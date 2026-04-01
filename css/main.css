@@ -262,6 +262,9 @@ body.scene-workspace { background: var(--page-bg); color: var(--text-body); }
     text-align: center;
     overflow: hidden;
 }
+.welcome-hero.welcome-hero-compact {
+    padding: 36px 32px 28px;
+}
 
 #welcome-network-canvas {
     position: absolute;
@@ -281,6 +284,10 @@ body.scene-workspace { background: var(--page-bg); color: var(--text-body); }
     color: var(--text-heading);
     font-size: 2.2rem;
     margin-bottom: 28px;
+}
+.welcome-hero-compact .brand-light {
+    font-size: 1.8rem;
+    margin-bottom: 8px;
 }
 
 .welcome-quote {

@@ -269,6 +269,7 @@
             btnConfirm.addEventListener('click', async () => {
                 const title = document.getElementById('new-inv-title').value.trim();
                 const desc = document.getElementById('new-inv-desc').value.trim();
+                const seedType = document.getElementById('new-inv-seed-type')?.value || 'company';
                 const seed = document.getElementById('new-inv-seed').value.trim();
 
                 if (!title) {
@@ -279,8 +280,8 @@
                 try {
                     const inv = await api.post('/investigations', {
                         title,
-                        description: desc,
-                        initial_seed: seed || null,
+                        description: desc || null,
+                        seed_type: seedType,
                     });
                     Toast.success('調查案件已建立');
                     closeModal();

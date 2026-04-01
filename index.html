@@ -35,14 +35,9 @@
             <span class="nav-brand">B E D R O C K</span>
             <span class="nav-user" id="nav-username">Mitch</span>
         </nav>
-        <div class="welcome-hero">
-            <canvas id="welcome-network-canvas"></canvas>
+        <div class="welcome-hero welcome-hero-compact">
             <div class="welcome-hero-content">
                 <h1 class="brand brand-light">B E D R O C K</h1>
-                <div class="welcome-quote">
-                    <p class="quote-text">"The truth is incontrovertible. Malice may attack it, ignorance may deride it, but in the end, there it is."</p>
-                    <p class="quote-source">— Winston Churchill</p>
-                </div>
                 <p class="welcome-greeting" id="welcome-greeting">Good morning, Mitch.</p>
             </div>
         </div>
@@ -167,6 +162,12 @@
                 <input type="text" id="new-inv-title" class="modal-input" placeholder="例：EGOpay 集團調查">
                 <label class="modal-label">說明</label>
                 <textarea id="new-inv-desc" class="modal-textarea" rows="3" placeholder="調查目的與範圍…"></textarea>
+                <label class="modal-label">種子類型</label>
+                <select id="new-inv-seed-type" class="modal-input">
+                    <option value="company">公司（統編）</option>
+                    <option value="person">自然人</option>
+                    <option value="tax_id">統一編號</option>
+                </select>
                 <label class="modal-label">初始種子</label>
                 <input type="text" id="new-inv-seed" class="modal-input" placeholder="統一編號或人名">
             </div>
