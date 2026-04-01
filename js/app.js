@@ -311,6 +311,21 @@
 
         showScene('workspace');
         initCytoscape();
+
+        // 重置所有側邊欄為空白，避免顯示前一個調查的殘留資料
+        const resetPairs = [
+            ['seeds-list', 'seed-count'],
+            ['clusters-list', 'cluster-count'],
+            ['red-flags-list', 'flag-count'],
+            ['media-list', 'media-count'],
+        ];
+        resetPairs.forEach(([listId, countId]) => {
+            const list = document.getElementById(listId);
+            const count = document.getElementById(countId);
+            if (list) list.innerHTML = '';
+            if (count) count.textContent = '0';
+        });
+
         // 重置空狀態
         const emptyState = document.getElementById('cy-empty-state');
         if (emptyState) emptyState.style.display = '';
@@ -717,15 +732,23 @@
         const countEl = document.getElementById('media-count');
         if (!listEl) return;
 
+        // 先清空，避免顯示前一個調查的資料
+        listEl.innerHTML = '<div class="ws-list-empty">尚無負面新聞</div>';
+        if (countEl) countEl.textContent = '0';
+
         try {
             const data = await api.get(`/investigations/${invId}/media`);
-            const items = data.items || data || [];
+            // API 回傳格式: { total, verdicts: [...] }
+            const items = data.verdicts || data.items || [];
+            if (!Array.isArray(items) || items.length === 0) {
+                if (countEl) countEl.textContent = '0';
+                listEl.innerHTML = '<div class="ws-list-empty">尚無負面新聞</div>';
+                return;
+            }
             if (countEl) countEl.textContent = items.length;
-            renderSidebarList(listEl, items, m => m.title, m => m.source);
+            renderSidebarList(listEl, items, m => m.source_title || m.title || '未知', m => m.source_url ? new URL(m.source_url).hostname : (m.source || ''));
         } catch (e) {
             console.warn('[BEDROCK] 載入負面新聞失敗:', e.message);
-            if (countEl) countEl.textContent = '0';
-            listEl.innerHTML = '<div class="ws-list-empty">尚無負面新聞</div>';
         }
     }
 
