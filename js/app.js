@@ -190,15 +190,15 @@
                     <div class="ws-guide-steps" style="margin:20px auto 0; max-width:320px;">
                         <div class="ws-guide-step">
                             <span class="ws-guide-step-num">1</span>
-                            <span>點擊「新增調查」，輸入案件名稱與統一編號</span>
+                            <span>點擊「新增調查」，輸入案件名稱與查詢目標</span>
                         </div>
                         <div class="ws-guide-step">
                             <span class="ws-guide-step-num">2</span>
-                            <span>進入調查後，點擊「開始」啟動爬蟲</span>
+                            <span>進入調查後，點擊「開始」啟動搜尋</span>
                         </div>
                         <div class="ws-guide-step">
                             <span class="ws-guide-step-num">3</span>
-                            <span>系統自動展開企業關係網路圖，偵測紅旗</span>
+                            <span>系統自動展開企業關係網路圖，偵測異常</span>
                         </div>
                     </div>
                 </div>`;
@@ -208,7 +208,7 @@
         listEl.innerHTML = state.investigations.map(inv => {
             const statusMap = {
                 draft: '草稿',
-                crawling: '爬取中',
+                crawling: '搜尋中',
                 analyzing: '分析中',
                 completed: '已完成',
             };
@@ -295,15 +295,17 @@
     // 調查工作台
     // ================================================================
     function openInvestigation(id) {
-        state.currentInvId = id;
-        state.currentInv = state.investigations.find(i => i.id === id) || { title: '調查案件', status: 'draft' };
+        // 確保 id 是數字（API 回傳數字，onclick 傳字串）
+        const numId = parseInt(id);
+        state.currentInvId = numId;
+        state.currentInv = state.investigations.find(i => i.id == numId) || { title: '調查案件', status: 'draft' };
 
         // 更新工作台標題
         const wsTitle = document.getElementById('ws-title');
         const wsStatus = document.getElementById('ws-status');
         if (wsTitle) wsTitle.textContent = state.currentInv.title;
         if (wsStatus) {
-            const statusMap = { draft: '草稿', crawling: '爬取中', analyzing: '分析中', completed: '已完成' };
+            const statusMap = { draft: '草稿', crawling: '搜尋中', analyzing: '分析中', completed: '已完成' };
             wsStatus.textContent = statusMap[state.currentInv.status] || '草稿';
         }
 
@@ -312,14 +314,18 @@
         // 重置空狀態
         const emptyState = document.getElementById('cy-empty-state');
         if (emptyState) emptyState.style.display = '';
-        loadInvestigationData(id);
+        loadInvestigationData(numId);
     }
     window.openInvestigation = openInvestigation;
 
     async function loadInvestigationData(id) {
+        // 先載入種子列表
+        loadSeeds(id);
+
+        // 載入圖資料
         try {
             const data = await api.get(`/investigations/${id}/graph`);
-            if (data && data.elements) {
+            if (data && data.elements && data.elements.length > 0) {
                 renderGraph(data.elements);
             }
         } catch (e) {
@@ -330,6 +336,41 @@
         loadClusters(id);
         loadRedFlags(id);
         loadMedia(id);
+    }
+
+    // ================================================================
+    // 種子列表
+    // ================================================================
+    async function loadSeeds(invId) {
+        const listEl = document.getElementById('seeds-list');
+        const countEl = document.getElementById('seed-count');
+        if (!listEl) return;
+
+        try {
+            const data = await api.get(`/investigations/${invId}/seeds`);
+            const seeds = data.items || data || [];
+            if (countEl) countEl.textContent = seeds.length;
+
+            if (seeds.length === 0) {
+                listEl.innerHTML = '<div class="ws-list-empty">尚無查詢目標，請在上方輸入統編或人名</div>';
+                return;
+            }
+
+            const typeLabels = { tax_id: '統編', company: '公司', person: '人名' };
+            listEl.innerHTML = seeds.map(s => `
+                <div class="ws-list-item ws-seed-item" data-seed-id="${s.id}">
+                    <div class="ws-list-item-title">
+                        <span class="ws-seed-type">${typeLabels[s.seed_type] || s.seed_type}</span>
+                        ${esc(s.seed_value)}
+                    </div>
+                    <div class="ws-list-item-sub">${formatDate(s.created_at)}</div>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.warn('[BEDROCK] 載入種子失敗:', e.message);
+            if (countEl) countEl.textContent = '0';
+            listEl.innerHTML = '<div class="ws-list-empty">載入失敗</div>';
+        }
     }
 
     // ================================================================
@@ -601,7 +642,7 @@
             if (countEl) countEl.textContent = data.total || flags.length;
 
             if (flags.length === 0) {
-                listEl.innerHTML = '<div class="ws-list-empty">尚無紅旗，請先執行爬取與分析</div>';
+                listEl.innerHTML = '<div class="ws-list-empty">尚無紅旗，請先執行搜尋與分析</div>';
                 return;
             }
 
@@ -719,11 +760,11 @@
                     await api.post(`/investigations/${state.currentInvId}/crawl/start`);
                     state.crawling = true;
                     updateCrawlUI();
-                    Toast.success('爬取已開始，追蹤至自然人…');
+                    Toast.success('搜尋已開始，自動追蹤關聯企業…');
                     pollCrawlProgress();
                 } catch (e) {
                     console.error('[BEDROCK] 啟動爬取失敗:', e.message);
-                    Toast.error('啟動爬取失敗: ' + e.message);
+                    Toast.error('啟動搜尋失敗: ' + e.message);
                 }
             });
         }
@@ -735,7 +776,7 @@
                 } catch (e) {}
                 state.crawling = false;
                 updateCrawlUI();
-                Toast.warning('爬取已暫停');
+                Toast.warning('搜尋已暫停');
             });
         }
 
@@ -746,7 +787,7 @@
                 } catch (e) {}
                 state.crawling = false;
                 updateCrawlUI();
-                Toast.warning('爬取已停止');
+                Toast.warning('搜尋已停止');
             });
         }
 
@@ -772,10 +813,12 @@
                 seed_type: seedType,
                 seed_value: value,
             });
-            Toast.success(`已新增種子: ${value}（${seedType === 'tax_id' ? '統編' : '公司名'}）`);
+            Toast.success(`已新增查詢目標: ${value}（${seedType === 'tax_id' ? '統編' : '公司名'}）`);
+            // 重新載入種子列表
+            if (state.currentInvId) loadSeeds(state.currentInvId);
         } catch (e) {
             console.warn('[BEDROCK] 新增種子失敗:', e.message);
-            Toast.error('新增種子失敗: ' + e.message);
+            Toast.error('新增查詢目標失敗: ' + e.message);
         }
         const seedInput = document.getElementById('seed-input');
         if (seedInput) seedInput.value = '';
@@ -802,7 +845,7 @@
                 clearInterval(interval);
                 state.crawling = false;
                 updateCrawlUI();
-                if (progress >= 100) Toast.success('爬取完成');
+                if (progress >= 100) Toast.success('搜尋完成');
                 return;
             }
             progress += Math.random() * 8;
@@ -831,7 +874,7 @@
             if (data.status === 'completed' || data.status === 'stopped') {
                 state.crawling = false;
                 updateCrawlUI();
-                Toast.success(`爬取完成：${processed} 個節點，自動開始分析…`);
+                Toast.success(`搜尋完成：${processed} 個節點，自動開始分析…`);
                 loadInvestigationData(state.currentInvId);
                 setTimeout(() => runAnalysis(), 1000);
                 return;
@@ -839,7 +882,7 @@
             if (data.status === 'error') {
                 state.crawling = false;
                 updateCrawlUI();
-                Toast.error('爬取錯誤: ' + (data.error_message || '未知'));
+                Toast.error('搜尋錯誤: ' + (data.error_message || '未知'));
                 return;
             }
         } catch (e) {

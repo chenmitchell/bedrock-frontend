@@ -1134,6 +1134,21 @@ details[open] .quote-toggle-btn::before { content: "▾ "; }
 }
 
 /* ================================================================
+   種子/查詢目標標籤
+   ================================================================ */
+.ws-seed-type {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: rgba(58,124,165,0.1);
+    color: var(--accent-blue);
+    margin-right: 6px;
+    letter-spacing: 0.02em;
+}
+
+/* ================================================================
    Tooltip 提示
    ================================================================ */
 [data-tooltip] {
