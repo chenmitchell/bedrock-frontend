@@ -101,6 +101,40 @@
     }
     window.showScene = showScene;
 
+    // 切換導航頁籤
+    function switchWelcomeTab(tabName) {
+        const sections = {
+            investigations: 'investigations-section',
+            admin: 'admin-section'
+        };
+
+        Object.values(sections).forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+
+        const activeSection = document.getElementById(sections[tabName]);
+        if (activeSection) activeSection.style.display = '';
+
+        // 更新頁籤狀態
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+            tab.classList.remove('nav-tab-active');
+            tab.setAttribute('aria-selected', 'false');
+        });
+
+        const activeTab = document.getElementById('tab-' + tabName);
+        if (activeTab) {
+            activeTab.classList.add('nav-tab-active');
+            activeTab.setAttribute('aria-selected', 'true');
+        }
+
+        // 如果切到管理頁籤，加載管理資料
+        if (tabName === 'admin') {
+            loadAdminData();
+        }
+    }
+    window.switchWelcomeTab = switchWelcomeTab;
+
     // 返回儀表板時刷新調查列表
     function goBackToDashboard() {
         showScene('welcome');
@@ -120,6 +154,8 @@
         crawling: false,
         _pollTimer: null,  // pollCrawlProgress timer ID
         _analysisTimer: null, // runAnalysis 後的 setTimeout ID
+        investigationsFilter: 'all',
+        investigationsSearch: '',
     };
 
     // ================================================================
@@ -231,6 +267,14 @@
         const listEl = document.getElementById('investigations-list');
         if (!listEl) return;
 
+        // 應用過濾和搜尋
+        let filtered = state.investigations.filter(inv => {
+            const matchFilter = state.investigationsFilter === 'all' || inv.status === state.investigationsFilter;
+            const matchSearch = inv.title.toLowerCase().includes(state.investigationsSearch.toLowerCase()) ||
+                                (inv.description || '').toLowerCase().includes(state.investigationsSearch.toLowerCase());
+            return matchFilter && matchSearch;
+        });
+
         if (state.investigations.length === 0) {
             listEl.innerHTML = `
                 <div class="investigations-empty">
@@ -256,7 +300,20 @@
             return;
         }
 
-        listEl.innerHTML = state.investigations.map(inv => {
+        if (filtered.length === 0) {
+            listEl.innerHTML = `
+                <div class="investigations-empty">
+                    <i class="fas fa-search"></i>
+                    <h3>未找到符合的案件</h3>
+                    <p>嘗試調整搜尋條件或篩選條件</p>
+                </div>`;
+            return;
+        }
+
+        // 更新統計卡片
+        updateDashboardKPIs();
+
+        listEl.innerHTML = filtered.map(inv => {
             const statusMap = {
                 draft: '草稿',
                 crawling: '搜尋中',
@@ -291,6 +348,26 @@
                 </div>
             `;
         }).join('');
+    }
+
+    // 更新儀表板 KPI 統計
+    function updateDashboardKPIs() {
+        const total = state.investigations.length;
+        const active = state.investigations.filter(i => ['crawling', 'analyzing'].includes(i.status)).length;
+        const totalFlags = state.investigations.reduce((sum, i) => sum + (i.red_flag_count || 0), 0);
+        const totalNodes = state.investigations.reduce((sum, i) => sum + (i.node_count || 0), 0);
+
+        const kpiElements = {
+            'kpi-total-investigations': total,
+            'kpi-active-investigations': active,
+            'kpi-total-flags': totalFlags,
+            'kpi-total-nodes': totalNodes,
+        };
+
+        Object.entries(kpiElements).forEach(([id, value]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value;
+        });
     }
 
     // ================================================================
@@ -385,6 +462,237 @@
         }
     }
     window.deleteInvestigation = deleteInvestigation;
+
+    // 設置儀表板搜尋和篩選
+    function setupDashboardControls() {
+        const searchInput = document.getElementById('investigations-search');
+        const filterBtns = document.querySelectorAll('.filter-btn');
+        const navTabs = document.querySelectorAll('.nav-tab');
+        const userMenuBtn = document.getElementById('btn-user-menu');
+        const userMenuDropdown = document.getElementById('user-menu-dropdown');
+
+        // 搜尋功能
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                state.investigationsSearch = e.target.value;
+                renderInvestigations();
+            });
+        }
+
+        // 篩選功能
+        filterBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                filterBtns.forEach(b => b.classList.remove('filter-btn-active'));
+                btn.classList.add('filter-btn-active');
+                state.investigationsFilter = btn.dataset.filter;
+                renderInvestigations();
+            });
+        });
+
+        // 導航頁籤
+        navTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.id.replace('tab-', '');
+                switchWelcomeTab(tabName);
+            });
+        });
+
+        // 使用者選單
+        if (userMenuBtn) {
+            userMenuBtn.addEventListener('click', () => {
+                if (userMenuDropdown) {
+                    const isVisible = userMenuDropdown.style.display !== 'none';
+                    userMenuDropdown.style.display = isVisible ? 'none' : '';
+                }
+            });
+        }
+
+        // 登出按鈕
+        const btnLogout = document.getElementById('btn-user-logout');
+        if (btnLogout) {
+            btnLogout.addEventListener('click', () => {
+                state.user = null;
+                localStorage.removeItem('bedrock_require_login');
+                showScene('login');
+            });
+        }
+
+        // 關閉使用者選單（點擊其他地方）
+        document.addEventListener('click', (e) => {
+            if (userMenuDropdown && !e.target.closest('.nav-user-menu')) {
+                userMenuDropdown.style.display = 'none';
+            }
+        });
+    }
+
+    // ================================================================
+    // 管理後台
+    // ================================================================
+    async function loadAdminData() {
+        await loadAdminUsers();
+        await loadAdminSettings();
+        await loadAdminAudit();
+        await checkSearXNGStatus();
+    }
+
+    async function loadAdminUsers() {
+        const tbody = document.getElementById('admin-users-tbody');
+        if (!tbody) return;
+
+        try {
+            // Mock 使用者資料
+            const users = [
+                { id: 1, name: 'Alice Chen', email: 'alice@bedrock.tw', role: '管理員', created_at: '2024-01-15' },
+                { id: 2, name: 'Bob Wang', email: 'bob@bedrock.tw', role: '分析師', created_at: '2024-02-01' },
+                { id: 3, name: 'Mitch Lee', email: 'mitch@bedrock.tw', role: '調查員', created_at: '2024-01-20' },
+            ];
+
+            tbody.innerHTML = users.map(u => `
+                <tr>
+                    <td>${esc(u.name)}</td>
+                    <td>${esc(u.email)}</td>
+                    <td>${esc(u.role)}</td>
+                    <td>${formatDate(u.created_at)}</td>
+                    <td>
+                        <button class="admin-action-btn" style="margin-right:8px;">編輯</button>
+                        <button class="admin-action-btn" style="color:#B22D20;">刪除</button>
+                    </td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#B22D20;">載入失敗: ${esc(e.message)}</td></tr>`;
+        }
+    }
+
+    async function loadAdminSettings() {
+        const content = document.getElementById('admin-settings-content');
+        if (!content) return;
+
+        try {
+            // 載入關鍵字
+            const keywordsList = document.getElementById('admin-keywords-list');
+            if (keywordsList) {
+                try {
+                    const keywordsData = await api.get('/keywords');
+                    const keywords = keywordsData.items || keywordsData || [];
+                    if (keywords.length > 0) {
+                        keywordsList.innerHTML = `
+                            <div class="admin-list">
+                                ${keywords.slice(0, 5).map(kw => `
+                                    <div class="admin-list-item">${esc(kw.keyword || kw)}</div>
+                                `).join('')}
+                                ${keywords.length > 5 ? `<div class="admin-list-item" style="color:#999;">… 及其他 ${keywords.length - 5} 個</div>` : ''}
+                            </div>`;
+                    } else {
+                        keywordsList.innerHTML = '<p style="color:#999;">暫無關鍵字</p>';
+                    }
+                } catch (e) {
+                    keywordsList.innerHTML = '<p style="color:#B22D20;">載入關鍵字失敗</p>';
+                }
+            }
+
+            // 載入系統配置
+            const configList = document.getElementById('admin-config-list');
+            if (configList) {
+                try {
+                    const settingsData = await api.get('/settings');
+                    const settings = settingsData.items || settingsData || [];
+                    if (settings.length > 0) {
+                        configList.innerHTML = `
+                            <table class="admin-table" style="width:100%; margin-top:10px;">
+                                <tr><th>設定項</th><th>值</th><th>操作</th></tr>
+                                ${settings.slice(0, 5).map(s => `
+                                    <tr>
+                                        <td>${esc(s.key || s)}</td>
+                                        <td><code style="background:#f5f5f3; padding:2px 6px; border-radius:3px;">${esc(s.value || '')}</code></td>
+                                        <td><button class="admin-action-btn">編輯</button></td>
+                                    </tr>
+                                `).join('')}
+                            </table>`;
+                    } else {
+                        configList.innerHTML = '<p style="color:#999;">暫無系統設定</p>';
+                    }
+                } catch (e) {
+                    configList.innerHTML = '<p style="color:#B22D20;">載入設定失敗</p>';
+                }
+            }
+        } catch (e) {
+            console.warn('[BEDROCK] 載入設定失敗:', e.message);
+        }
+    }
+
+    async function loadAdminAudit() {
+        const tbody = document.getElementById('admin-audit-tbody');
+        if (!tbody) return;
+
+        try {
+            // Mock 稽核資料
+            const audits = [
+                { timestamp: new Date(Date.now() - 3600000).toISOString(), user: 'Alice Chen', action: 'create_investigation', resource: 'INV-001', status: 'success' },
+                { timestamp: new Date(Date.now() - 7200000).toISOString(), user: 'Bob Wang', action: 'start_crawl', resource: 'INV-001', status: 'success' },
+                { timestamp: new Date(Date.now() - 10800000).toISOString(), user: 'Mitch Lee', action: 'add_seed', resource: 'INV-001', status: 'success' },
+            ];
+
+            tbody.innerHTML = audits.map(a => {
+                const actionMap = {
+                    'create_investigation': '建立調查',
+                    'start_crawl': '啟動爬蟲',
+                    'add_seed': '新增種子',
+                    'analyze': '執行分析',
+                    'export': '匯出報告',
+                };
+                return `
+                    <tr>
+                        <td>${formatDate(a.timestamp)}</td>
+                        <td>${esc(a.user)}</td>
+                        <td>${actionMap[a.action] || a.action}</td>
+                        <td>${esc(a.resource)}</td>
+                        <td><span class="status-badge status-${a.status}">${a.status === 'success' ? '成功' : '失敗'}</span></td>
+                    </tr>
+                `;
+            }).join('');
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#B22D20;">載入失敗: ${esc(e.message)}</td></tr>`;
+        }
+    }
+
+    async function checkSearXNGStatus() {
+        const statusEl = document.getElementById('searxng-status');
+        const testBtn = document.getElementById('btn-searxng-test');
+
+        if (statusEl) {
+            try {
+                // Mock 檢測 SearXNG 連線狀態
+                const isConnected = Math.random() > 0.3; // 70% 連線成功
+                if (isConnected) {
+                    statusEl.innerHTML = '<span class="status-badge status-success">已連線</span>';
+                } else {
+                    statusEl.innerHTML = '<span class="status-badge status-error">未連線</span>';
+                }
+            } catch (e) {
+                statusEl.innerHTML = '<span class="status-badge status-error">檢測失敗</span>';
+            }
+        }
+
+        if (testBtn) {
+            testBtn.addEventListener('click', async () => {
+                testBtn.disabled = true;
+                testBtn.textContent = '連線測試中…';
+                try {
+                    // Mock 連線測試
+                    await new Promise(r => setTimeout(r, 1500));
+                    Toast.success('SearXNG 連線正常');
+                    if (statusEl) statusEl.innerHTML = '<span class="status-badge status-success">已連線</span>';
+                } catch (e) {
+                    Toast.error('SearXNG 連線失敗');
+                    if (statusEl) statusEl.innerHTML = '<span class="status-badge status-error">未連線</span>';
+                } finally {
+                    testBtn.disabled = false;
+                    testBtn.innerHTML = '<i class="fas fa-plug"></i> 連線測試';
+                }
+            });
+        }
+    }
 
     // ================================================================
     // 調查工作台
@@ -1048,6 +1356,35 @@
         `).join('');
     }
 
+    // 搜尋負面新聞
+    async function searchNegativeNews() {
+        if (!state.currentInvId) {
+            Toast.warning('請先選擇一個調查案件');
+            return;
+        }
+
+        const btnSearch = document.getElementById('btn-search-media');
+        if (!btnSearch) return;
+
+        const originalText = btnSearch.innerHTML;
+        btnSearch.disabled = true;
+        btnSearch.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 搜尋中…';
+
+        try {
+            Toast.success('已開始搜尋負面新聞，此操作可能需要 1-2 分鐘…');
+            const result = await api.post(`/investigations/${state.currentInvId}/media/search`, {});
+            Toast.success(`搜尋完成，找到 ${result.count || 0} 則報導`);
+            await loadMedia(state.currentInvId);
+        } catch (e) {
+            console.warn('[BEDROCK] 搜尋負面新聞失敗:', e.message);
+            Toast.error('搜尋失敗: ' + e.message);
+        } finally {
+            btnSearch.disabled = false;
+            btnSearch.innerHTML = originalText;
+        }
+    }
+    window.searchNegativeNews = searchNegativeNews;
+
     // ================================================================
     // 爬取控制
     // ================================================================
@@ -1467,14 +1804,49 @@
         showScene('login');
         setupLogin();
         setupNewInvestigation();
+        setupDashboardControls();
         setupCrawlControls();
         setupAnalysis();
         setupExport();
+        setupAdminTabs();
+        setupWorkspaceMediaSearch();
 
         // 延遲檢查是否跳過登入，確保 UI 已準備好
         setTimeout(() => {
             checkAndSkipLogin();
         }, 100);
+    }
+
+    // 設置管理頁籤切換
+    function setupAdminTabs() {
+        const adminTabs = document.querySelectorAll('.admin-tab');
+        const adminPanels = document.querySelectorAll('.admin-panel');
+
+        adminTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabId = tab.id;
+                const panelId = tabId.replace('admin-tab-', 'admin-') + '-panel';
+
+                adminTabs.forEach(t => {
+                    t.classList.remove('admin-tab-active');
+                    t.setAttribute('aria-selected', 'false');
+                });
+                adminPanels.forEach(p => p.style.display = 'none');
+
+                tab.classList.add('admin-tab-active');
+                tab.setAttribute('aria-selected', 'true');
+                const panel = document.getElementById(panelId);
+                if (panel) panel.style.display = '';
+            });
+        });
+    }
+
+    // 設置工作台的負面新聞搜尋按鈕
+    function setupWorkspaceMediaSearch() {
+        const btnSearchMedia = document.getElementById('btn-search-media');
+        if (btnSearchMedia) {
+            btnSearchMedia.addEventListener('click', searchNegativeNews);
+        }
     }
 
     if (document.readyState === 'loading') {

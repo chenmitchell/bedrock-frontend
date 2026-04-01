@@ -46,7 +46,25 @@
     <div id="welcome-scene" class="scene" style="display:none;" role="main" aria-label="儀表板">
         <nav class="welcome-nav" aria-label="主要導覽">
             <span class="nav-brand" aria-hidden="true">BEDROCK</span>
-            <span class="nav-user" id="nav-username" aria-label="目前使用者">Mitch</span>
+            <div class="nav-tabs" role="tablist" aria-label="頁籤導覽">
+                <button class="nav-tab nav-tab-active" id="tab-investigations" role="tab" aria-selected="true" aria-controls="investigations-section">調查案件</button>
+                <button class="nav-tab" id="tab-admin" role="tab" aria-selected="false" aria-controls="admin-section">管理後台</button>
+            </div>
+            <div class="nav-spacer"></div>
+            <div class="nav-user-menu">
+                <button class="nav-user" id="btn-user-menu" aria-label="使用者選單" aria-haspopup="menu">
+                    <span id="nav-username">Mitch</span>
+                    <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                </button>
+                <div id="user-menu-dropdown" class="user-menu-dropdown" role="menu" style="display:none;">
+                    <button class="user-menu-item" id="btn-user-settings" role="menuitem">
+                        <i class="fas fa-cog" aria-hidden="true"></i> 設定
+                    </button>
+                    <button class="user-menu-item" id="btn-user-logout" role="menuitem">
+                        <i class="fas fa-sign-out-alt" aria-hidden="true"></i> 登出
+                    </button>
+                </div>
+            </div>
         </nav>
         <div class="welcome-hero welcome-hero-compact">
             <div class="welcome-hero-content">
@@ -62,18 +80,140 @@
             </div>
         </div>
         <div class="welcome-body">
-            <div class="dashboard-header">
-                <div>
-                    <h2 class="section-title">調查案件</h2>
-                    <p class="section-desc">管理您的加強盡職調查案件</p>
+            <!-- 調查案件區 -->
+            <section id="investigations-section" role="tabpanel" aria-labelledby="tab-investigations">
+                <div class="dashboard-kpi-section">
+                    <div class="dashboard-kpi-cards">
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i class="fas fa-folder"></i></div>
+                            <div class="kpi-content">
+                                <div class="kpi-label">總案件數</div>
+                                <div class="kpi-value" id="kpi-total-investigations">0</div>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i class="fas fa-spinner"></i></div>
+                            <div class="kpi-content">
+                                <div class="kpi-label">進行中案件數</div>
+                                <div class="kpi-value" id="kpi-active-investigations">0</div>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon kpi-icon-danger"><i class="fas fa-flag"></i></div>
+                            <div class="kpi-content">
+                                <div class="kpi-label">總紅旗數</div>
+                                <div class="kpi-value" id="kpi-total-flags">0</div>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i class="fas fa-circle-notch"></i></div>
+                            <div class="kpi-content">
+                                <div class="kpi-label">總節點數</div>
+                                <div class="kpi-value" id="kpi-total-nodes">0</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <button id="btn-new-investigation" class="btn-outline">
-                    <i class="fas fa-plus"></i> 新增調查
-                </button>
-            </div>
-            <div id="investigations-list" class="investigations-grid">
-                <!-- JS 動態生成 -->
-            </div>
+
+                <div class="dashboard-header">
+                    <div>
+                        <h2 class="section-title">調查案件</h2>
+                        <p class="section-desc">管理您的加強盡職調查案件</p>
+                    </div>
+                    <div style="display:flex; gap:12px; align-items:center;">
+                        <div class="dashboard-search">
+                            <i class="fas fa-search" aria-hidden="true"></i>
+                            <input type="text" id="investigations-search" class="dashboard-search-input" placeholder="搜尋案件名稱…" aria-label="搜尋調查案件">
+                        </div>
+                        <div class="dashboard-filters" role="group" aria-label="案件狀態篩選">
+                            <button class="filter-btn filter-btn-active" data-filter="all">全部</button>
+                            <button class="filter-btn" data-filter="draft">草稿</button>
+                            <button class="filter-btn" data-filter="crawling">搜尋中</button>
+                            <button class="filter-btn" data-filter="analyzing">分析中</button>
+                            <button class="filter-btn" data-filter="completed">已完成</button>
+                        </div>
+                        <button id="btn-new-investigation" class="btn-outline">
+                            <i class="fas fa-plus"></i> 新增調查
+                        </button>
+                    </div>
+                </div>
+                <div id="investigations-list" class="investigations-grid">
+                    <!-- JS 動態生成 -->
+                </div>
+            </section>
+
+            <!-- 管理後台區 -->
+            <section id="admin-section" role="tabpanel" aria-labelledby="tab-admin" style="display:none;">
+                <div class="admin-body">
+                    <div class="admin-tabs" role="tablist" aria-label="管理頁籤">
+                        <button class="admin-tab admin-tab-active" id="admin-tab-users" role="tab" aria-selected="true">使用者管理</button>
+                        <button class="admin-tab" id="admin-tab-settings" role="tab" aria-selected="false">系統設定</button>
+                        <button class="admin-tab" id="admin-tab-audit" role="tab" aria-selected="false">稽核紀錄</button>
+                        <button class="admin-tab" id="admin-tab-searxng" role="tab" aria-selected="false">SearXNG 設定</button>
+                    </div>
+
+                    <div id="admin-users-panel" class="admin-panel admin-panel-active" role="tabpanel">
+                        <h3 class="admin-panel-title">使用者管理</h3>
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>使用者名稱</th>
+                                    <th>電子郵件</th>
+                                    <th>角色</th>
+                                    <th>建立時間</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-users-tbody">
+                                <tr><td colspan="5" style="text-align:center; padding:20px;">載入中…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div id="admin-settings-panel" class="admin-panel" role="tabpanel" style="display:none;">
+                        <h3 class="admin-panel-title">系統設定</h3>
+                        <div id="admin-settings-content">
+                            <h4>關鍵字集合</h4>
+                            <div id="admin-keywords-list" style="margin-bottom:20px;"></div>
+                            <h4>系統配置</h4>
+                            <div id="admin-config-list"></div>
+                        </div>
+                    </div>
+
+                    <div id="admin-audit-panel" class="admin-panel" role="tabpanel" style="display:none;">
+                        <h3 class="admin-panel-title">稽核紀錄</h3>
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>時間</th>
+                                    <th>使用者</th>
+                                    <th>操作</th>
+                                    <th>資源</th>
+                                    <th>狀態</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-audit-tbody">
+                                <tr><td colspan="5" style="text-align:center; padding:20px;">載入中…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div id="admin-searxng-panel" class="admin-panel" role="tabpanel" style="display:none;">
+                        <h3 class="admin-panel-title">SearXNG 設定</h3>
+                        <div id="admin-searxng-content">
+                            <div class="admin-setting-group">
+                                <label>連線狀態</label>
+                                <div id="searxng-status" class="searxng-status" style="margin:10px 0;">
+                                    <span class="status-badge status-unknown">檢測中…</span>
+                                </div>
+                                <button id="btn-searxng-test" class="ws-btn-action" style="margin-top:10px;">
+                                    <i class="fas fa-plug"></i> 連線測試
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </div>
     </div>
 
@@ -159,6 +299,9 @@
                         負面新聞
                         <span id="media-count" class="ws-count ws-count-warning">0</span>
                         <span class="help-icon" data-tooltip="系統搜尋節點相關的負面新聞報導，包括詐騙、洗錢、訴訟等 AML 相關資訊。">?</span>
+                        <button id="btn-search-media" class="ws-btn-sm" data-tooltip="搜尋所有節點的負面新聞">
+                            <i class="fas fa-search"></i> 搜尋
+                        </button>
                     </h4>
                     <div id="media-list" class="ws-list"></div>
                 </div>
