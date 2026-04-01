@@ -287,6 +287,79 @@ body.scene-workspace { background: var(--page-bg); color: var(--text-body); }
     transform: scale(0.98);
 }
 
+/* iOS 風格登入安全開關 */
+.login-security-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 24px;
+    padding: 16px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+}
+
+.toggle-label {
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.5);
+    font-weight: 500;
+    letter-spacing: 0.05em;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-input {
+    display: none;
+}
+
+.toggle-slider {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 28px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 14px;
+    transition: background 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.12);
+}
+
+.toggle-slider::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 24px;
+    height: 24px;
+    background: #FFFFFF;
+    border-radius: 50%;
+    transition: left 0.3s cubic-bezier(0.4, 0.0, 0.2, 1), box-shadow 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.toggle-input:checked + .toggle-slider {
+    background: #34C759;
+}
+
+.toggle-input:checked + .toggle-slider::after {
+    left: 22px;
+    box-shadow: 0 2px 6px rgba(52,199,89,0.4);
+}
+
+.toggle-input:focus + .toggle-slider {
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.12), 0 0 0 3px rgba(74,158,191,0.25);
+}
+
+.toggle-input:checked:focus + .toggle-slider {
+    box-shadow: 0 0 0 3px rgba(52,199,89,0.25);
+}
+
 .login-footer {
     position: absolute;
     bottom: 28px;
@@ -549,6 +622,32 @@ details[open] .quote-toggle-btn::before { content: "▾ "; }
 .status-completed {
     background: rgba(90,158,111,0.1);
     color: var(--status-completed);
+}
+
+/* 卡片刪除按鈕 */
+.btn-card-delete {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: rgba(192, 57, 43, 0.08);
+    border: 1px solid rgba(192, 57, 43, 0.15);
+    border-radius: 6px;
+    color: #B22D20;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-size: 0.85rem;
+}
+
+.btn-card-delete:hover {
+    background: rgba(192, 57, 43, 0.12);
+    border-color: rgba(192, 57, 43, 0.3);
+    box-shadow: 0 2px 6px rgba(192, 57, 43, 0.15);
+}
+
+.btn-card-delete:active {
+    transform: scale(0.95);
 }
 
 /* 風險徽章 */

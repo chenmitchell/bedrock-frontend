@@ -29,6 +29,15 @@
                 <input type="password" id="input-password" class="login-input" placeholder="密碼" autocomplete="current-password" aria-required="true">
                 <button id="btn-login" class="login-btn" type="button">登入</button>
             </form>
+
+            <!-- 安全設定開關 -->
+            <div class="login-security-toggle">
+                <span class="toggle-label">需要登入驗證</span>
+                <label class="toggle-switch" for="toggle-require-login" role="switch" aria-checked="false" aria-label="切換登入驗證需求">
+                    <input type="checkbox" id="toggle-require-login" class="toggle-input">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
         </div>
         <p class="login-footer">BEDROCK — 企業關係拓樸暨 EDD 調查平台</p>
     </div>

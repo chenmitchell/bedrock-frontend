@@ -129,8 +129,30 @@
         const btnLogin = document.getElementById('btn-login');
         const inputEmail = document.getElementById('input-email');
         const inputPassword = document.getElementById('input-password');
+        const toggleRequireLogin = document.getElementById('toggle-require-login');
+        const toggleSwitch = document.querySelector('.toggle-switch');
 
         if (!btnLogin) return;
+
+        // 從 localStorage 恢復開關狀態
+        const savedRequireLogin = localStorage.getItem('bedrock_require_login') === 'true';
+        if (toggleRequireLogin) {
+            toggleRequireLogin.checked = savedRequireLogin;
+            if (toggleSwitch) {
+                toggleSwitch.setAttribute('aria-checked', savedRequireLogin.toString());
+            }
+        }
+
+        // 開關變更事件
+        if (toggleRequireLogin) {
+            toggleRequireLogin.addEventListener('change', (e) => {
+                const checked = e.target.checked;
+                localStorage.setItem('bedrock_require_login', checked.toString());
+                if (toggleSwitch) {
+                    toggleSwitch.setAttribute('aria-checked', checked.toString());
+                }
+            });
+        }
 
         btnLogin.addEventListener('click', () => {
             const email = inputEmail.value.trim();
@@ -154,6 +176,18 @@
                 if (e.key === 'Enter') btnLogin.click();
             });
         });
+    }
+
+    // 檢查是否需要跳過登入
+    function checkAndSkipLogin() {
+        const requireLogin = localStorage.getItem('bedrock_require_login') === 'true';
+        if (!requireLogin) {
+            // 自動 mock 登入並進入儀表板
+            state.user = { email: 'dev@bedrock.local', name: 'Developer' };
+            updateGreeting();
+            showScene('welcome');
+            loadInvestigations();
+        }
     }
 
     function updateGreeting() {
@@ -232,16 +266,25 @@
             const statusLabel = statusMap[inv.status] || inv.status;
             const statusClass = `status-${inv.status || 'draft'}`;
 
+            // 只有 0 節點的調查才顯示刪除按鈕
+            const nodeCount = inv.node_count || 0;
+            const showDelete = nodeCount === 0;
+
             return `
-                <div class="investigation-card" data-id="${inv.id}" onclick="openInvestigation('${inv.id}')">
+                <div class="investigation-card" data-id="${inv.id}">
                     <div class="investigation-card-header">
-                        <span class="investigation-card-title">${esc(inv.title)}</span>
-                        <span class="status-badge ${statusClass}">${statusLabel}</span>
+                        <div style="flex: 1; cursor: pointer;" onclick="openInvestigation('${inv.id}')">
+                            <span class="investigation-card-title">${esc(inv.title)}</span>
+                        </div>
+                        <div style="display: flex; gap: 12px; align-items: start;">
+                            <span class="status-badge ${statusClass}">${statusLabel}</span>
+                            ${showDelete ? `<button class="btn-card-delete" data-id="${inv.id}" onclick="deleteInvestigation(event, '${inv.id}')" aria-label="刪除調查" title="刪除此調查"><i class="fas fa-trash-alt"></i></button>` : ''}
+                        </div>
                     </div>
-                    <div class="investigation-card-desc">${esc(inv.description || '')}</div>
-                    <div class="investigation-card-footer">
+                    <div class="investigation-card-desc" onclick="openInvestigation('${inv.id}')" style="cursor: pointer;">${esc(inv.description || '')}</div>
+                    <div class="investigation-card-footer" onclick="openInvestigation('${inv.id}')" style="cursor: pointer;">
                         <span class="investigation-card-meta">
-                            ${inv.node_count || 0} 節點 · ${inv.red_flag_count || 0} 紅旗
+                            ${nodeCount} 節點 · ${inv.red_flag_count || 0} 紅旗
                         </span>
                         <span class="investigation-card-meta">${formatDate(inv.updated_at)}</span>
                     </div>
@@ -324,6 +367,24 @@
         });
     }
     window.closeModal = closeModal;
+
+    // 刪除調查（只有 0 節點的調查可以刪除）
+    async function deleteInvestigation(event, invId) {
+        event.stopPropagation();  // 防止觸發卡片的 openInvestigation
+
+        const confirmed = confirm('確定要刪除此調查案件嗎？此動作無法復原。');
+        if (!confirmed) return;
+
+        try {
+            await api.del(`/investigations/${invId}`);
+            Toast.success('調查已刪除');
+            loadInvestigations();
+        } catch (e) {
+            console.warn('[BEDROCK] 刪除失敗:', e.message);
+            Toast.error('刪除失敗: ' + e.message);
+        }
+    }
+    window.deleteInvestigation = deleteInvestigation;
 
     // ================================================================
     // 調查工作台
@@ -1279,28 +1340,104 @@
     function setupExport() {
         const btnExport = document.getElementById('btn-export');
         if (btnExport) {
-            btnExport.addEventListener('click', async () => {
+            btnExport.addEventListener('click', async (e) => {
                 if (!state.currentInvId) return;
-                try {
-                    Toast.show('正在產生報告…', 'info');
-                    const res = await fetch(API_BASE + `/investigations/${state.currentInvId}/export/pdf`, {
-                        method: 'GET',
+
+                // 顯示導出格式選擇菜單
+                const menu = document.createElement('div');
+                menu.className = 'export-menu';
+                menu.style.position = 'absolute';
+                menu.style.background = '#fff';
+                menu.style.border = '1px solid #e0ddd8';
+                menu.style.borderRadius = '6px';
+                menu.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+                menu.style.zIndex = '1000';
+                menu.style.minWidth = '120px';
+
+                const formats = [
+                    { name: 'HTML', ext: 'html', icon: 'fa-file-code' },
+                    { name: 'PDF', ext: 'pdf', icon: 'fa-file-pdf' },
+                    { name: 'JSON', ext: 'json', icon: 'fa-code' },
+                ];
+
+                formats.forEach(fmt => {
+                    const item = document.createElement('button');
+                    item.style.display = 'flex';
+                    item.style.alignItems = 'center';
+                    item.style.gap = '10px';
+                    item.style.width = '100%';
+                    item.style.padding = '10px 15px';
+                    item.style.background = 'none';
+                    item.style.border = 'none';
+                    item.style.cursor = 'pointer';
+                    item.style.textAlign = 'left';
+                    item.style.color = '#333';
+                    item.style.transition = 'all 0.2s';
+                    item.innerHTML = `<i class="fas ${fmt.icon}" style="width:20px;"></i>${fmt.name}`;
+
+                    item.addEventListener('mouseover', () => {
+                        item.style.background = '#f5f5f3';
                     });
-                    if (!res.ok) throw new Error('匯出失敗');
-                    const blob = await res.blob();
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `bedrock_report_${state.currentInvId}.pdf`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    Toast.success('報告已匯出');
-                } catch (e) {
-                    Toast.warning('匯出功能尚未連接後端');
-                }
+                    item.addEventListener('mouseout', () => {
+                        item.style.background = 'none';
+                    });
+
+                    item.addEventListener('click', async () => {
+                        await exportInvestigation(fmt.ext);
+                        document.body.removeChild(menu);
+                    });
+
+                    menu.appendChild(item);
+                });
+
+                // 定位菜單
+                const rect = btnExport.getBoundingClientRect();
+                menu.style.top = (rect.bottom + 5) + 'px';
+                menu.style.right = (window.innerWidth - rect.right) + 'px';
+
+                document.body.appendChild(menu);
+
+                // 點擊外部關閉
+                const closeMenu = () => {
+                    if (document.body.contains(menu)) {
+                        document.body.removeChild(menu);
+                    }
+                    document.removeEventListener('click', closeMenu);
+                };
+                setTimeout(() => {
+                    document.addEventListener('click', closeMenu);
+                }, 0);
             });
         }
     }
+
+    async function exportInvestigation(format) {
+        if (!state.currentInvId) return;
+
+        try {
+            Toast.show(`正在產生 ${format.toUpperCase()} 報告…`, 'info');
+            const res = await fetch(API_BASE + `/investigations/${state.currentInvId}/export/${format}`, {
+                method: 'GET',
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || '匯出失敗');
+            }
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `bedrock_report_${state.currentInvId}.${format}`;
+            a.click();
+            URL.revokeObjectURL(url);
+            Toast.success(`報告已匯出為 ${format.toUpperCase()}`);
+        } catch (e) {
+            console.warn('[BEDROCK] 匯出失敗:', e.message);
+            Toast.error('匯出失敗: ' + e.message);
+        }
+    }
+    window.exportInvestigation = exportInvestigation;
 
     // ================================================================
     // 工具函式
@@ -1333,6 +1470,11 @@
         setupCrawlControls();
         setupAnalysis();
         setupExport();
+
+        // 延遲檢查是否跳過登入，確保 UI 已準備好
+        setTimeout(() => {
+            checkAndSkipLogin();
+        }, 100);
     }
 
     if (document.readyState === 'loading') {
