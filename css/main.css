@@ -75,6 +75,27 @@ html, body {
     overflow: hidden;
 }
 
+/* 自訂捲軸：纖細現代風格 */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.15);
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0,0,0,0.25);
+}
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,0,0,0.15) transparent;
+}
+
 body {
     font-family: var(--font-body);
     font-size: 16px;       /* WCAG: 最小基準字級 */
@@ -637,16 +658,18 @@ details[open] .quote-toggle-btn::before { content: "▾ "; }
 
 /* 左側面板 */
 .ws-sidebar {
-    width: 280px;
+    width: 300px;
+    min-width: 280px;
     background: var(--ws-sidebar-bg);
     border-right: 1px solid var(--ws-sidebar-border);
     overflow-y: auto;
+    overflow-x: hidden;
     flex-shrink: 0;
     padding: 0;
 }
 
 .ws-section {
-    padding: 20px;
+    padding: 16px;
     border-bottom: 1px solid var(--ws-sidebar-border);
 }
 
@@ -706,11 +729,13 @@ details[open] .quote-toggle-btn::before { content: "▾ "; }
 /* 搜尋列 */
 .ws-search-row {
     display: flex;
-    gap: 8px;
+    gap: 6px;
+    min-width: 0;
 }
 
 .ws-input {
     flex: 1;
+    min-width: 0;
     padding: 9px 12px;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
@@ -1219,8 +1244,8 @@ details[open] .quote-toggle-btn::before { content: "▾ "; }
     content: attr(data-tooltip);
     position: absolute;
     bottom: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
+    transform: none;
     padding: 8px 14px;
     background: var(--text-heading);
     color: #fff;
@@ -1242,8 +1267,8 @@ details[open] .quote-toggle-btn::before { content: "▾ "; }
     content: '';
     position: absolute;
     bottom: calc(100% + 2px);
-    left: 50%;
-    transform: translateX(-50%);
+    left: 12px;
+    transform: none;
     border: 5px solid transparent;
     border-top-color: var(--text-heading);
     pointer-events: none;
@@ -1280,6 +1305,10 @@ details[open] .quote-toggle-btn::before { content: "▾ "; }
     padding: 48px 24px;
     text-align: center;
     color: var(--text-caption);
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
 }
 
 .ws-empty-state i {
@@ -1393,7 +1422,7 @@ details[open] .quote-toggle-btn::before { content: "▾ "; }
    響應式設計
    ================================================================ */
 @media (max-width: 1200px) {
-    .ws-sidebar { width: 240px; }
+    .ws-sidebar { width: 260px; min-width: 240px; }
     .ws-detail { width: 280px; }
 }
 
