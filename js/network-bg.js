@@ -92,8 +92,11 @@
         }
 
         resize() {
-            if (!this.canvas || !this.canvas.parentElement) return;
-            const rect = this.canvas.parentElement.getBoundingClientRect();
+            if (!this.canvas) return;
+            const parent = this.canvas.parentElement;
+            if (!parent || parent.offsetWidth === 0) return;
+            const rect = parent.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return;
             const dpr = window.devicePixelRatio || 1;
             this.w = rect.width;
             this.h = rect.height;
@@ -231,6 +234,7 @@
     }
 
     function initWelcomeCanvas() {
+        if (!document.getElementById('welcome-network-canvas')) return;
         const welcomeCanvas = new NetworkCanvas('welcome-network-canvas', WELCOME_CONFIG);
         welcomeCanvas.init();
         window._bedrockWelcomeCanvas = welcomeCanvas;
