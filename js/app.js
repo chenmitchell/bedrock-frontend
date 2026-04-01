@@ -423,8 +423,8 @@
                         'height': 'data(size)',
                         'background-color': 'data(color)',
                         'border-width': 1.5,
-                        'border-color': '#E0DDD8',
-                        'text-max-width': '80px',
+                        'border-color': 'data(border_color)',
+                        'text-max-width': '90px',
                         'text-wrap': 'ellipsis',
                     },
                 },
@@ -444,6 +444,35 @@
                         'background-color': '#B8860B',
                         'border-color': '#8B6508',
                         'color': '#2C2C2A',
+                    },
+                },
+                {
+                    selector: 'node[risk_level="CRITICAL"]',
+                    style: {
+                        'background-color': '#C0392B',
+                        'border-color': '#8B0000',
+                        'border-width': 3.5,
+                        'shadow-blur': 15,
+                        'shadow-color': '#C0392B',
+                        'shadow-opacity': 0.6,
+                        'shadow-offset-x': 0,
+                        'shadow-offset-y': 0,
+                        'font-weight': 'bold',
+                        'color': '#8B0000',
+                    },
+                },
+                {
+                    selector: 'node[risk_level="WARNING"]',
+                    style: {
+                        'background-color': '#E67E22',
+                        'border-color': '#D35400',
+                        'border-width': 2.5,
+                        'shadow-blur': 10,
+                        'shadow-color': '#E67E22',
+                        'shadow-opacity': 0.4,
+                        'shadow-offset-x': 0,
+                        'shadow-offset-y': 0,
+                        'color': '#8B4513',
                     },
                 },
                 {
@@ -483,6 +512,33 @@
                     style: {
                         'line-style': 'dashed',
                         'line-dash-pattern': [4, 3],
+                        'line-color': '#95E1D3',
+                        'target-arrow-color': '#95E1D3',
+                    },
+                },
+                {
+                    selector: 'edge[type="representative"]',
+                    style: {
+                        'line-color': '#3A7CA5',
+                        'target-arrow-color': '#3A7CA5',
+                        'width': 2,
+                    },
+                },
+                {
+                    selector: 'edge[type="shareholder"]',
+                    style: {
+                        'line-color': '#4ECDC4',
+                        'target-arrow-color': '#4ECDC4',
+                        'width': 1.5,
+                    },
+                },
+                {
+                    selector: 'edge[type="historical"]',
+                    style: {
+                        'line-style': 'dotted',
+                        'line-color': '#ADADAB',
+                        'target-arrow-color': '#ADADAB',
+                        'opacity': 0.5,
                     },
                 },
                 {
@@ -518,9 +574,13 @@
         state.cy.elements().remove();
         state.cy.add(elements);
         runLayout('cola');
-        // 有資料就隱藏空狀態
+        // 有資料就隱藏空狀態，顯示圖例
         const emptyState = document.getElementById('cy-empty-state');
-        if (emptyState && elements.length > 0) emptyState.style.display = 'none';
+        const legend = document.getElementById('graph-legend');
+        if (elements.length > 0) {
+            if (emptyState) emptyState.style.display = 'none';
+            if (legend) legend.style.display = '';
+        }
     }
 
     // renderDemoGraph 已移除 — 不再使用 demo 資料
@@ -600,31 +660,132 @@
         panel.style.display = '';
 
         const isCompany = data.type === 'company';
+        const riskLevel = data.risk_level || 'NONE';
+        const riskColors = { CRITICAL: '#C0392B', WARNING: '#E67E22', INFO: '#2980B9', NONE: '#27AE60' };
+        const riskLabels = { CRITICAL: '高風險', WARNING: '中風險', INFO: '低風險', NONE: '正常' };
+        const riskColor = riskColors[riskLevel] || '#27AE60';
+        const riskLabel = riskLabels[riskLevel] || '正常';
+
+        // 取得連線資訊
+        const cyNode = state.cy ? state.cy.getElementById(data.id) : null;
+        const edges = cyNode ? cyNode.connectedEdges() : [];
+        const edgeCount = edges.length;
+
+        // 組織連線詳情
+        let connectionsHtml = '';
+        if (edges.length > 0) {
+            const edgeTypeLabels = {
+                director: '董監事', representative: '法人代表',
+                shareholder: '股東', historical: '歷史關聯',
+            };
+            connectionsHtml = edges.map(e => {
+                const ed = e.data();
+                const otherNodeId = ed.source === data.id ? ed.target : ed.source;
+                const otherNode = state.cy.getElementById(otherNodeId);
+                const otherLabel = otherNode.length ? otherNode.data('label') : otherNodeId;
+                const direction = ed.source === data.id ? '→' : '←';
+                const typeLabel = edgeTypeLabels[ed.type] || ed.type;
+                return `
+                    <div class="ws-detail-connection" style="padding:4px 0; border-bottom:1px solid rgba(0,0,0,0.06); cursor:pointer;" onclick="(function(){ if(window.__bedrockCy) { var n = window.__bedrockCy.getElementById('${otherNodeId}'); if(n.length){ window.__bedrockCy.center(n); n.select(); } } })()">
+                        <span style="color:#888; font-size:11px;">${direction}</span>
+                        <span style="font-weight:500;">${esc(otherLabel)}</span>
+                        <span style="background:rgba(58,124,165,0.12); color:#3A7CA5; font-size:10px; padding:1px 6px; border-radius:8px; margin-left:4px;">${esc(ed.label || typeLabel)}</span>
+                    </div>`;
+            }).join('');
+        }
+
+        // 紅旗詳情
+        const flags = data.flags || [];
+        const ruleNames = {
+            'SHELL_COMPANY': '殼公司', 'RAPID_DISSOLVE': '快速註銷', 'PHOENIX_COMPANY': '鳳凰公司',
+            'CIRCULAR_OWNERSHIP': '循環持股', 'NOMINEE_DIRECTOR': '代理董事', 'CAPITAL_ANOMALY': '資本異常',
+            'ADDRESS_CLUSTER': '地址聚集', 'FREQUENT_CHANGE': '頻繁變更', 'DORMANT_REVIVAL': '休眠復甦',
+            'CROSS_HOLDING': '交叉持股', 'AGE_ANOMALY': '年齡異常', 'MASS_DIRECTOR': '大量董事',
+            'REGISTRATION_BURST': '註冊激增', 'STAR_STRUCTURE': '星形結構', 'BRIDGE_NODE': '橋接節點',
+            'UBO_DEEP_PATH': 'UBO 深層路徑', 'CAPITAL_VOLATILITY': '資本劇烈跳動',
+            'BATCH_REGISTRATION': '批量登記', 'DIRECTOR_MUSICAL_CHAIRS': '董事走馬燈',
+            'UBO_CONCENTRATION': 'UBO 資本集中', 'HIDDEN_UBO': '隱藏實質受益人',
+            'SUSPICIOUS_INDUSTRY_MIX': '異常產業組合', 'CROSS_INVESTIGATION': '跨調查關聯',
+        };
+        let flagsHtml = '';
+        if (flags.length > 0) {
+            flagsHtml = flags.map(f => {
+                const sevColors = { CRITICAL: '#C0392B', WARNING: '#E67E22', INFO: '#2980B9' };
+                const sevLabels = { CRITICAL: '嚴重', WARNING: '警告', INFO: '資訊' };
+                const c = sevColors[f.severity] || '#999';
+                const sl = sevLabels[f.severity] || f.severity;
+                const rn = ruleNames[f.rule_id] || f.rule_id;
+                return `
+                    <div style="padding:6px 0; border-left:3px solid ${c}; padding-left:8px; margin-bottom:4px;">
+                        <div style="font-weight:600; font-size:12px;">
+                            <span style="color:${c};">[${sl}]</span> ${esc(rn)}
+                        </div>
+                        <div style="font-size:11px; color:#666; margin-top:2px;">${esc(f.description || '')}</div>
+                    </div>`;
+            }).join('');
+        }
+
+        // 格式化資本額
+        const capitalStr = data.capital != null
+            ? `NT$ ${Number(data.capital).toLocaleString()}`
+            : '未知';
+
         content.innerHTML = `
+            <!-- 風險等級標籤 -->
+            <div style="background:${riskColor}; color:white; padding:6px 12px; border-radius:6px; font-weight:600; font-size:13px; text-align:center; margin-bottom:12px;">
+                ${riskLevel !== 'NONE' ? '⚠ ' : '✓ '}${riskLabel}${flags.length > 0 ? ` — ${flags.length} 項異常` : ''}
+            </div>
+
             <div class="ws-detail-section">
                 <div class="ws-detail-section-title">基本資料</div>
                 <div class="ws-detail-row">
                     <span class="ws-detail-label">類型</span>
-                    <span class="ws-detail-value">${isCompany ? '公司' : '自然人'}</span>
+                    <span class="ws-detail-value">${isCompany ? '公司法人' : '自然人'}</span>
+                </div>
+                ${isCompany ? `
+                <div class="ws-detail-row">
+                    <span class="ws-detail-label">統一編號</span>
+                    <span class="ws-detail-value" style="font-family:monospace;">${esc(data.entity_id)}</span>
                 </div>
                 <div class="ws-detail-row">
-                    <span class="ws-detail-label">ID</span>
-                    <span class="ws-detail-value">${esc(data.id)}</span>
+                    <span class="ws-detail-label">公司狀態</span>
+                    <span class="ws-detail-value">${esc(data.status || '未知')}</span>
                 </div>
-                ${data.flagged ? `
                 <div class="ws-detail-row">
-                    <span class="ws-detail-label">紅旗</span>
-                    <span class="ws-detail-value" style="color:var(--risk-high);">⚑ 已標記</span>
-                </div>` : ''}
+                    <span class="ws-detail-label">資本額</span>
+                    <span class="ws-detail-value">${capitalStr}</span>
+                </div>
+                <div class="ws-detail-row">
+                    <span class="ws-detail-label">代表人</span>
+                    <span class="ws-detail-value">${esc(data.representative || '未知')}</span>
+                </div>
+                <div class="ws-detail-row">
+                    <span class="ws-detail-label">登記地址</span>
+                    <span class="ws-detail-value" style="font-size:11px; word-break:break-all;">${esc(data.address || '未知')}</span>
+                </div>
+                ` : `
+                <div class="ws-detail-row">
+                    <span class="ws-detail-label">職稱</span>
+                    <span class="ws-detail-value">${esc(data.title || '董監事')}</span>
+                </div>
+                `}
             </div>
+
             <div class="ws-detail-section">
-                <div class="ws-detail-section-title">關聯</div>
-                <div class="ws-detail-row">
-                    <span class="ws-detail-label">連線數</span>
-                    <span class="ws-detail-value">${state.cy ? state.cy.getElementById(data.id).connectedEdges().length : 0}</span>
-                </div>
+                <div class="ws-detail-section-title">關聯架構 (${edgeCount})</div>
+                ${connectionsHtml || '<div style="color:#999; font-size:12px;">無連線</div>'}
             </div>
+
+            ${flags.length > 0 ? `
+            <div class="ws-detail-section">
+                <div class="ws-detail-section-title" style="color:${riskColor};">⚑ 異常原因 (${flags.length})</div>
+                ${flagsHtml}
+            </div>
+            ` : ''}
         `;
+
+        // 暴露 cy 給 onclick 導航用
+        window.__bedrockCy = state.cy;
     }
 
     function closeDetail() {
