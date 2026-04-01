@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Dark background -->
+  <rect width="64" height="64" fill="#0f1117"/>
+
+  <!-- Hexagonal shield -->
+  <path d="M 32 8 L 50 18 L 50 36 C 50 48 32 56 32 56 C 32 56 14 48 14 36 L 14 18 Z"
+        fill="none" stroke="#00d4aa" stroke-width="2" stroke-linejoin="round"/>
+
+  <!-- Chinese character 磐 (stylized as layered design) -->
+  <g transform="translate(32, 32)">
+    <!-- Horizontal lines suggesting the character -->
+    <line x1="-12" y1="-8" x2="12" y2="-8" stroke="#00d4aa" stroke-width="2" stroke-linecap="round"/>
+    <line x1="-12" y1="-2" x2="12" y2="-2" stroke="#00d4aa" stroke-width="2" stroke-linecap="round"/>
+    <line x1="-12" y1="4" x2="12" y2="4" stroke="#00d4aa" stroke-width="2" stroke-linecap="round"/>
+    <line x1="-12" y1="10" x2="12" y2="10" stroke="#00d4aa" stroke-width="2" stroke-linecap="round"/>
+    <!-- Vertical elements -->
+    <line x1="-8" y1="-8" x2="-8" y2="10" stroke="#00d4aa" stroke-width="2" stroke-linecap="round"/>
+    <line x1="8" y1="-8" x2="8" y2="10" stroke="#00d4aa" stroke-width="2" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1950,15 +1950,6 @@
         setTimeout(() => {
             checkAndSkipLogin();
         }, 100);
-
-        // 顯示側邊導航欄（歡迎和工作台場景用）
-        setTimeout(() => {
-            const navSidebar = document.getElementById('nav-sidebar');
-            const currentScene = document.body.className;
-            if (navSidebar) {
-                navSidebar.style.display = currentScene.includes('login') ? 'none' : 'flex';
-            }
-        }, 200);
     }
 
     // 設置管理頁籤切換
