@@ -93,6 +93,13 @@
     }
     window.showScene = showScene;
 
+    // 返回儀表板時刷新調查列表
+    function goBackToDashboard() {
+        showScene('welcome');
+        loadInvestigations();
+    }
+    window.goBackToDashboard = goBackToDashboard;
+
     // ================================================================
     // 應用程式狀態
     // ================================================================
@@ -896,6 +903,41 @@
                 text.textContent = `${processed}/${discovered} 節點 (${pct}%)${entity ? ' — ' + entity : ''}`;
             }
 
+            // === 即時更新關聯圖（每次 poll 都刷新，讓使用者看到圖慢慢長出來）===
+            if (processed > 0 && state.cy) {
+                try {
+                    const graphData = await api.get(`/investigations/${state.currentInvId}/graph`);
+                    if (graphData && graphData.elements && graphData.elements.length > 0) {
+                        // 增量更新：只加入新節點/邊，避免重新 layout 已有節點
+                        const existingIds = new Set();
+                        state.cy.elements().forEach(el => existingIds.add(el.id()));
+                        const newElements = graphData.elements.filter(el => !existingIds.has(el.data.id));
+                        if (newElements.length > 0) {
+                            state.cy.add(newElements);
+                            // 對新加入的節點做局部 layout
+                            const newNodes = state.cy.nodes().filter(n => !existingIds.has(n.id()));
+                            if (newNodes.length > 0 && state.cy.nodes().length <= 500) {
+                                state.cy.layout({
+                                    name: 'cola',
+                                    animate: true,
+                                    animationDuration: 300,
+                                    nodeSpacing: 30,
+                                    edgeLength: 120,
+                                    randomize: false,
+                                    avoidOverlap: true,
+                                    fit: state.cy.nodes().length <= 20,
+                                }).run();
+                            }
+                            // 隱藏空狀態
+                            const emptyState = document.getElementById('cy-empty-state');
+                            if (emptyState) emptyState.style.display = 'none';
+                        }
+                    }
+                } catch (graphErr) {
+                    console.warn('[BEDROCK] 即時圖更新失敗:', graphErr.message);
+                }
+            }
+
             if (data.status === 'completed' || data.status === 'stopped') {
                 state.crawling = false;
                 updateCrawlUI();
@@ -934,15 +976,48 @@
 
     async function runAnalysis() {
         if (!state.currentInvId) return;
-        Toast.show('正在執行圖結構分析…', 'info', 5000);
+
+        // 顯示分析進度條（複用 crawl progress UI）
+        const fill = document.getElementById('crawl-progress-fill');
+        const text = document.getElementById('crawl-progress-text');
+        const progressEl = document.getElementById('crawl-progress');
+        if (progressEl) progressEl.style.display = '';
+        if (fill) fill.style.width = '10%';
+        if (text) text.textContent = '分析中 — 星形結構偵測…';
+
+        const steps = [
+            { pct: '20%', label: '循環持股偵測…' },
+            { pct: '35%', label: '橋接節點偵測…' },
+            { pct: '50%', label: 'UBO 深層路徑分析…' },
+            { pct: '65%', label: '地址聚集偵測…' },
+            { pct: '80%', label: '資本異常偵測…' },
+        ];
+
+        // 模擬分階段進度（後端是同步一次算完，前端模擬分階段）
+        let stepIdx = 0;
+        const stepTimer = setInterval(() => {
+            if (stepIdx < steps.length) {
+                if (fill) fill.style.width = steps[stepIdx].pct;
+                if (text) text.textContent = `分析中 — ${steps[stepIdx].label}`;
+                stepIdx++;
+            }
+        }, 1500);
 
         try {
             const result = await api.post(`/investigations/${state.currentInvId}/analyze`);
-            const count = result.total_anomalies || 0;
-            Toast.success(`分析完成：發現 ${count} 個異常`);
+            clearInterval(stepTimer);
 
-            // 重新載入紅旗
+            const count = result.total_anomalies || 0;
+            const flagsSaved = result.red_flags_saved || 0;
+
+            if (fill) fill.style.width = '100%';
+            if (text) text.textContent = `分析完成 — ${count} 個異常、${flagsSaved} 個紅旗`;
+            Toast.success(`分析完成：發現 ${count} 個異常，寫入 ${flagsSaved} 個紅旗`);
+
+            // 重新載入所有側邊欄資料（紅旗 + 集群 + 媒體）
             loadRedFlags(state.currentInvId);
+            loadClusters(state.currentInvId);
+            loadMedia(state.currentInvId);
 
             // 在圖上標記有紅旗的節點
             if (state.cy && result.anomalies) {
@@ -956,9 +1031,20 @@
                     }
                 });
             }
+
+            // 3 秒後隱藏進度條
+            setTimeout(() => {
+                if (progressEl) progressEl.style.display = 'none';
+            }, 3000);
         } catch (e) {
+            clearInterval(stepTimer);
             console.warn('[BEDROCK] 分析失敗:', e.message);
             Toast.error('分析失敗: ' + e.message);
+            if (fill) fill.style.width = '0%';
+            if (text) text.textContent = '分析失敗';
+            setTimeout(() => {
+                if (progressEl) progressEl.style.display = 'none';
+            }, 3000);
         }
     }
 
