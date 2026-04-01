@@ -278,11 +278,14 @@
                 }
 
                 try {
-                    const inv = await api.post('/investigations', {
+                    const payload = {
                         title,
                         description: desc || null,
                         seed_type: seedType,
-                    });
+                    };
+                    // 建立時帶入種子值，後端會自動建立種子記錄
+                    if (seed) payload.seed_value = seed;
+                    const inv = await api.post('/investigations', payload);
                     Toast.success('調查案件已建立');
                     closeModal();
                     await loadInvestigations();
