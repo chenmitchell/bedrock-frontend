@@ -783,14 +783,11 @@
                     await api.post(`/investigations/${state.currentInvId}/crawl/start`);
                     state.crawling = true;
                     updateCrawlUI();
-                    Toast.success('爬取已開始');
+                    Toast.success('爬取已開始，追蹤至自然人…');
                     pollCrawlProgress();
                 } catch (e) {
-                    // Demo mode
-                    state.crawling = true;
-                    updateCrawlUI();
-                    Toast.success('爬取已開始（模擬模式）');
-                    simulateCrawl();
+                    console.error('[BEDROCK] 啟動爬取失敗:', e.message);
+                    Toast.error('啟動爬取失敗: ' + e.message);
                 }
             });
         }
@@ -827,11 +824,22 @@
 
     async function addSeed(value) {
         if (!value || !state.currentInvId) return;
+
+        // 判斷種子類型：8 位數字 = 統編，否則 = 公司名或人名
+        let seedType = 'company';
+        if (/^\d{8}$/.test(value)) {
+            seedType = 'tax_id';
+        }
+
         try {
-            await api.post(`/investigations/${state.currentInvId}/seeds`, { value });
-            Toast.success(`已新增種子: ${value}`);
+            await api.post(`/investigations/${state.currentInvId}/seeds`, {
+                seed_type: seedType,
+                seed_value: value,
+            });
+            Toast.success(`已新增種子: ${value}（${seedType === 'tax_id' ? '統編' : '公司名'}）`);
         } catch (e) {
-            Toast.success(`已新增種子: ${value}（離線模式）`);
+            console.warn('[BEDROCK] 新增種子失敗:', e.message);
+            Toast.error('新增種子失敗: ' + e.message);
         }
         const seedInput = document.getElementById('seed-input');
         if (seedInput) seedInput.value = '';
@@ -874,19 +882,34 @@
             const data = await api.get(`/investigations/${state.currentInvId}/crawl/status`);
             const fill = document.getElementById('crawl-progress-fill');
             const text = document.getElementById('crawl-progress-text');
-            if (fill) fill.style.width = (data.percentage || 0) + '%';
-            if (text) text.textContent = `${data.node_count || 0} 節點`;
+            const pct = data.percentage || 0;
+            const processed = data.nodes_processed || 0;
+            const discovered = data.nodes_discovered || 0;
+            const entity = data.current_entity || '';
+
+            if (fill) fill.style.width = pct + '%';
+            if (text) {
+                text.textContent = `${processed}/${discovered} 節點 (${pct}%)${entity ? ' — ' + entity : ''}`;
+            }
+
             if (data.status === 'completed' || data.status === 'stopped') {
                 state.crawling = false;
                 updateCrawlUI();
-                Toast.success('爬取完成，自動開始分析…');
+                Toast.success(`爬取完成：${processed} 個節點，自動開始分析…`);
                 loadInvestigationData(state.currentInvId);
-                // 爬取完成後自動執行圖結構分析
                 setTimeout(() => runAnalysis(), 1000);
                 return;
             }
-        } catch (e) {}
-        if (state.crawling) setTimeout(() => pollCrawlProgress(), 3000);
+            if (data.status === 'error') {
+                state.crawling = false;
+                updateCrawlUI();
+                Toast.error('爬取錯誤: ' + (data.error_message || '未知'));
+                return;
+            }
+        } catch (e) {
+            console.warn('[BEDROCK] 查詢進度失敗:', e.message);
+        }
+        if (state.crawling) setTimeout(() => pollCrawlProgress(), 2000);
     }
 
     // ================================================================
