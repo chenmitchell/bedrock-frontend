@@ -1,7 +1,8 @@
 /**
- * BEDROCK 磐石 — 前端應用程式 v2.0
+ * BEDROCK 磐石 — 前端應用程式 v3.0
  * Enhanced Due Diligence Platform
  *
+ * 完整設計系統 · 左側導航欄 · 深色主題 · 參考 Outpost Dashboard
  * 單頁應用（SPA）· 三場景切換 · Cytoscape 拓樸圖
  * 場景：login → welcome（儀表板）→ workspace（調查工作台）
  */
@@ -90,6 +91,12 @@
             if (el) el.style.display = (s === name) ? '' : 'none';
         });
         document.body.className = 'scene-' + name;
+
+        // 控制側邊導航欄顯示
+        const navSidebar = document.getElementById('nav-sidebar');
+        if (navSidebar) {
+            navSidebar.style.display = (name === 'login') ? 'none' : 'flex';
+        }
 
         // 調整 canvas 大小
         if (name === 'login' && window._bedrockLoginCanvas) {
@@ -219,9 +226,9 @@
         const requireLogin = localStorage.getItem('bedrock_require_login') === 'true';
         if (!requireLogin) {
             // 自動 mock 登入並進入儀表板
-            state.user = { email: 'dev@bedrock.local', name: 'Developer' };
-            updateGreeting();
+            state.user = { email: 'dev@bedrock.local', name: 'test' };
             showScene('welcome');
+            updateGreeting();
             loadInvestigations();
         }
     }
@@ -230,17 +237,20 @@
         const el = document.getElementById('welcome-greeting');
         if (!el || !state.user) return;
 
-        const hour = new Date().getHours();
-        let greeting;
-        if (hour < 12) greeting = 'Good morning';
-        else if (hour < 18) greeting = 'Good afternoon';
-        else greeting = 'Good evening';
-
         const name = state.user.name || 'Investigator';
-        el.textContent = `${greeting}, ${name}.`;
+        el.textContent = `歡迎回來，${name}`;
 
-        const navUser = document.getElementById('nav-username');
-        if (navUser) navUser.textContent = name;
+        // 更新所有用戶名顯示
+        ['nav-username', 'nav-username-welcome'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = name;
+        });
+
+        // 更新頭像
+        const avatar = document.getElementById('nav-user-avatar');
+        if (avatar && name) {
+            avatar.textContent = name.charAt(0).toUpperCase();
+        }
     }
 
     // ================================================================
@@ -1797,10 +1807,135 @@
     }
 
     // ================================================================
+    // 新導航系統（v3.0）
+    // ================================================================
+    function switchNavItem(event) {
+        event.preventDefault();
+        const navItem = event.currentTarget;
+        const navName = navItem.dataset.nav;
+
+        // 更新 active 狀態
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        navItem.classList.add('active');
+
+        // 根據導航項切換頁面（如需要）
+        switch (navName) {
+            case 'overview':
+            case 'investigations':
+                showScene('welcome');
+                if (navName === 'investigations') {
+                    switchWelcomeTab('investigations');
+                }
+                loadInvestigations();
+                break;
+            case 'reports':
+                showScene('welcome');
+                switchWelcomeTab('investigations');
+                break;
+            case 'settings':
+            case 'users':
+            case 'audit':
+                showScene('welcome');
+                switchWelcomeTab('admin');
+                const adminTabMap = { settings: 'settings', users: 'users', audit: 'audit' };
+                if (adminTabMap[navName]) {
+                    switchAdminTab(adminTabMap[navName]);
+                }
+                break;
+        }
+    }
+    window.switchNavItem = switchNavItem;
+
+    function toggleUserMenu() {
+        const dropdown = document.getElementById('user-menu-dropdown') || document.getElementById('user-menu-dropdown-welcome');
+        if (dropdown) {
+            dropdown.style.display = dropdown.style.display === 'none' ? '' : 'none';
+        }
+    }
+    window.toggleUserMenu = toggleUserMenu;
+
+    function handleUserSettings() {
+        Toast.show('使用者設定（功能建設中）', 'info');
+        toggleUserMenu();
+    }
+    window.handleUserSettings = handleUserSettings;
+
+    function handleLogout() {
+        if (confirm('確定要登出嗎？')) {
+            state.user = null;
+            localStorage.removeItem('bedrock_session');
+            showScene('login');
+            toggleUserMenu();
+            Toast.success('已登出');
+        }
+    }
+    window.handleLogout = handleLogout;
+
+    function switchAdminTab(tabName) {
+        const adminTabs = document.querySelectorAll('.admin-tab');
+        const adminPanels = document.querySelectorAll('.admin-panel');
+
+        adminTabs.forEach(tab => {
+            tab.classList.remove('admin-tab-active');
+            tab.setAttribute('aria-selected', 'false');
+        });
+        adminPanels.forEach(panel => {
+            panel.classList.remove('admin-panel-active');
+            panel.style.display = 'none';
+        });
+
+        const activeTab = document.getElementById('admin-tab-' + tabName);
+        const activePanel = document.getElementById('admin-' + tabName + '-panel');
+
+        if (activeTab) {
+            activeTab.classList.add('admin-tab-active');
+            activeTab.setAttribute('aria-selected', 'true');
+        }
+        if (activePanel) {
+            activePanel.classList.add('admin-panel-active');
+            activePanel.style.display = '';
+        }
+
+        if (tabName === 'users' || tabName === 'audit') {
+            loadAdminData();
+        }
+    }
+    window.switchAdminTab = switchAdminTab;
+
+    function filterInvestigations(filter) {
+        state.investigationsFilter = filter;
+
+        // 更新按鈕狀態
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.classList.remove('filter-btn-active');
+            if (btn.dataset.filter === filter) {
+                btn.classList.add('filter-btn-active');
+            }
+        });
+
+        renderInvestigations();
+    }
+    window.filterInvestigations = filterInvestigations;
+
+    function openNewInvestigationModal() {
+        const overlay = document.getElementById('modal-overlay');
+        if (overlay) overlay.style.display = '';
+    }
+    window.openNewInvestigationModal = openNewInvestigationModal;
+
+    function confirmNewInvestigation() {
+        const btnConfirm = document.getElementById('btn-confirm-new');
+        if (btnConfirm) btnConfirm.click();
+    }
+    window.confirmNewInvestigation = confirmNewInvestigation;
+
+    // ================================================================
     // 初始化
     // ================================================================
     function init() {
-        console.log('[BEDROCK] 磐石 EDD 平台 v2.0 啟動');
+        console.log('[BEDROCK] 磐石 EDD 平台 v3.0 啟動');
         showScene('login');
         setupLogin();
         setupNewInvestigation();
@@ -1815,6 +1950,15 @@
         setTimeout(() => {
             checkAndSkipLogin();
         }, 100);
+
+        // 顯示側邊導航欄（歡迎和工作台場景用）
+        setTimeout(() => {
+            const navSidebar = document.getElementById('nav-sidebar');
+            const currentScene = document.body.className;
+            if (navSidebar) {
+                navSidebar.style.display = currentScene.includes('login') ? 'none' : 'flex';
+            }
+        }, 200);
     }
 
     // 設置管理頁籤切換

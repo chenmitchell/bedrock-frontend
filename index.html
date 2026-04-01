@@ -6,7 +6,7 @@
     <title>BEDROCK — EDD 調查平台</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;1,400&family=Inter:wght@400;500&family=Noto+Serif+TC:wght@400&family=Noto+Sans+TC:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;1,400&family=Inter:wght@400;500;600&family=Noto+Serif+TC:wght@400&family=Noto+Sans+TC:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="/css/main.css">
 </head>
@@ -14,12 +14,118 @@
     <!-- WCAG: 跳至主要內容連結 -->
     <a href="#main-content" class="skip-link">跳至主要內容</a>
 
+    <!-- ===== 左側導航欄（歡迎和工作台場景用） ===== -->
+    <nav class="nav-sidebar" id="nav-sidebar" style="display:none;">
+        <div class="nav-logo">
+            <svg class="nav-logo-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <!-- BEDROCK 磐石 LOGO -->
+                <!-- 外層六邊形 -->
+                <defs>
+                    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#4A9EBF;stop-opacity:1" />
+                        <stop offset="100%" style="stop-color:#5BB5D6;stop-opacity:1" />
+                    </linearGradient>
+                </defs>
+                <polygon points="50,10 90,30 90,70 50,90 10,70 10,30" fill="none" stroke="url(#logoGradient)" stroke-width="2.5" />
+                <!-- 內層網路點 -->
+                <circle cx="50" cy="50" r="3" fill="url(#logoGradient)" />
+                <circle cx="65" cy="40" r="2.5" fill="url(#logoGradient)" opacity="0.7" />
+                <circle cx="35" cy="40" r="2.5" fill="url(#logoGradient)" opacity="0.7" />
+                <circle cx="70" cy="60" r="2.5" fill="url(#logoGradient)" opacity="0.7" />
+                <circle cx="30" cy="60" r="2.5" fill="url(#logoGradient)" opacity="0.7" />
+                <!-- 網路連線 -->
+                <line x1="50" y1="50" x2="65" y2="40" stroke="url(#logoGradient)" stroke-width="1.5" opacity="0.4" />
+                <line x1="50" y1="50" x2="35" y2="40" stroke="url(#logoGradient)" stroke-width="1.5" opacity="0.4" />
+                <line x1="50" y1="50" x2="70" y2="60" stroke="url(#logoGradient)" stroke-width="1.5" opacity="0.4" />
+                <line x1="50" y1="50" x2="30" y2="60" stroke="url(#logoGradient)" stroke-width="1.5" opacity="0.4" />
+            </svg>
+            <span class="nav-logo-text">BEDROCK</span>
+        </div>
+
+        <div class="nav-menu">
+            <!-- 主選單 -->
+            <div class="nav-section">
+                <div class="nav-section-title">主選單</div>
+                <button class="nav-item active" data-nav="overview" onclick="switchNavItem(event)">
+                    <div class="nav-item-icon"><i class="fas fa-chart-line"></i></div>
+                    <div class="nav-item-text">總覽</div>
+                </button>
+                <button class="nav-item" data-nav="investigations" onclick="switchNavItem(event)">
+                    <div class="nav-item-icon"><i class="fas fa-magnifying-glass"></i></div>
+                    <div class="nav-item-text">調查案件</div>
+                </button>
+                <button class="nav-item" data-nav="reports" onclick="switchNavItem(event)">
+                    <div class="nav-item-icon"><i class="fas fa-file-lines"></i></div>
+                    <div class="nav-item-text">報告</div>
+                </button>
+            </div>
+
+            <!-- 管理 -->
+            <div class="nav-section">
+                <div class="nav-section-title">管理</div>
+                <button class="nav-item" data-nav="settings" onclick="switchNavItem(event)">
+                    <div class="nav-item-icon"><i class="fas fa-gear"></i></div>
+                    <div class="nav-item-text">系統設定</div>
+                </button>
+                <button class="nav-item" data-nav="users" onclick="switchNavItem(event)">
+                    <div class="nav-item-icon"><i class="fas fa-users"></i></div>
+                    <div class="nav-item-text">使用者管理</div>
+                </button>
+                <button class="nav-item" data-nav="audit" onclick="switchNavItem(event)">
+                    <div class="nav-item-icon"><i class="fas fa-clock"></i></div>
+                    <div class="nav-item-text">稽核紀錄</div>
+                </button>
+            </div>
+        </div>
+
+        <div class="nav-spacer"></div>
+
+        <!-- 使用者資訊 -->
+        <div class="nav-section">
+            <button class="nav-user" id="btn-user-menu" onclick="toggleUserMenu()">
+                <div class="nav-user-avatar" id="nav-user-avatar">M</div>
+                <div class="nav-user-info">
+                    <div class="nav-user-name" id="nav-username">Mitch</div>
+                    <div class="nav-user-role">管理員</div>
+                </div>
+            </button>
+            <div id="user-menu-dropdown" class="user-menu-dropdown" style="display:none;">
+                <button class="user-menu-item" id="btn-user-settings" onclick="handleUserSettings()">
+                    <i class="fas fa-cog"></i> 設定
+                </button>
+                <button class="user-menu-item" id="btn-user-logout" onclick="handleLogout()">
+                    <i class="fas fa-sign-out-alt"></i> 登出
+                </button>
+            </div>
+        </div>
+    </nav>
+
     <!-- ===== 登入頁 ===== -->
     <div id="login-scene" class="scene" role="main" aria-label="登入">
         <canvas id="network-canvas" aria-hidden="true"></canvas>
-        <div class="login-center">
+        <div class="login-container">
+            <!-- LOGO SVG -->
+            <div class="brand-logo">
+                <svg width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <defs>
+                        <linearGradient id="logoBrandGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#4A9EBF;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#5BB5D6;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <polygon points="50,10 90,30 90,70 50,90 10,70 10,30" fill="none" stroke="url(#logoBrandGradient)" stroke-width="2.5" />
+                    <circle cx="50" cy="50" r="3" fill="url(#logoBrandGradient)" />
+                    <circle cx="65" cy="40" r="2.5" fill="url(#logoBrandGradient)" opacity="0.7" />
+                    <circle cx="35" cy="40" r="2.5" fill="url(#logoBrandGradient)" opacity="0.7" />
+                    <circle cx="70" cy="60" r="2.5" fill="url(#logoBrandGradient)" opacity="0.7" />
+                    <circle cx="30" cy="60" r="2.5" fill="url(#logoBrandGradient)" opacity="0.7" />
+                    <line x1="50" y1="50" x2="65" y2="40" stroke="url(#logoBrandGradient)" stroke-width="1.5" opacity="0.4" />
+                    <line x1="50" y1="50" x2="35" y2="40" stroke="url(#logoBrandGradient)" stroke-width="1.5" opacity="0.4" />
+                    <line x1="50" y1="50" x2="70" y2="60" stroke="url(#logoBrandGradient)" stroke-width="1.5" opacity="0.4" />
+                    <line x1="50" y1="50" x2="30" y2="60" stroke="url(#logoBrandGradient)" stroke-width="1.5" opacity="0.4" />
+                </svg>
+            </div>
             <h1 class="brand">BEDROCK</h1>
-            <div class="brand-divider" aria-hidden="true"></div>
             <p class="brand-subtitle">看見隱藏的連結</p>
 
             <form class="login-form" aria-label="登入表單" onsubmit="return false;">
@@ -31,7 +137,7 @@
             </form>
 
             <!-- 安全設定開關 -->
-            <div class="login-security-toggle">
+            <div class="login-toggle">
                 <span class="toggle-label">需要登入驗證</span>
                 <label class="toggle-switch" for="toggle-require-login" role="switch" aria-checked="false" aria-label="切換登入驗證需求">
                     <input type="checkbox" id="toggle-require-login" class="toggle-input">
@@ -42,75 +148,68 @@
         <p class="login-footer">BEDROCK — 企業關係拓樸暨 EDD 調查平台</p>
     </div>
 
-    <!-- ===== 歡迎畫面 ===== -->
+    <!-- ===== 歡迎畫面（儀表板） ===== -->
     <div id="welcome-scene" class="scene" style="display:none;" role="main" aria-label="儀表板">
         <nav class="welcome-nav" aria-label="主要導覽">
             <span class="nav-brand" aria-hidden="true">BEDROCK</span>
             <div class="nav-tabs" role="tablist" aria-label="頁籤導覽">
-                <button class="nav-tab nav-tab-active" id="tab-investigations" role="tab" aria-selected="true" aria-controls="investigations-section">調查案件</button>
-                <button class="nav-tab" id="tab-admin" role="tab" aria-selected="false" aria-controls="admin-section">管理後台</button>
+                <button class="nav-tab nav-tab-active" id="tab-investigations" role="tab" aria-selected="true" aria-controls="investigations-section" onclick="switchWelcomeTab('investigations')">調查案件</button>
+                <button class="nav-tab" id="tab-admin" role="tab" aria-selected="false" aria-controls="admin-section" onclick="switchWelcomeTab('admin')">管理後台</button>
             </div>
             <div class="nav-spacer"></div>
             <div class="nav-user-menu">
-                <button class="nav-user" id="btn-user-menu" aria-label="使用者選單" aria-haspopup="menu">
-                    <span id="nav-username">Mitch</span>
+                <button class="nav-user" id="btn-user-menu-welcome" aria-label="使用者選單" aria-haspopup="menu" onclick="toggleUserMenu()">
+                    <span id="nav-username-welcome">Mitch</span>
                     <i class="fas fa-chevron-down" aria-hidden="true"></i>
                 </button>
-                <div id="user-menu-dropdown" class="user-menu-dropdown" role="menu" style="display:none;">
-                    <button class="user-menu-item" id="btn-user-settings" role="menuitem">
+                <div id="user-menu-dropdown-welcome" class="user-menu-dropdown" role="menu" style="display:none;">
+                    <button class="user-menu-item" id="btn-user-settings-welcome" role="menuitem" onclick="handleUserSettings()">
                         <i class="fas fa-cog" aria-hidden="true"></i> 設定
                     </button>
-                    <button class="user-menu-item" id="btn-user-logout" role="menuitem">
+                    <button class="user-menu-item" id="btn-user-logout-welcome" role="menuitem" onclick="handleLogout()">
                         <i class="fas fa-sign-out-alt" aria-hidden="true"></i> 登出
                     </button>
                 </div>
             </div>
         </nav>
-        <div class="welcome-hero welcome-hero-compact">
-            <div class="welcome-hero-content">
-                <h1 class="brand brand-light">BEDROCK</h1>
-                <p class="welcome-greeting" id="welcome-greeting">Good morning.</p>
-                <details class="welcome-quote-toggle">
-                    <summary class="quote-toggle-btn">引言</summary>
-                    <div class="welcome-quote">
-                        <p class="quote-text">"The truth is incontrovertible. Malice may attack it, ignorance may deride it, but in the end, there it is."</p>
-                        <p class="quote-source">— Winston Churchill</p>
-                    </div>
-                </details>
-            </div>
+
+        <div class="welcome-hero">
+            <p class="welcome-greeting" id="welcome-greeting">歡迎回來，Mitch</p>
+            <p style="color: var(--color-text-secondary); font-size: 0.95rem; margin: 0;">以下是您的 EDD 調查概況</p>
         </div>
+
         <div class="welcome-body">
             <!-- 調查案件區 -->
             <section id="investigations-section" role="tabpanel" aria-labelledby="tab-investigations">
                 <div class="dashboard-kpi-section">
                     <div class="dashboard-kpi-cards">
                         <div class="kpi-card">
-                            <div class="kpi-icon"><i class="fas fa-folder"></i></div>
-                            <div class="kpi-content">
-                                <div class="kpi-label">總案件數</div>
-                                <div class="kpi-value" id="kpi-total-investigations">0</div>
+                            <div class="kpi-header">
+                                <div class="kpi-icon"><i class="fas fa-folder"></i></div>
                             </div>
+                            <div class="kpi-label">總案件數</div>
+                            <div class="kpi-value" id="kpi-total-investigations">0</div>
                         </div>
                         <div class="kpi-card">
-                            <div class="kpi-icon"><i class="fas fa-spinner"></i></div>
-                            <div class="kpi-content">
-                                <div class="kpi-label">進行中案件數</div>
-                                <div class="kpi-value" id="kpi-active-investigations">0</div>
+                            <div class="kpi-header">
+                                <div class="kpi-icon"><i class="fas fa-spinner"></i></div>
                             </div>
+                            <div class="kpi-label">進行中</div>
+                            <div class="kpi-value" id="kpi-active-investigations">0</div>
                         </div>
                         <div class="kpi-card">
-                            <div class="kpi-icon kpi-icon-danger"><i class="fas fa-flag"></i></div>
-                            <div class="kpi-content">
-                                <div class="kpi-label">總紅旗數</div>
-                                <div class="kpi-value" id="kpi-total-flags">0</div>
+                            <div class="kpi-header">
+                                <div class="kpi-icon danger"><i class="fas fa-flag"></i></div>
                             </div>
+                            <div class="kpi-label">紅旗數</div>
+                            <div class="kpi-value" id="kpi-total-flags">0</div>
                         </div>
                         <div class="kpi-card">
-                            <div class="kpi-icon"><i class="fas fa-circle-notch"></i></div>
-                            <div class="kpi-content">
-                                <div class="kpi-label">總節點數</div>
-                                <div class="kpi-value" id="kpi-total-nodes">0</div>
+                            <div class="kpi-header">
+                                <div class="kpi-icon"><i class="fas fa-circle-notch"></i></div>
                             </div>
+                            <div class="kpi-label">節點數</div>
+                            <div class="kpi-value" id="kpi-total-nodes">0</div>
                         </div>
                     </div>
                 </div>
@@ -126,13 +225,13 @@
                             <input type="text" id="investigations-search" class="dashboard-search-input" placeholder="搜尋案件名稱…" aria-label="搜尋調查案件">
                         </div>
                         <div class="dashboard-filters" role="group" aria-label="案件狀態篩選">
-                            <button class="filter-btn filter-btn-active" data-filter="all">全部</button>
-                            <button class="filter-btn" data-filter="draft">草稿</button>
-                            <button class="filter-btn" data-filter="crawling">搜尋中</button>
-                            <button class="filter-btn" data-filter="analyzing">分析中</button>
-                            <button class="filter-btn" data-filter="completed">已完成</button>
+                            <button class="filter-btn filter-btn-active" data-filter="all" onclick="filterInvestigations('all')">全部</button>
+                            <button class="filter-btn" data-filter="draft" onclick="filterInvestigations('draft')">草稿</button>
+                            <button class="filter-btn" data-filter="crawling" onclick="filterInvestigations('crawling')">搜尋中</button>
+                            <button class="filter-btn" data-filter="analyzing" onclick="filterInvestigations('analyzing')">分析中</button>
+                            <button class="filter-btn" data-filter="completed" onclick="filterInvestigations('completed')">已完成</button>
                         </div>
-                        <button id="btn-new-investigation" class="btn-outline">
+                        <button id="btn-new-investigation" class="btn btn-primary" onclick="openNewInvestigationModal()">
                             <i class="fas fa-plus"></i> 新增調查
                         </button>
                     </div>
@@ -146,15 +245,14 @@
             <section id="admin-section" role="tabpanel" aria-labelledby="tab-admin" style="display:none;">
                 <div class="admin-body">
                     <div class="admin-tabs" role="tablist" aria-label="管理頁籤">
-                        <button class="admin-tab admin-tab-active" id="admin-tab-users" role="tab" aria-selected="true">使用者管理</button>
-                        <button class="admin-tab" id="admin-tab-settings" role="tab" aria-selected="false">系統設定</button>
-                        <button class="admin-tab" id="admin-tab-audit" role="tab" aria-selected="false">稽核紀錄</button>
-                        <button class="admin-tab" id="admin-tab-searxng" role="tab" aria-selected="false">SearXNG 設定</button>
+                        <button class="admin-tab admin-tab-active" id="admin-tab-users" role="tab" aria-selected="true" onclick="switchAdminTab('users')">使用者管理</button>
+                        <button class="admin-tab" id="admin-tab-settings" role="tab" aria-selected="false" onclick="switchAdminTab('settings')">系統設定</button>
+                        <button class="admin-tab" id="admin-tab-audit" role="tab" aria-selected="false" onclick="switchAdminTab('audit')">稽核紀錄</button>
                     </div>
 
                     <div id="admin-users-panel" class="admin-panel admin-panel-active" role="tabpanel">
                         <h3 class="admin-panel-title">使用者管理</h3>
-                        <table class="admin-table">
+                        <table class="admin-table table">
                             <thead>
                                 <tr>
                                     <th>使用者名稱</th>
@@ -182,7 +280,7 @@
 
                     <div id="admin-audit-panel" class="admin-panel" role="tabpanel" style="display:none;">
                         <h3 class="admin-panel-title">稽核紀錄</h3>
-                        <table class="admin-table">
+                        <table class="admin-table table">
                             <thead>
                                 <tr>
                                     <th>時間</th>
@@ -196,21 +294,6 @@
                                 <tr><td colspan="5" style="text-align:center; padding:20px;">載入中…</td></tr>
                             </tbody>
                         </table>
-                    </div>
-
-                    <div id="admin-searxng-panel" class="admin-panel" role="tabpanel" style="display:none;">
-                        <h3 class="admin-panel-title">SearXNG 設定</h3>
-                        <div id="admin-searxng-content">
-                            <div class="admin-setting-group">
-                                <label>連線狀態</label>
-                                <div id="searxng-status" class="searxng-status" style="margin:10px 0;">
-                                    <span class="status-badge status-unknown">檢測中…</span>
-                                </div>
-                                <button id="btn-searxng-test" class="ws-btn-action" style="margin-top:10px;">
-                                    <i class="fas fa-plug"></i> 連線測試
-                                </button>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </section>
@@ -240,10 +323,10 @@
                         搜尋與新增
                         <span class="help-icon" data-tooltip="輸入 8 位統一編號或公司/人名，加入調查對象。系統會自動從資料庫搜尋。" data-tooltip-pos="bottom">?</span>
                     </h4>
-                    <div class="ws-search-row">
+                    <div style="display:flex; gap:8px;">
                         <label for="seed-input" class="sr-only">輸入統一編號或公司名</label>
-                        <input type="text" id="seed-input" class="ws-input" placeholder="輸入統一編號或公司名…" aria-label="輸入統一編號或公司名">
-                        <button id="btn-add-seed" class="ws-btn-add" aria-label="新增查詢目標" data-tooltip="將此統編或名稱加為調查起點" data-tooltip-pos="bottom">新增</button>
+                        <input type="text" id="seed-input" class="ws-input" placeholder="輸入統編或公司名…" aria-label="輸入統一編號或公司名" style="flex:1;">
+                        <button id="btn-add-seed" class="btn btn-primary btn-sm" aria-label="新增查詢目標" data-tooltip="將此統編或名稱加為調查起點" data-tooltip-pos="bottom">新增</button>
                     </div>
                 </div>
                 <div class="ws-section">
@@ -260,13 +343,13 @@
                         <span class="help-icon" data-tooltip="點擊「開始」後，系統會從查詢目標出發，自動追蹤董監事與法人代表，直到找到所有實質受益人為止。" data-tooltip-pos="bottom">?</span>
                     </h4>
                     <div class="ws-controls" role="group" aria-label="搜尋控制">
-                        <button id="btn-start-crawl" class="ws-btn-action ws-btn-start" aria-label="開始搜尋" data-tooltip="開始搜尋，自動追蹤關聯企業與實質受益人" data-tooltip-pos="bottom">
+                        <button id="btn-start-crawl" class="ws-btn-action" aria-label="開始搜尋" data-tooltip="開始搜尋，自動追蹤關聯企業與實質受益人" data-tooltip-pos="bottom">
                             <i class="fas fa-play" aria-hidden="true"></i> 開始
                         </button>
-                        <button id="btn-pause-crawl" class="ws-btn-action ws-btn-pause" disabled aria-label="暫停搜尋">
+                        <button id="btn-pause-crawl" class="ws-btn-action" disabled aria-label="暫停搜尋">
                             <i class="fas fa-pause" aria-hidden="true"></i> 暫停
                         </button>
-                        <button id="btn-stop-crawl" class="ws-btn-action ws-btn-stop" disabled aria-label="停止搜尋">
+                        <button id="btn-stop-crawl" class="ws-btn-action" disabled aria-label="停止搜尋">
                             <i class="fas fa-stop" aria-hidden="true"></i> 停止
                         </button>
                     </div>
@@ -286,9 +369,9 @@
                 <div class="ws-section">
                     <h4 class="ws-section-title">
                         紅旗警示
-                        <span id="flag-count" class="ws-count ws-count-danger">0</span>
+                        <span id="flag-count" class="ws-count" style="background: rgba(255, 59, 48, 0.1); color: var(--color-danger);">0</span>
                         <span class="help-icon" data-tooltip="紅旗是系統自動偵測的可疑模式，例如：殼公司、循環持股、頻繁變更負責人、資本異常等 AML 警訊。">?</span>
-                        <button id="btn-analyze" class="ws-btn-sm" data-tooltip="對已搜尋的網路圖執行結構分析，偵測可疑模式">
+                        <button id="btn-analyze" class="btn btn-sm" style="background: none; color: var(--color-accent); border: none; padding: 0; cursor: pointer; margin-left: auto;" data-tooltip="對已搜尋的網路圖執行結構分析，偵測可疑模式">
                             <i class="fas fa-microscope"></i> 分析
                         </button>
                     </h4>
@@ -297,9 +380,9 @@
                 <div class="ws-section">
                     <h4 class="ws-section-title">
                         負面新聞
-                        <span id="media-count" class="ws-count ws-count-warning">0</span>
+                        <span id="media-count" class="ws-count" style="background: rgba(255, 149, 0, 0.1); color: var(--color-warning);">0</span>
                         <span class="help-icon" data-tooltip="系統搜尋節點相關的負面新聞報導，包括詐騙、洗錢、訴訟等 AML 相關資訊。">?</span>
-                        <button id="btn-search-media" class="ws-btn-sm" data-tooltip="搜尋所有節點的負面新聞">
+                        <button id="btn-search-media" class="btn btn-sm" style="background: none; color: var(--color-accent); border: none; padding: 0; cursor: pointer; margin-left: auto;" data-tooltip="搜尋所有節點的負面新聞">
                             <i class="fas fa-search"></i> 搜尋
                         </button>
                     </h4>
@@ -341,7 +424,7 @@
                             <div class="graph-legend-dot" style="background:#E67E22;"></div> 中風險
                         </div>
                         <div class="graph-legend-item">
-                            <div class="graph-legend-dot risk-pulse" style="background:#C0392B;"></div> 高風險
+                            <div class="graph-legend-dot" style="background:#C0392B; animation: pulse 2s infinite;"></div> 高風險
                         </div>
                         <div class="graph-legend-item">
                             <div class="graph-legend-line" style="background:#C5C0B8;"></div> 董監事
@@ -356,7 +439,7 @@
             <!-- 右側詳情面板 -->
             <aside class="ws-detail" id="ws-detail" style="display:none;" role="complementary" aria-label="節點詳情">
                 <div class="ws-detail-header">
-                    <h4 id="detail-title">節點名稱</h4>
+                    <h4 id="detail-title" style="margin: 0;">節點名稱</h4>
                     <button class="ws-detail-close" onclick="closeDetail()" aria-label="關閉詳情面板">
                         <i class="fas fa-times" aria-hidden="true"></i>
                     </button>
@@ -365,13 +448,13 @@
                     <!-- JS 動態生成 -->
                 </div>
                 <div class="ws-detail-actions">
-                    <button class="ws-btn-action ws-btn-start" id="btn-deep-crawl" data-tooltip="以此節點為起點，繼續深入追蹤更多關聯">
+                    <button class="ws-btn-action" id="btn-deep-crawl" data-tooltip="以此節點為起點，繼續深入追蹤更多關聯">
                         <i class="fas fa-search"></i> 深追
                     </button>
                     <button class="ws-btn-action" id="btn-mark-node" data-tooltip="標記此節點為重點關注對象">
                         <i class="fas fa-bookmark"></i> 標記
                     </button>
-                    <button class="ws-btn-action ws-btn-stop" id="btn-exclude-node" data-tooltip="將此節點從調查範圍中排除">
+                    <button class="ws-btn-action" id="btn-exclude-node" data-tooltip="將此節點從調查範圍中排除">
                         <i class="fas fa-ban"></i> 排除
                     </button>
                 </div>
@@ -399,7 +482,7 @@
             </div>
             <div class="modal-actions">
                 <button class="modal-btn modal-btn-cancel" onclick="closeModal()">取消</button>
-                <button class="modal-btn modal-btn-confirm" id="btn-confirm-new">建立</button>
+                <button class="modal-btn modal-btn-confirm" id="btn-confirm-new" onclick="confirmNewInvestigation()">建立</button>
             </div>
         </div>
     </div>
