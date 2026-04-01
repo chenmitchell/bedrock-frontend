@@ -2337,26 +2337,44 @@
 
     // 設置管理頁籤切換
     function setupAdminTabs() {
-        const adminTabs = document.querySelectorAll('.admin-tab');
-        const adminPanels = document.querySelectorAll('.admin-panel');
+        try {
+            const adminTabs = document.querySelectorAll('.admin-tab');
+            const adminPanels = document.querySelectorAll('.admin-panel');
 
-        adminTabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                const tabId = tab.id;
-                const panelId = tabId.replace('admin-tab-', 'admin-') + '-panel';
+            adminTabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    try {
+                        const tabId = tab.id;
+                        if (!tabId) return;
+                        const panelId = tabId.replace('admin-tab-', 'admin-') + '-panel';
 
-                adminTabs.forEach(t => {
-                    t.classList.remove('admin-tab-active');
-                    t.setAttribute('aria-selected', 'false');
+                        adminTabs.forEach(t => {
+                            t.classList.remove('admin-tab-active');
+                            t.setAttribute('aria-selected', 'false');
+                        });
+                        adminPanels.forEach(p => p.style.display = 'none');
+
+                        tab.classList.add('admin-tab-active');
+                        tab.setAttribute('aria-selected', 'true');
+                        const panel = document.getElementById(panelId);
+                        if (panel) panel.style.display = '';
+
+                        // Load data for specific tabs
+                        const tabName = tabId.replace('admin-tab-', '');
+                        if (tabName === 'users' || tabName === 'audit') {
+                            loadAdminData();
+                        }
+                        if (tabName === 'keywords') {
+                            loadKeywords();
+                        }
+                    } catch(e) {
+                        console.error('[BEDROCK] Admin tab click error:', e);
+                    }
                 });
-                adminPanels.forEach(p => p.style.display = 'none');
-
-                tab.classList.add('admin-tab-active');
-                tab.setAttribute('aria-selected', 'true');
-                const panel = document.getElementById(panelId);
-                if (panel) panel.style.display = '';
             });
-        });
+        } catch(e) {
+            console.error('[BEDROCK] setupAdminTabs error:', e);
+        }
     }
 
     // 設置關鍵字管理控制

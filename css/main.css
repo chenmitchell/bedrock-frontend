@@ -1459,6 +1459,10 @@ input:focus, select:focus, textarea:focus {
 
 /* ===== 7. RWD 響應式 ===== */
 @media (max-width: 768px) {
+  body {
+    overflow-x: hidden;
+  }
+
   .nav-sidebar {
     width: 0;
     padding: 0;

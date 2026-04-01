@@ -92,6 +92,7 @@
         }
 
         resize() {
+            if (!this.canvas || !this.canvas.parentElement) return;
             const rect = this.canvas.parentElement.getBoundingClientRect();
             const dpr = window.devicePixelRatio || 1;
             this.w = rect.width;
