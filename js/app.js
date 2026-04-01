@@ -168,47 +168,13 @@
             state.investigations = data.items || data || [];
         } catch (e) {
             console.warn('[BEDROCK] 無法載入調查:', e.message);
-            // 使用 demo 資料
-            state.investigations = getDemoInvestigations();
+            state.investigations = [];
         }
 
         renderInvestigations();
     }
 
-    function getDemoInvestigations() {
-        return [
-            {
-                id: 'demo-1',
-                title: 'EGOpay 集團關聯調查',
-                description: '追蹤 EGOpay 集團核心人物與關聯企業之間的所有權、董監事交叉持股關係',
-                status: 'crawling',
-                node_count: 47,
-                red_flag_count: 12,
-                created_at: '2026-03-15',
-                updated_at: '2026-03-28',
-            },
-            {
-                id: 'demo-2',
-                title: '國際地產洗錢通道篩查',
-                description: '針對可疑跨境不動產交易鏈進行 EDD 調查，涵蓋台灣與東南亞關聯公司',
-                status: 'draft',
-                node_count: 0,
-                red_flag_count: 0,
-                created_at: '2026-03-29',
-                updated_at: '2026-03-29',
-            },
-            {
-                id: 'demo-3',
-                title: '虛擬貨幣交易所合規審查',
-                description: '調查某虛擬貨幣交易所的實際控制人與資金流向，評估洗錢風險',
-                status: 'completed',
-                node_count: 83,
-                red_flag_count: 5,
-                created_at: '2026-02-10',
-                updated_at: '2026-03-20',
-            },
-        ];
-    }
+    // getDemoInvestigations 已移除 — 不再使用 demo 資料
 
     function renderInvestigations() {
         const listEl = document.getElementById('investigations-list');
@@ -292,21 +258,7 @@
                     if (inv && inv.id) openInvestigation(inv.id);
                 } catch (e) {
                     console.warn('[BEDROCK] 建立失敗:', e.message);
-                    // Demo fallback
-                    const fakeId = 'demo-' + Date.now();
-                    state.investigations.unshift({
-                        id: fakeId,
-                        title,
-                        description: desc,
-                        status: 'draft',
-                        node_count: 0,
-                        red_flag_count: 0,
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString(),
-                    });
-                    renderInvestigations();
-                    closeModal();
-                    Toast.success('調查案件已建立（離線模式）');
+                    Toast.error('建立調查失敗: ' + e.message);
                 }
             });
         }
@@ -353,7 +305,6 @@
             }
         } catch (e) {
             console.warn('[BEDROCK] 載入圖資料失敗:', e.message);
-            renderDemoGraph();
         }
 
         // 載入集群、紅旗、負面新聞
@@ -487,40 +438,7 @@
         runLayout('cola');
     }
 
-    function renderDemoGraph() {
-        if (!state.cy) return;
-
-        const nodes = [
-            { data: { id: 'c1', label: 'EGOpay Holdings', type: 'company', size: 40, color: '#3A7CA5' } },
-            { data: { id: 'c2', label: '宏偉科技有限公司', type: 'company', size: 32, color: '#3A7CA5' } },
-            { data: { id: 'c3', label: '金流國際股份有限公司', type: 'company', size: 32, color: '#3A7CA5', flagged: true } },
-            { data: { id: 'c4', label: '遠東投資顧問', type: 'company', size: 28, color: '#3A7CA5' } },
-            { data: { id: 'c5', label: 'Pacific Trade Ltd', type: 'company', size: 28, color: '#3A7CA5' } },
-            { data: { id: 'p1', label: '張大明', type: 'person', size: 36, color: '#B8860B', flagged: true } },
-            { data: { id: 'p2', label: '李小華', type: 'person', size: 30, color: '#B8860B' } },
-            { data: { id: 'p3', label: '王建國', type: 'person', size: 30, color: '#B8860B' } },
-            { data: { id: 'p4', label: '陳美玲', type: 'person', size: 26, color: '#B8860B' } },
-            { data: { id: 'p5', label: 'David Chen', type: 'person', size: 26, color: '#B8860B' } },
-        ];
-
-        const edges = [
-            { data: { source: 'p1', target: 'c1', label: '董事長', type: 'director' } },
-            { data: { source: 'p1', target: 'c2', label: '實質受益人', type: 'ownership' } },
-            { data: { source: 'p1', target: 'c3', label: '監察人', type: 'director' } },
-            { data: { source: 'p2', target: 'c1', label: '董事', type: 'director' } },
-            { data: { source: 'p2', target: 'c4', label: '負責人', type: 'director' } },
-            { data: { source: 'p3', target: 'c2', label: '總經理', type: 'director' } },
-            { data: { source: 'p3', target: 'c3', label: '董事', type: 'director' } },
-            { data: { source: 'p4', target: 'c4', label: '股東', type: 'ownership' } },
-            { data: { source: 'p5', target: 'c5', label: 'Director', type: 'director' } },
-            { data: { source: 'c1', target: 'c3', label: '持股 60%', type: 'ownership' } },
-            { data: { source: 'c1', target: 'c5', label: '子公司', type: 'ownership' } },
-            { data: { source: 'c4', target: 'c2', label: '投資', type: 'ownership' } },
-        ];
-
-        state.cy.add([...nodes, ...edges]);
-        runLayout('cola');
-    }
+    // renderDemoGraph 已移除 — 不再使用 demo 資料
 
     function runLayout(name) {
         if (!state.cy) return;
@@ -644,13 +562,9 @@
             if (countEl) countEl.textContent = clusters.length;
             renderSidebarList(listEl, clusters, c => c.name, c => `${c.node_count || 0} 節點`);
         } catch (e) {
-            // Demo 資料
-            const demo = [
-                { name: '核心持股集團', node_count: 5 },
-                { name: '海外關聯公司', node_count: 3 },
-            ];
-            if (countEl) countEl.textContent = demo.length;
-            renderSidebarList(listEl, demo, c => c.name, c => `${c.node_count} 節點`);
+            console.warn('[BEDROCK] 載入集群失敗:', e.message);
+            if (countEl) countEl.textContent = '0';
+            listEl.innerHTML = '<div class="ws-list-empty">尚無集群資料</div>';
         }
     }
 
@@ -746,12 +660,9 @@
             if (countEl) countEl.textContent = items.length;
             renderSidebarList(listEl, items, m => m.title, m => m.source);
         } catch (e) {
-            const demo = [
-                { title: 'EGOpay 涉詐騙案遭搜索', source: '聯合新聞網 2026-01' },
-                { title: '金流國際負責人遭約談', source: '自由時報 2025-11' },
-            ];
-            if (countEl) countEl.textContent = demo.length;
-            renderSidebarList(listEl, demo, m => m.title, m => m.source);
+            console.warn('[BEDROCK] 載入負面新聞失敗:', e.message);
+            if (countEl) countEl.textContent = '0';
+            listEl.innerHTML = '<div class="ws-list-empty">尚無負面新聞</div>';
         }
     }
 
