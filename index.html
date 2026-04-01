@@ -11,29 +11,33 @@
     <link rel="stylesheet" href="/css/main.css">
 </head>
 <body class="scene-login">
+    <!-- WCAG: 跳至主要內容連結 -->
+    <a href="#main-content" class="skip-link">跳至主要內容</a>
 
     <!-- ===== 登入頁 ===== -->
-    <div id="login-scene" class="scene">
-        <canvas id="network-canvas"></canvas>
+    <div id="login-scene" class="scene" role="main" aria-label="登入">
+        <canvas id="network-canvas" aria-hidden="true"></canvas>
         <div class="login-center">
             <h1 class="brand">B E D R O C K</h1>
-            <div class="brand-divider"></div>
+            <div class="brand-divider" aria-hidden="true"></div>
             <p class="brand-subtitle">看見隱藏的連結</p>
 
-            <div class="login-form">
-                <input type="text" id="input-email" class="login-input" placeholder="電子郵件">
-                <input type="password" id="input-password" class="login-input" placeholder="密碼">
-                <button id="btn-login" class="login-btn">登入</button>
-            </div>
+            <form class="login-form" aria-label="登入表單" onsubmit="return false;">
+                <label for="input-email" class="sr-only">電子郵件</label>
+                <input type="text" id="input-email" class="login-input" placeholder="電子郵件" autocomplete="email" aria-required="true">
+                <label for="input-password" class="sr-only">密碼</label>
+                <input type="password" id="input-password" class="login-input" placeholder="密碼" autocomplete="current-password" aria-required="true">
+                <button id="btn-login" class="login-btn" type="button">登入</button>
+            </form>
         </div>
         <p class="login-footer">BEDROCK — 企業關係拓樸暨 EDD 調查平台</p>
     </div>
 
     <!-- ===== 歡迎畫面 ===== -->
-    <div id="welcome-scene" class="scene" style="display:none;">
-        <nav class="welcome-nav">
-            <span class="nav-brand">B E D R O C K</span>
-            <span class="nav-user" id="nav-username">Mitch</span>
+    <div id="welcome-scene" class="scene" style="display:none;" role="main" aria-label="儀表板">
+        <nav class="welcome-nav" aria-label="主要導覽">
+            <span class="nav-brand" aria-hidden="true">B E D R O C K</span>
+            <span class="nav-user" id="nav-username" aria-label="目前使用者">Mitch</span>
         </nav>
         <div class="welcome-hero welcome-hero-compact">
             <div class="welcome-hero-content">
@@ -65,17 +69,18 @@
     </div>
 
     <!-- ===== 調查工作台 ===== -->
-    <div id="workspace-scene" class="scene" style="display:none;">
-        <nav class="workspace-nav">
-            <button class="nav-back" onclick="showScene('welcome')">
-                <i class="fas fa-chevron-left"></i>
+    <div id="workspace-scene" class="scene" style="display:none;" role="main" aria-label="調查工作台">
+        <nav class="workspace-nav" aria-label="工作台導覽">
+            <button class="nav-back" onclick="showScene('welcome')" aria-label="返回儀表板">
+                <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                <span class="sr-only">返回</span>
             </button>
-            <span class="nav-brand">B E D R O C K</span>
+            <span class="nav-brand" aria-hidden="true">B E D R O C K</span>
             <span id="ws-title" class="nav-title">調查案件</span>
-            <span id="ws-status" class="ws-status-badge">草稿</span>
+            <span id="ws-status" class="ws-status-badge" role="status" aria-live="polite">草稿</span>
             <div class="nav-spacer"></div>
-            <button class="nav-action" id="btn-export" title="匯出報告">
-                <i class="fas fa-file-export"></i>
+            <button class="nav-action" id="btn-export" aria-label="匯出報告">
+                <i class="fas fa-file-export" aria-hidden="true"></i>
             </button>
         </nav>
         <div class="workspace-body">
@@ -87,8 +92,9 @@
                         <span class="help-icon" data-tooltip="輸入 8 位統一編號或公司/人名，加入調查對象。系統會自動從資料庫搜尋。" data-tooltip-pos="bottom">?</span>
                     </h4>
                     <div class="ws-search-row">
-                        <input type="text" id="seed-input" class="ws-input" placeholder="輸入統一編號或公司名…">
-                        <button id="btn-add-seed" class="ws-btn-add" data-tooltip="將此統編或名稱加為調查起點" data-tooltip-pos="bottom">新增</button>
+                        <label for="seed-input" class="sr-only">輸入統一編號或公司名</label>
+                        <input type="text" id="seed-input" class="ws-input" placeholder="輸入統一編號或公司名…" aria-label="輸入統一編號或公司名">
+                        <button id="btn-add-seed" class="ws-btn-add" aria-label="新增查詢目標" data-tooltip="將此統編或名稱加為調查起點" data-tooltip-pos="bottom">新增</button>
                     </div>
                 </div>
                 <div class="ws-section">
@@ -104,20 +110,20 @@
                         搜尋控制
                         <span class="help-icon" data-tooltip="點擊「開始」後，系統會從查詢目標出發，自動追蹤董監事與法人代表，直到找到所有實質受益人為止。" data-tooltip-pos="bottom">?</span>
                     </h4>
-                    <div class="ws-controls">
-                        <button id="btn-start-crawl" class="ws-btn-action ws-btn-start" data-tooltip="開始搜尋，自動追蹤關聯企業與實質受益人" data-tooltip-pos="bottom">
-                            <i class="fas fa-play"></i> 開始
+                    <div class="ws-controls" role="group" aria-label="搜尋控制">
+                        <button id="btn-start-crawl" class="ws-btn-action ws-btn-start" aria-label="開始搜尋" data-tooltip="開始搜尋，自動追蹤關聯企業與實質受益人" data-tooltip-pos="bottom">
+                            <i class="fas fa-play" aria-hidden="true"></i> 開始
                         </button>
-                        <button id="btn-pause-crawl" class="ws-btn-action ws-btn-pause" disabled>
-                            <i class="fas fa-pause"></i> 暫停
+                        <button id="btn-pause-crawl" class="ws-btn-action ws-btn-pause" disabled aria-label="暫停搜尋">
+                            <i class="fas fa-pause" aria-hidden="true"></i> 暫停
                         </button>
-                        <button id="btn-stop-crawl" class="ws-btn-action ws-btn-stop" disabled>
-                            <i class="fas fa-stop"></i> 停止
+                        <button id="btn-stop-crawl" class="ws-btn-action ws-btn-stop" disabled aria-label="停止搜尋">
+                            <i class="fas fa-stop" aria-hidden="true"></i> 停止
                         </button>
                     </div>
-                    <div id="crawl-progress" class="ws-progress" style="display:none;">
+                    <div id="crawl-progress" class="ws-progress" style="display:none;" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="搜尋進度">
                         <div class="ws-progress-bar"><div class="ws-progress-fill" id="crawl-progress-fill"></div></div>
-                        <span class="ws-progress-text" id="crawl-progress-text">0 節點</span>
+                        <span class="ws-progress-text" id="crawl-progress-text" aria-live="polite">0 節點</span>
                     </div>
                 </div>
                 <div class="ws-section">
@@ -150,15 +156,15 @@
             </aside>
 
             <!-- 中央 Cytoscape -->
-            <main class="ws-canvas-area">
-                <div class="ws-canvas-toolbar">
-                    <button class="ws-tool-btn" id="btn-zoom-in" title="放大"><i class="fas fa-search-plus"></i></button>
-                    <button class="ws-tool-btn" id="btn-zoom-out" title="縮小"><i class="fas fa-search-minus"></i></button>
-                    <button class="ws-tool-btn" id="btn-fit" title="適合畫面"><i class="fas fa-expand"></i></button>
-                    <div class="ws-tool-sep"></div>
-                    <button class="ws-tool-btn" id="btn-layout-cola" title="Cola 排版"><i class="fas fa-project-diagram"></i></button>
-                    <button class="ws-tool-btn" id="btn-layout-grid" title="網格排版"><i class="fas fa-th"></i></button>
-                    <button class="ws-tool-btn" id="btn-export-png" title="匯出圖片"><i class="fas fa-image"></i></button>
+            <main class="ws-canvas-area" id="main-content">
+                <div class="ws-canvas-toolbar" role="toolbar" aria-label="圖譜工具列">
+                    <button class="ws-tool-btn" id="btn-zoom-in" aria-label="放大圖譜"><i class="fas fa-search-plus" aria-hidden="true"></i></button>
+                    <button class="ws-tool-btn" id="btn-zoom-out" aria-label="縮小圖譜"><i class="fas fa-search-minus" aria-hidden="true"></i></button>
+                    <button class="ws-tool-btn" id="btn-fit" aria-label="適合畫面"><i class="fas fa-expand" aria-hidden="true"></i></button>
+                    <div class="ws-tool-sep" aria-hidden="true"></div>
+                    <button class="ws-tool-btn" id="btn-layout-cola" aria-label="力導向排版"><i class="fas fa-project-diagram" aria-hidden="true"></i></button>
+                    <button class="ws-tool-btn" id="btn-layout-grid" aria-label="網格排版"><i class="fas fa-th" aria-hidden="true"></i></button>
+                    <button class="ws-tool-btn" id="btn-export-png" aria-label="匯出圖片"><i class="fas fa-image" aria-hidden="true"></i></button>
                 </div>
                 <div style="position:relative; flex:1; min-height:0;">
                     <div id="cy" class="cytoscape-container" style="width:100%; height:100%;"></div>
@@ -174,11 +180,11 @@
             </main>
 
             <!-- 右側詳情面板 -->
-            <aside class="ws-detail" id="ws-detail" style="display:none;">
+            <aside class="ws-detail" id="ws-detail" style="display:none;" role="complementary" aria-label="節點詳情">
                 <div class="ws-detail-header">
                     <h4 id="detail-title">節點名稱</h4>
-                    <button class="ws-detail-close" onclick="closeDetail()">
-                        <i class="fas fa-times"></i>
+                    <button class="ws-detail-close" onclick="closeDetail()" aria-label="關閉詳情面板">
+                        <i class="fas fa-times" aria-hidden="true"></i>
                     </button>
                 </div>
                 <div id="detail-content" class="ws-detail-body">
@@ -200,21 +206,21 @@
     </div>
 
     <!-- ===== 新增調查 Modal ===== -->
-    <div id="modal-overlay" class="modal-overlay" style="display:none;">
+    <div id="modal-overlay" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="modal-heading">
         <div class="modal-box">
-            <h3 class="modal-title">新增調查案件</h3>
+            <h3 class="modal-title" id="modal-heading">新增調查案件</h3>
             <div class="modal-body">
-                <label class="modal-label">案件名稱</label>
-                <input type="text" id="new-inv-title" class="modal-input" placeholder="輸入案件名稱">
-                <label class="modal-label">說明</label>
+                <label class="modal-label" for="new-inv-title">案件名稱</label>
+                <input type="text" id="new-inv-title" class="modal-input" placeholder="輸入案件名稱" aria-required="true">
+                <label class="modal-label" for="new-inv-desc">說明</label>
                 <textarea id="new-inv-desc" class="modal-textarea" rows="3" placeholder="調查目的與範圍…"></textarea>
-                <label class="modal-label">查詢類型 <span class="help-icon" data-tooltip="統一編號：直接查詢單一公司。公司名稱：模糊搜尋。自然人：查詢此人擔任董監事的所有公司。" data-tooltip-pos="bottom">?</span></label>
+                <label class="modal-label" for="new-inv-seed-type">查詢類型 <span class="help-icon" data-tooltip="統一編號：直接查詢單一公司。公司名稱：模糊搜尋。自然人：查詢此人擔任董監事的所有公司。" data-tooltip-pos="bottom" role="img" aria-label="說明">?</span></label>
                 <select id="new-inv-seed-type" class="modal-input">
                     <option value="tax_id">統一編號（8 位數字）</option>
                     <option value="company">公司名稱（模糊搜尋）</option>
                     <option value="person">自然人姓名</option>
                 </select>
-                <label class="modal-label">查詢目標</label>
+                <label class="modal-label" for="new-inv-seed">查詢目標</label>
                 <input type="text" id="new-inv-seed" class="modal-input" placeholder="輸入 8 位統一編號或公司全名">
             </div>
             <div class="modal-actions">

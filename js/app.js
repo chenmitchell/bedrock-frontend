@@ -861,12 +861,14 @@
             const data = await api.get(`/investigations/${state.currentInvId}/crawl/status`);
             const fill = document.getElementById('crawl-progress-fill');
             const text = document.getElementById('crawl-progress-text');
+            const progressEl = document.getElementById('crawl-progress');
             const pct = data.percentage || 0;
             const processed = data.nodes_processed || 0;
             const discovered = data.nodes_discovered || 0;
             const entity = data.current_entity || '';
 
             if (fill) fill.style.width = pct + '%';
+            if (progressEl) progressEl.setAttribute('aria-valuenow', pct);
             if (text) {
                 text.textContent = `${processed}/${discovered} 節點 (${pct}%)${entity ? ' — ' + entity : ''}`;
             }
