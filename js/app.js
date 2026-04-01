@@ -658,17 +658,63 @@
 
         try {
             const data = await api.get(`/investigations/${invId}/red-flags`);
-            const flags = data.items || data || [];
-            if (countEl) countEl.textContent = flags.length;
-            renderSidebarList(listEl, flags, f => f.rule_name, f => f.description);
+            const flags = data.red_flags || data.items || [];
+            if (countEl) countEl.textContent = data.total || flags.length;
+
+            if (flags.length === 0) {
+                listEl.innerHTML = '<div class="ws-list-empty">尚無紅旗，請先執行爬取與分析</div>';
+                return;
+            }
+
+            // 紅旗名稱映射
+            const ruleNames = {
+                'SHELL_COMPANY': '殼公司',
+                'RAPID_DISSOLVE': '快速註銷',
+                'PHOENIX_COMPANY': '鳳凰公司',
+                'CIRCULAR_OWNERSHIP': '循環持股',
+                'NOMINEE_DIRECTOR': '代理董事',
+                'CAPITAL_ANOMALY': '資本異常',
+                'ADDRESS_CLUSTER': '地址聚集',
+                'FREQUENT_CHANGE': '頻繁變更',
+                'DORMANT_REVIVAL': '休眠復甦',
+                'CROSS_HOLDING': '交叉持股',
+                'AGE_ANOMALY': '年齡異常',
+                'MASS_DIRECTOR': '大量董事',
+                'REGISTRATION_BURST': '註冊激增',
+                'STAR_STRUCTURE': '星形結構',
+                'BRIDGE_NODE': '橋接節點',
+                'UBO_DEEP_PATH': 'UBO 深層路徑',
+            };
+            const severityColors = {
+                'CRITICAL': 'var(--risk-high)',
+                'WARNING': 'var(--risk-medium)',
+                'INFO': 'var(--risk-low)',
+            };
+            const severityLabels = {
+                'CRITICAL': '嚴重',
+                'WARNING': '警告',
+                'INFO': '資訊',
+            };
+
+            listEl.innerHTML = flags.map(f => {
+                const ruleName = ruleNames[f.rule_id] || f.rule_id;
+                const desc = (f.detail && f.detail.description) || '';
+                const color = severityColors[f.severity] || '#999';
+                const sevLabel = severityLabels[f.severity] || f.severity;
+                return `
+                    <div class="ws-list-item" style="border-left: 3px solid ${color};">
+                        <div class="ws-list-item-title">
+                            <span style="color:${color}; font-weight:600;">[${sevLabel}]</span>
+                            ${esc(ruleName)}
+                        </div>
+                        <div class="ws-list-item-sub">${esc(desc)}</div>
+                    </div>
+                `;
+            }).join('');
         } catch (e) {
-            const demo = [
-                { rule_name: '大量資本額變更', description: '公司 EGOpay 在 2 年內變更資本額 5 次' },
-                { rule_name: '年輕董事異常', description: '張大明 25 歲即擔任 3 家公司董事' },
-                { rule_name: '同地址多公司', description: '信義路四段 100 號有 4 家關聯公司' },
-            ];
-            if (countEl) countEl.textContent = demo.length;
-            renderSidebarList(listEl, demo, f => f.rule_name, f => f.description);
+            console.warn('[BEDROCK] 載入紅旗失敗:', e.message);
+            listEl.innerHTML = '<div class="ws-list-empty">載入失敗</div>';
+            if (countEl) countEl.textContent = '0';
         }
     }
 
@@ -819,12 +865,54 @@
             if (data.status === 'completed' || data.status === 'stopped') {
                 state.crawling = false;
                 updateCrawlUI();
-                Toast.success('爬取完成');
+                Toast.success('爬取完成，自動開始分析…');
                 loadInvestigationData(state.currentInvId);
+                // 爬取完成後自動執行圖結構分析
+                setTimeout(() => runAnalysis(), 1000);
                 return;
             }
         } catch (e) {}
         if (state.crawling) setTimeout(() => pollCrawlProgress(), 3000);
+    }
+
+    // ================================================================
+    // 圖結構分析
+    // ================================================================
+    function setupAnalysis() {
+        const btnAnalyze = document.getElementById('btn-analyze');
+        if (btnAnalyze) {
+            btnAnalyze.addEventListener('click', () => runAnalysis());
+        }
+    }
+
+    async function runAnalysis() {
+        if (!state.currentInvId) return;
+        Toast.show('正在執行圖結構分析…', 'info', 5000);
+
+        try {
+            const result = await api.post(`/investigations/${state.currentInvId}/analyze`);
+            const count = result.total_anomalies || 0;
+            Toast.success(`分析完成：發現 ${count} 個異常`);
+
+            // 重新載入紅旗
+            loadRedFlags(state.currentInvId);
+
+            // 在圖上標記有紅旗的節點
+            if (state.cy && result.anomalies) {
+                result.anomalies.forEach(a => {
+                    const targetId = a.target_id;
+                    if (targetId) {
+                        const node = state.cy.getElementById(targetId);
+                        if (node && node.length) {
+                            node.data('flagged', true);
+                        }
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('[BEDROCK] 分析失敗:', e.message);
+            Toast.error('分析失敗: ' + e.message);
+        }
     }
 
     // ================================================================
@@ -885,6 +973,7 @@
         setupLogin();
         setupNewInvestigation();
         setupCrawlControls();
+        setupAnalysis();
         setupExport();
     }
 

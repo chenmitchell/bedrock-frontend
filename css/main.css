@@ -616,6 +616,24 @@ details[open] .quote-toggle-btn::before { content: "▾ "; }
     font-weight: 600;
 }
 
+.ws-btn-sm {
+    margin-left: auto;
+    font-size: 0.68rem;
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+.ws-btn-sm:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
 .ws-count-danger {
     background: var(--risk-high-bg);
     color: var(--risk-high);
