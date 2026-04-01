@@ -668,6 +668,7 @@
 
             // 紅旗名稱映射
             const ruleNames = {
+                // 原始 13 條規則
                 'SHELL_COMPANY': '殼公司',
                 'RAPID_DISSOLVE': '快速註銷',
                 'PHOENIX_COMPANY': '鳳凰公司',
@@ -681,9 +682,22 @@
                 'AGE_ANOMALY': '年齡異常',
                 'MASS_DIRECTOR': '大量董事',
                 'REGISTRATION_BURST': '註冊激增',
+                // 圖結構分析
                 'STAR_STRUCTURE': '星形結構',
                 'BRIDGE_NODE': '橋接節點',
                 'UBO_DEEP_PATH': 'UBO 深層路徑',
+                // 時序異常
+                'CAPITAL_VOLATILITY': '資本劇烈跳動',
+                'BATCH_REGISTRATION': '批量登記',
+                // 歷史資料
+                'DIRECTOR_MUSICAL_CHAIRS': '董事走馬燈',
+                // 實質受益人
+                'UBO_CONCENTRATION': 'UBO 資本集中',
+                'HIDDEN_UBO': '隱藏實質受益人',
+                // 產業組合
+                'SUSPICIOUS_INDUSTRY_MIX': '異常產業組合',
+                // 跨調查
+                'CROSS_INVESTIGATION': '跨調查關聯',
             };
             const severityColors = {
                 'CRITICAL': 'var(--risk-high)',
