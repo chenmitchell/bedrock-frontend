@@ -17,22 +17,30 @@
         : 'https://api.bedrock.mitch.tw/api';
 
     const api = {
-        async request(method, path, body) {
+        async request(method, path, body, timeoutMs = 30000) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+
             const opts = {
                 method,
                 headers: { 'Content-Type': 'application/json' },
+                signal: controller.signal,
             };
-            // 未來加入 JWT token
-            // const token = sessionStorage.getItem('bedrock_token');
-            // if (token) opts.headers['Authorization'] = `Bearer ${token}`;
             if (body) opts.body = JSON.stringify(body);
 
-            const res = await fetch(API_BASE + path, opts);
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({ detail: res.statusText }));
-                throw new Error(err.detail || `HTTP ${res.status}`);
+            try {
+                const res = await fetch(API_BASE + path, opts);
+                clearTimeout(timer);
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({ detail: res.statusText }));
+                    throw new Error(err.detail || `HTTP ${res.status}`);
+                }
+                return res.json();
+            } catch (e) {
+                clearTimeout(timer);
+                if (e.name === 'AbortError') throw new Error('請求逾時，請稍後再試');
+                throw e;
             }
-            return res.json();
         },
         get(path) { return this.request('GET', path); },
         post(path, body) { return this.request('POST', path, body); },
@@ -110,6 +118,8 @@
         currentInv: null,
         cy: null,          // Cytoscape 實例
         crawling: false,
+        _pollTimer: null,  // pollCrawlProgress timer ID
+        _analysisTimer: null, // runAnalysis 後的 setTimeout ID
     };
 
     // ================================================================
@@ -278,7 +288,24 @@
                     Toast.success('調查案件已建立');
                     closeModal();
                     await loadInvestigations();
-                    if (inv && inv.id) openInvestigation(inv.id);
+                    if (inv && inv.id) {
+                        openInvestigation(inv.id);
+                        // 有種子就自動啟動爬蟲 — 使用者不需要再按「開始」
+                        if (seed) {
+                            setTimeout(async () => {
+                                try {
+                                    await api.post(`/investigations/${inv.id}/crawl/start`);
+                                    state.crawling = true;
+                                    updateCrawlUI();
+                                    Toast.success('已自動開始搜尋關聯企業…');
+                                    pollCrawlProgress();
+                                } catch (crawlErr) {
+                                    console.warn('[BEDROCK] 自動爬取啟動失敗:', crawlErr.message);
+                                    Toast.warning('請手動點擊「開始」啟動搜尋');
+                                }
+                            }, 500);
+                        }
+                    }
                 } catch (e) {
                     console.warn('[BEDROCK] 建立失敗:', e.message);
                     Toast.error('建立調查失敗: ' + e.message);
@@ -302,7 +329,11 @@
     // 調查工作台
     // ================================================================
     function openInvestigation(id) {
-        // 確保 id 是數字（API 回傳數字，onclick 傳字串）
+        // 清除上一個調查的 timer，避免 memory leak
+        if (state._pollTimer) { clearTimeout(state._pollTimer); state._pollTimer = null; }
+        if (state._analysisTimer) { clearTimeout(state._analysisTimer); state._analysisTimer = null; }
+        state.crawling = false;
+
         const numId = parseInt(id);
         state.currentInvId = numId;
         state.currentInv = state.investigations.find(i => i.id == numId) || { title: '調查案件', status: 'draft' };
@@ -573,7 +604,23 @@
         if (!state.cy) return;
         state.cy.elements().remove();
         state.cy.add(elements);
-        runLayout('cola');
+        // 大圖用 concentric（快速），小圖用 cola（美觀）
+        const nodeCount = elements.filter(e => e.group === 'nodes').length;
+        if (nodeCount > 150) {
+            state.cy.layout({
+                name: 'concentric',
+                animate: false,
+                concentric: function(node) {
+                    // 有紅旗的放中心
+                    return node.data('flag_count') ? 10 : node.connectedEdges().length;
+                },
+                levelWidth: function() { return 3; },
+                minNodeSpacing: 20,
+            }).run();
+            Toast.show(`${nodeCount} 個節點，使用快速排版`, 'info', 2000);
+        } else {
+            runLayout('cola');
+        }
         // 有資料就隱藏空狀態，顯示圖例
         const emptyState = document.getElementById('cy-empty-state');
         const legend = document.getElementById('graph-legend');
@@ -907,14 +954,21 @@
         try {
             const data = await api.get(`/investigations/${invId}/media`);
             // API 回傳格式: { total, verdicts: [...] }
-            const items = data.verdicts || data.items || [];
-            if (!Array.isArray(items) || items.length === 0) {
+            let items = [];
+            if (data && Array.isArray(data.verdicts)) items = data.verdicts;
+            else if (data && Array.isArray(data.items)) items = data.items;
+            else if (Array.isArray(data)) items = data;
+
+            if (items.length === 0) {
                 if (countEl) countEl.textContent = '0';
                 listEl.innerHTML = '<div class="ws-list-empty">尚無負面新聞</div>';
                 return;
             }
             if (countEl) countEl.textContent = items.length;
-            renderSidebarList(listEl, items, m => m.source_title || m.title || '未知', m => m.source_url ? new URL(m.source_url).hostname : (m.source || ''));
+            renderSidebarList(listEl, items, m => m.source_title || m.title || '未知', m => {
+                try { return m.source_url ? new URL(m.source_url).hostname : (m.source || ''); }
+                catch { return m.source || ''; }
+            });
         } catch (e) {
             console.warn('[BEDROCK] 載入負面新聞失敗:', e.message);
         }
@@ -964,10 +1018,14 @@
             btnPause.addEventListener('click', async () => {
                 try {
                     await api.post(`/investigations/${state.currentInvId}/crawl/pause`);
-                } catch (e) {}
+                    Toast.warning('搜尋已暫停');
+                } catch (e) {
+                    console.warn('[BEDROCK] 暫停失敗:', e.message);
+                    Toast.error('暫停失敗: ' + e.message);
+                }
                 state.crawling = false;
+                if (state._pollTimer) { clearTimeout(state._pollTimer); state._pollTimer = null; }
                 updateCrawlUI();
-                Toast.warning('搜尋已暫停');
             });
         }
 
@@ -975,10 +1033,14 @@
             btnStop.addEventListener('click', async () => {
                 try {
                     await api.post(`/investigations/${state.currentInvId}/crawl/stop`);
-                } catch (e) {}
+                    Toast.warning('搜尋已停止');
+                } catch (e) {
+                    console.warn('[BEDROCK] 停止失敗:', e.message);
+                    Toast.error('停止失敗: ' + e.message);
+                }
                 state.crawling = false;
+                if (state._pollTimer) { clearTimeout(state._pollTimer); state._pollTimer = null; }
                 updateCrawlUI();
-                Toast.warning('搜尋已停止');
             });
         }
 
@@ -1077,7 +1139,7 @@
                             state.cy.add(newElements);
                             // 對新加入的節點做局部 layout
                             const newNodes = state.cy.nodes().filter(n => !existingIds.has(n.id()));
-                            if (newNodes.length > 0 && state.cy.nodes().length <= 500) {
+                            if (newNodes.length > 0 && state.cy.nodes().length <= 150) {
                                 state.cy.layout({
                                     name: 'cola',
                                     animate: true,
@@ -1110,7 +1172,7 @@
                 if (fill) fill.style.width = '100%';
                 if (text) text.textContent = `完成 — ${processed} 個節點`;
                 loadInvestigationData(state.currentInvId);
-                setTimeout(() => runAnalysis(), 1000);
+                state._analysisTimer = setTimeout(() => runAnalysis(), 1000);
                 return;
             }
             if (data.status === 'error') {
@@ -1122,7 +1184,9 @@
         } catch (e) {
             console.warn('[BEDROCK] 查詢進度失敗:', e.message);
         }
-        if (state.crawling) setTimeout(() => pollCrawlProgress(), 2000);
+        if (state.crawling) {
+            state._pollTimer = setTimeout(() => pollCrawlProgress(), 2000);
+        }
     }
 
     // ================================================================
@@ -1165,7 +1229,7 @@
         }, 1500);
 
         try {
-            const result = await api.post(`/investigations/${state.currentInvId}/analyze`);
+            const result = await api.post(`/investigations/${state.currentInvId}/analyze`, null, 120000);
             clearInterval(stepTimer);
 
             const count = result.total_anomalies || 0;
