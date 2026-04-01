@@ -266,6 +266,24 @@ body.scene-workspace { background: var(--page-bg); color: var(--text-body); }
     padding: 36px 32px 28px;
 }
 
+.welcome-quote-toggle {
+    margin-top: 8px;
+    text-align: center;
+}
+.quote-toggle-btn {
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text-caption);
+    list-style: none;
+    user-select: none;
+}
+.quote-toggle-btn::-webkit-details-marker { display: none; }
+.quote-toggle-btn::before { content: "▸ "; }
+details[open] .quote-toggle-btn::before { content: "▾ "; }
+.welcome-quote-toggle .welcome-quote {
+    margin-top: 12px;
+}
+
 #welcome-network-canvas {
     position: absolute;
     top: 0; left: 0;
