@@ -542,6 +542,7 @@
         await loadAdminUsers();
         await loadAdminSettings();
         await loadAdminAudit();
+        await loadDataSyncStatus();
         await checkSearXNGStatus();
     }
 
@@ -550,18 +551,20 @@
         if (!tbody) return;
 
         try {
-            // Mock 使用者資料
-            const users = [
-                { id: 1, name: 'Alice Chen', email: 'alice@bedrock.tw', role: '管理員', created_at: '2024-01-15' },
-                { id: 2, name: 'Bob Wang', email: 'bob@bedrock.tw', role: '分析師', created_at: '2024-02-01' },
-                { id: 3, name: 'Mitch Lee', email: 'mitch@bedrock.tw', role: '調查員', created_at: '2024-01-20' },
-            ];
+            // 從 API 獲取使用者資料
+            const data = await api.get('/admin/users');
+            const users = data.items || data || [];
+
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">暫無使用者</td></tr>';
+                return;
+            }
 
             tbody.innerHTML = users.map(u => `
                 <tr>
-                    <td>${esc(u.name)}</td>
+                    <td>${esc(u.name || u.username || 'N/A')}</td>
                     <td>${esc(u.email)}</td>
-                    <td>${esc(u.role)}</td>
+                    <td>${esc(u.role || '使用者')}</td>
                     <td>${formatDate(u.created_at)}</td>
                     <td>
                         <button class="admin-action-btn" style="margin-right:8px;">編輯</button>
@@ -570,6 +573,7 @@
                 </tr>
             `).join('');
         } catch (e) {
+            console.warn('[BEDROCK] 載入使用者失敗:', e.message);
             tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#B22D20;">載入失敗: ${esc(e.message)}</td></tr>`;
         }
     }
@@ -636,69 +640,174 @@
         if (!tbody) return;
 
         try {
-            // Mock 稽核資料
-            const audits = [
-                { timestamp: new Date(Date.now() - 3600000).toISOString(), user: 'Alice Chen', action: 'create_investigation', resource: 'INV-001', status: 'success' },
-                { timestamp: new Date(Date.now() - 7200000).toISOString(), user: 'Bob Wang', action: 'start_crawl', resource: 'INV-001', status: 'success' },
-                { timestamp: new Date(Date.now() - 10800000).toISOString(), user: 'Mitch Lee', action: 'add_seed', resource: 'INV-001', status: 'success' },
-            ];
+            // 從 API 獲取稽核紀錄
+            const data = await api.get('/admin/audit-log');
+            const audits = data.items || data || [];
+
+            if (audits.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">暫無稽核紀錄</td></tr>';
+                return;
+            }
+
+            const actionMap = {
+                'create_investigation': '建立調查',
+                'start_crawl': '啟動爬蟲',
+                'add_seed': '新增種子',
+                'analyze': '執行分析',
+                'export': '匯出報告',
+                'login': '登入',
+                'logout': '登出',
+                'delete_investigation': '刪除調查',
+            };
 
             tbody.innerHTML = audits.map(a => {
-                const actionMap = {
-                    'create_investigation': '建立調查',
-                    'start_crawl': '啟動爬蟲',
-                    'add_seed': '新增種子',
-                    'analyze': '執行分析',
-                    'export': '匯出報告',
-                };
+                const actionLabel = actionMap[a.action] || a.action;
+                const statusLabel = a.status === 'success' || a.status === 'ok' ? '成功' : '失敗';
                 return `
                     <tr>
-                        <td>${formatDate(a.timestamp)}</td>
-                        <td>${esc(a.user)}</td>
-                        <td>${actionMap[a.action] || a.action}</td>
-                        <td>${esc(a.resource)}</td>
-                        <td><span class="status-badge status-${a.status}">${a.status === 'success' ? '成功' : '失敗'}</span></td>
+                        <td>${formatDate(a.timestamp || a.created_at)}</td>
+                        <td>${esc(a.user || a.username || 'N/A')}</td>
+                        <td>${actionLabel}</td>
+                        <td>${esc(a.resource || a.target || 'N/A')}</td>
+                        <td><span class="status-badge status-${a.status}">${statusLabel}</span></td>
                     </tr>
                 `;
             }).join('');
         } catch (e) {
+            console.warn('[BEDROCK] 載入稽核紀錄失敗:', e.message);
             tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#B22D20;">載入失敗: ${esc(e.message)}</td></tr>`;
         }
     }
+
+    // ================================================================
+    // 資料同步管理
+    // ================================================================
+    async function loadDataSyncStatus() {
+        try {
+            const data = await api.get('/admin/sync-status');
+            const lastTime = document.getElementById('sync-last-time');
+            const hashStatus = document.getElementById('sync-hash-status');
+            const statsTbody = document.getElementById('sync-stats-tbody');
+
+            if (lastTime) {
+                lastTime.textContent = data.last_sync_time
+                    ? formatDate(data.last_sync_time) + ` ${new Date(data.last_sync_time).toLocaleTimeString('zh-TW')}`
+                    : '未曾同步';
+            }
+
+            if (hashStatus) {
+                hashStatus.textContent = data.data_hash || 'N/A';
+            }
+
+            if (statsTbody && data.sync_stats && Array.isArray(data.sync_stats)) {
+                statsTbody.innerHTML = data.sync_stats.map(s => `
+                    <tr>
+                        <td>${esc(s.resource_type || s.type || '未知')}</td>
+                        <td>${s.record_count || 0}</td>
+                        <td>${formatDate(s.last_updated)}</td>
+                    </tr>
+                `).join('');
+            } else if (statsTbody) {
+                statsTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#999;">暫無同步資料</td></tr>';
+            }
+        } catch (e) {
+            console.warn('[BEDROCK] 載入同步狀態失敗:', e.message);
+            const lastTime = document.getElementById('sync-last-time');
+            if (lastTime) lastTime.textContent = '載入失敗: ' + e.message;
+        }
+    }
+
+    async function triggerDataSync() {
+        const btnSync = document.getElementById('btn-sync-now');
+        if (!btnSync) return;
+
+        const originalHtml = btnSync.innerHTML;
+        btnSync.disabled = true;
+        btnSync.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 同步中…';
+
+        try {
+            const result = await api.post('/admin/sync', {});
+            Toast.success(`資料同步完成：${result.synced_records || 0} 筆記錄`);
+            await loadDataSyncStatus();
+        } catch (e) {
+            console.warn('[BEDROCK] 同步失敗:', e.message);
+            Toast.error('資料同步失敗: ' + e.message);
+        } finally {
+            btnSync.disabled = false;
+            btnSync.innerHTML = originalHtml;
+        }
+    }
+    window.triggerDataSync = triggerDataSync;
+
+    async function verifyDataSync() {
+        const btnVerify = document.getElementById('btn-sync-verify');
+        if (!btnVerify) return;
+
+        const originalHtml = btnVerify.innerHTML;
+        btnVerify.disabled = true;
+        btnVerify.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 驗證中…';
+
+        try {
+            const result = await api.post('/admin/sync/verify', {});
+            if (result.is_valid) {
+                Toast.success('資料完整性驗證通過');
+            } else {
+                Toast.warning('資料完整性驗證失敗：' + (result.errors || []).join('、'));
+            }
+        } catch (e) {
+            console.warn('[BEDROCK] 驗證失敗:', e.message);
+            Toast.error('驗證失敗: ' + e.message);
+        } finally {
+            btnVerify.disabled = false;
+            btnVerify.innerHTML = originalHtml;
+        }
+    }
+    window.verifyDataSync = verifyDataSync;
 
     async function checkSearXNGStatus() {
         const statusEl = document.getElementById('searxng-status');
         const testBtn = document.getElementById('btn-searxng-test');
 
-        if (statusEl) {
+        // 檢測 SearXNG 狀態
+        async function performHealthCheck() {
             try {
-                // Mock 檢測 SearXNG 連線狀態
-                const isConnected = Math.random() > 0.3; // 70% 連線成功
-                if (isConnected) {
-                    statusEl.innerHTML = '<span class="status-badge status-success">已連線</span>';
-                } else {
-                    statusEl.innerHTML = '<span class="status-badge status-error">未連線</span>';
+                const data = await api.get('/admin/health');
+                const isHealthy = data.status === 'ok' || data.status === 'healthy';
+                if (statusEl) {
+                    statusEl.innerHTML = isHealthy
+                        ? '<span class="status-badge status-success">已連線</span>'
+                        : '<span class="status-badge status-error">未連線</span>';
                 }
+                return isHealthy;
             } catch (e) {
-                statusEl.innerHTML = '<span class="status-badge status-error">檢測失敗</span>';
+                console.warn('[BEDROCK] 健康檢查失敗:', e.message);
+                if (statusEl) {
+                    statusEl.innerHTML = '<span class="status-badge status-error">檢測失敗</span>';
+                }
+                return false;
             }
         }
+
+        // 初始檢查
+        await performHealthCheck();
 
         if (testBtn) {
             testBtn.addEventListener('click', async () => {
                 testBtn.disabled = true;
-                testBtn.textContent = '連線測試中…';
+                const originalHtml = testBtn.innerHTML;
+                testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 連線測試中…';
                 try {
-                    // Mock 連線測試
-                    await new Promise(r => setTimeout(r, 1500));
-                    Toast.success('SearXNG 連線正常');
-                    if (statusEl) statusEl.innerHTML = '<span class="status-badge status-success">已連線</span>';
+                    const isHealthy = await performHealthCheck();
+                    if (isHealthy) {
+                        Toast.success('SearXNG 連線正常');
+                    } else {
+                        Toast.warning('SearXNG 連線異常');
+                    }
                 } catch (e) {
-                    Toast.error('SearXNG 連線失敗');
-                    if (statusEl) statusEl.innerHTML = '<span class="status-badge status-error">未連線</span>';
+                    Toast.error('SearXNG 連線測試失敗');
                 } finally {
                     testBtn.disabled = false;
-                    testBtn.innerHTML = '<i class="fas fa-plug"></i> 連線測試';
+                    testBtn.innerHTML = originalHtml;
                 }
             });
         }
@@ -893,6 +1002,14 @@
                     },
                 },
                 {
+                    selector: 'node.marked',
+                    style: {
+                        'border-width': 4,
+                        'border-color': '#FFD700',
+                        'border-style': 'double'
+                    },
+                },
+                {
                     selector: 'node:selected',
                     style: {
                         'border-color': '#3A7CA5',
@@ -1039,6 +1156,78 @@
     }
 
     // ================================================================
+    // ================================================================
+    // 節點操作按鈕（深追/標記/排除）
+    // ================================================================
+    let currentSelectedNode = null;
+
+    function setupNodeOperationButtons() {
+        const btnDeepCrawl = document.getElementById('btn-deep-crawl');
+        const btnMark = document.getElementById('btn-mark-node');
+        const btnExclude = document.getElementById('btn-exclude-node');
+
+        if (btnDeepCrawl) {
+            btnDeepCrawl.addEventListener('click', async () => {
+                if (!currentSelectedNode || !state.currentInvId) {
+                    Toast.warning('請先選擇一個節點');
+                    return;
+                }
+                Toast.show('正在從此節點深入追蹤…', 'info');
+                try {
+                    await api.post(`/investigations/${state.currentInvId}/crawl/start`, {
+                        seed_name: currentSelectedNode
+                    });
+                    Toast.success('深入追蹤已啟動');
+                    state.crawling = true;
+                    updateCrawlUI();
+                    pollCrawlProgress();
+                } catch(e) {
+                    Toast.error('深入追蹤失敗: ' + e.message);
+                }
+            });
+        }
+
+        if (btnMark) {
+            btnMark.addEventListener('click', async () => {
+                if (!currentSelectedNode || !state.cy) {
+                    Toast.warning('請先選擇一個節點');
+                    return;
+                }
+                const node = state.cy.getElementById(currentSelectedNode);
+                if (!node || !node.length) return;
+
+                if (node.hasClass('marked')) {
+                    node.removeClass('marked');
+                    Toast.show('已取消標記', 'info');
+                } else {
+                    node.addClass('marked');
+                    Toast.success('已標記為重點關注');
+                }
+            });
+        }
+
+        if (btnExclude) {
+            btnExclude.addEventListener('click', async () => {
+                if (!currentSelectedNode || !state.cy) {
+                    Toast.warning('請先選擇一個節點');
+                    return;
+                }
+                if (!confirm(`確定要將「${currentSelectedNode}」從調查範圍排除嗎？`)) return;
+
+                const node = state.cy.getElementById(currentSelectedNode);
+                if (!node || !node.length) return;
+
+                node.style('opacity', 0.2);
+                node.connectedEdges().style('opacity', 0.1);
+                Toast.warning(`已排除「${currentSelectedNode}」`);
+
+                // 關閉詳情面板
+                const detailPanel = document.getElementById('ws-detail');
+                if (detailPanel) detailPanel.style.display = 'none';
+            });
+        }
+    }
+
     // Cytoscape 工具列
     // ================================================================
     function setupCytoscapeToolbar() {
@@ -1081,6 +1270,9 @@
         const title = document.getElementById('detail-title');
         const content = document.getElementById('detail-content');
         if (!panel || !title || !content) return;
+
+        // 記錄當前選定的節點
+        currentSelectedNode = data.id;
 
         title.textContent = data.label || data.id;
         panel.style.display = '';
@@ -1945,6 +2137,7 @@
         setupExport();
         setupAdminTabs();
         setupWorkspaceMediaSearch();
+        setupNodeOperationButtons();
 
         // 延遲檢查是否跳過登入，確保 UI 已準備好
         setTimeout(() => {

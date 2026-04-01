@@ -249,6 +249,7 @@
                         <button class="admin-tab admin-tab-active" id="admin-tab-users" role="tab" aria-selected="true" onclick="switchAdminTab('users')">使用者管理</button>
                         <button class="admin-tab" id="admin-tab-settings" role="tab" aria-selected="false" onclick="switchAdminTab('settings')">系統設定</button>
                         <button class="admin-tab" id="admin-tab-audit" role="tab" aria-selected="false" onclick="switchAdminTab('audit')">稽核紀錄</button>
+                        <button class="admin-tab" id="admin-tab-sync" role="tab" aria-selected="false" onclick="switchAdminTab('sync')">資料同步</button>
                     </div>
 
                     <div id="admin-users-panel" class="admin-panel admin-panel-active" role="tabpanel">
@@ -295,6 +296,49 @@
                                 <tr><td colspan="5" style="text-align:center; padding:20px;">載入中…</td></tr>
                             </tbody>
                         </table>
+                    </div>
+
+                    <div id="admin-sync-panel" class="admin-panel" role="tabpanel" style="display:none;">
+                        <h3 class="admin-panel-title">資料同步</h3>
+                        <div style="padding: 20px;">
+                            <div class="admin-list">
+                                <div style="margin-bottom: 24px;">
+                                    <h4 style="margin: 0 0 12px 0; color: #333;">最後同步時間</h4>
+                                    <div id="sync-last-time" style="font-family: monospace; color: #666; background: #f5f5f3; padding: 12px; border-radius: 4px;">
+                                        載入中…
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 24px;">
+                                    <h4 style="margin: 0 0 12px 0; color: #333;">資料雜湊值</h4>
+                                    <div id="sync-hash-status" style="font-family: monospace; color: #666; background: #f5f5f3; padding: 12px; border-radius: 4px; word-break: break-all;">
+                                        載入中…
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 24px;">
+                                    <h4 style="margin: 0 0 12px 0; color: #333;">同步統計</h4>
+                                    <table class="admin-table" style="width: 100%;">
+                                        <thead>
+                                            <tr>
+                                                <th>資源類型</th>
+                                                <th>記錄數</th>
+                                                <th>最後更新</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="sync-stats-tbody">
+                                            <tr><td colspan="3" style="text-align:center; padding:12px;">載入中…</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div style="display: flex; gap: 12px; margin-top: 24px;">
+                                    <button id="btn-sync-now" class="btn btn-primary" onclick="triggerDataSync()">
+                                        <i class="fas fa-sync"></i> 立即同步
+                                    </button>
+                                    <button id="btn-sync-verify" class="btn" onclick="verifyDataSync()">
+                                        <i class="fas fa-check-circle"></i> 驗證完整性
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
