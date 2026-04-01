@@ -182,9 +182,25 @@
 
         if (state.investigations.length === 0) {
             listEl.innerHTML = `
-                <div style="grid-column: 1/-1; text-align:center; padding:48px; color:var(--text-caption);">
-                    <i class="fas fa-folder-open" style="font-size:2rem; margin-bottom:12px; display:block;"></i>
-                    尚無調查案件，點擊「新增調查」開始
+                <div class="investigations-empty">
+                    <i class="fas fa-folder-open"></i>
+                    <h3>尚無調查案件</h3>
+                    <p>點擊右上方「新增調查」建立第一個案件。<br>
+                    輸入統一編號或公司名稱，系統會自動追蹤董監事關係與企業拓樸。</p>
+                    <div class="ws-guide-steps" style="margin:20px auto 0; max-width:320px;">
+                        <div class="ws-guide-step">
+                            <span class="ws-guide-step-num">1</span>
+                            <span>點擊「新增調查」，輸入案件名稱與統一編號</span>
+                        </div>
+                        <div class="ws-guide-step">
+                            <span class="ws-guide-step-num">2</span>
+                            <span>進入調查後，點擊「開始」啟動爬蟲</span>
+                        </div>
+                        <div class="ws-guide-step">
+                            <span class="ws-guide-step-num">3</span>
+                            <span>系統自動展開企業關係網路圖，偵測紅旗</span>
+                        </div>
+                    </div>
                 </div>`;
             return;
         }
@@ -293,6 +309,9 @@
 
         showScene('workspace');
         initCytoscape();
+        // 重置空狀態
+        const emptyState = document.getElementById('cy-empty-state');
+        if (emptyState) emptyState.style.display = '';
         loadInvestigationData(id);
     }
     window.openInvestigation = openInvestigation;
@@ -436,6 +455,9 @@
         state.cy.elements().remove();
         state.cy.add(elements);
         runLayout('cola');
+        // 有資料就隱藏空狀態
+        const emptyState = document.getElementById('cy-empty-state');
+        if (emptyState && elements.length > 0) emptyState.style.display = 'none';
     }
 
     // renderDemoGraph 已移除 — 不再使用 demo 資料

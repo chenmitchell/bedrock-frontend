@@ -82,16 +82,22 @@
             <!-- 左側面板 -->
             <aside class="ws-sidebar">
                 <div class="ws-section">
-                    <h4 class="ws-section-title">搜尋與新增</h4>
+                    <h4 class="ws-section-title">
+                        搜尋與新增
+                        <span class="help-icon" data-tooltip="輸入 8 位統一編號或公司/人名，加入為調查種子。系統會自動從 g0v 資料庫搜尋。" data-tooltip-pos="bottom">?</span>
+                    </h4>
                     <div class="ws-search-row">
-                        <input type="text" id="seed-input" class="ws-input" placeholder="統編或人名…">
-                        <button id="btn-add-seed" class="ws-btn-add">新增</button>
+                        <input type="text" id="seed-input" class="ws-input" placeholder="例：90236983 或 台積電">
+                        <button id="btn-add-seed" class="ws-btn-add" data-tooltip="將此統編或名稱加為調查起點" data-tooltip-pos="bottom">新增</button>
                     </div>
                 </div>
                 <div class="ws-section">
-                    <h4 class="ws-section-title">爬取控制</h4>
+                    <h4 class="ws-section-title">
+                        爬取控制
+                        <span class="help-icon" data-tooltip="點擊「開始」後，系統會從種子出發，遞迴追蹤董監事、法人代表，直到找到所有自然人（UBO）為止。" data-tooltip-pos="bottom">?</span>
+                    </h4>
                     <div class="ws-controls">
-                        <button id="btn-start-crawl" class="ws-btn-action ws-btn-start">
+                        <button id="btn-start-crawl" class="ws-btn-action ws-btn-start" data-tooltip="開始遞迴爬取，追蹤至自然人" data-tooltip-pos="bottom">
                             <i class="fas fa-play"></i> 開始
                         </button>
                         <button id="btn-pause-crawl" class="ws-btn-action ws-btn-pause" disabled>
@@ -107,20 +113,30 @@
                     </div>
                 </div>
                 <div class="ws-section">
-                    <h4 class="ws-section-title">集群 <span id="cluster-count" class="ws-count">0</span></h4>
+                    <h4 class="ws-section-title">
+                        集群
+                        <span id="cluster-count" class="ws-count">0</span>
+                        <span class="help-icon" data-tooltip="集群是一組透過董監事或持股關係相互連結的公司群組，可能代表同一控制人的企業版圖。">?</span>
+                    </h4>
                     <div id="clusters-list" class="ws-list"></div>
                 </div>
                 <div class="ws-section">
                     <h4 class="ws-section-title">
-                        紅旗警示 <span id="flag-count" class="ws-count ws-count-danger">0</span>
-                        <button id="btn-analyze" class="ws-btn-sm" title="執行圖結構分析">
+                        紅旗警示
+                        <span id="flag-count" class="ws-count ws-count-danger">0</span>
+                        <span class="help-icon" data-tooltip="紅旗是系統自動偵測的可疑模式，例如：殼公司、循環持股、頻繁變更負責人、資本異常等 AML 警訊。">?</span>
+                        <button id="btn-analyze" class="ws-btn-sm" data-tooltip="對已爬取的網路圖執行結構分析，偵測可疑模式">
                             <i class="fas fa-microscope"></i> 分析
                         </button>
                     </h4>
                     <div id="red-flags-list" class="ws-list"></div>
                 </div>
                 <div class="ws-section">
-                    <h4 class="ws-section-title">負面新聞 <span id="media-count" class="ws-count ws-count-warning">0</span></h4>
+                    <h4 class="ws-section-title">
+                        負面新聞
+                        <span id="media-count" class="ws-count ws-count-warning">0</span>
+                        <span class="help-icon" data-tooltip="系統搜尋節點相關的負面新聞報導，包括詐騙、洗錢、訴訟等 AML 相關資訊。">?</span>
+                    </h4>
                     <div id="media-list" class="ws-list"></div>
                 </div>
             </aside>
@@ -137,6 +153,14 @@
                     <button class="ws-tool-btn" id="btn-export-png" title="匯出圖片"><i class="fas fa-image"></i></button>
                 </div>
                 <div id="cy" class="cytoscape-container"></div>
+                <div id="cy-empty-state" class="ws-empty-state" style="position:absolute; inset:0; pointer-events:none;">
+                    <i class="fas fa-project-diagram"></i>
+                    <div class="ws-empty-state-title">企業關係網路圖</div>
+                    <div class="ws-empty-state-desc">
+                        在左側新增種子（統編或人名），<br>然後點擊「開始」啟動爬蟲。<br>
+                        爬取完成後，網路圖會自動顯示。
+                    </div>
+                </div>
             </main>
 
             <!-- 右側詳情面板 -->
@@ -151,13 +175,13 @@
                     <!-- JS 動態生成 -->
                 </div>
                 <div class="ws-detail-actions">
-                    <button class="ws-btn-action ws-btn-start" id="btn-deep-crawl">
+                    <button class="ws-btn-action ws-btn-start" id="btn-deep-crawl" data-tooltip="以此節點為起點，繼續深入爬取更多關聯">
                         <i class="fas fa-search"></i> 深追
                     </button>
-                    <button class="ws-btn-action" id="btn-mark-node">
+                    <button class="ws-btn-action" id="btn-mark-node" data-tooltip="標記此節點為重點關注對象">
                         <i class="fas fa-bookmark"></i> 標記
                     </button>
-                    <button class="ws-btn-action ws-btn-stop" id="btn-exclude-node">
+                    <button class="ws-btn-action ws-btn-stop" id="btn-exclude-node" data-tooltip="將此節點從調查範圍中排除">
                         <i class="fas fa-ban"></i> 排除
                     </button>
                 </div>
@@ -174,14 +198,14 @@
                 <input type="text" id="new-inv-title" class="modal-input" placeholder="例：EGOpay 集團調查">
                 <label class="modal-label">說明</label>
                 <textarea id="new-inv-desc" class="modal-textarea" rows="3" placeholder="調查目的與範圍…"></textarea>
-                <label class="modal-label">種子類型</label>
+                <label class="modal-label">種子類型 <span class="help-icon" data-tooltip="統一編號：直接查詢單一公司。公司名稱：模糊搜尋。自然人：查詢此人擔任董監事的所有公司。" data-tooltip-pos="bottom">?</span></label>
                 <select id="new-inv-seed-type" class="modal-input">
-                    <option value="company">公司名稱</option>
-                    <option value="tax_id">統一編號</option>
-                    <option value="person">自然人</option>
+                    <option value="tax_id">統一編號（8 位數字）</option>
+                    <option value="company">公司名稱（模糊搜尋）</option>
+                    <option value="person">自然人姓名</option>
                 </select>
                 <label class="modal-label">初始種子</label>
-                <input type="text" id="new-inv-seed" class="modal-input" placeholder="統一編號或人名">
+                <input type="text" id="new-inv-seed" class="modal-input" placeholder="例：90236983 或 台灣積體電路">
             </div>
             <div class="modal-actions">
                 <button class="modal-btn modal-btn-cancel" onclick="closeModal()">取消</button>
