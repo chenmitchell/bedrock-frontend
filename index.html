@@ -247,6 +247,7 @@
                 <div class="admin-body">
                     <div class="admin-tabs" role="tablist" aria-label="管理頁籤">
                         <button class="admin-tab admin-tab-active" id="admin-tab-users" role="tab" aria-selected="true" onclick="switchAdminTab('users')">使用者管理</button>
+                        <button class="admin-tab" id="admin-tab-keywords" role="tab" aria-selected="false" onclick="switchAdminTab('keywords')">關鍵字</button>
                         <button class="admin-tab" id="admin-tab-settings" role="tab" aria-selected="false" onclick="switchAdminTab('settings')">系統設定</button>
                         <button class="admin-tab" id="admin-tab-audit" role="tab" aria-selected="false" onclick="switchAdminTab('audit')">稽核紀錄</button>
                         <button class="admin-tab" id="admin-tab-sync" role="tab" aria-selected="false" onclick="switchAdminTab('sync')">資料同步</button>
@@ -268,6 +269,51 @@
                                 <tr><td colspan="5" style="text-align:center; padding:20px;">載入中…</td></tr>
                             </tbody>
                         </table>
+                    </div>
+
+                    <div id="admin-keywords-panel" class="admin-panel" role="tabpanel" style="display:none;">
+                        <h3 class="admin-panel-title">關鍵字管理</h3>
+
+                        <div style="margin-bottom: 24px;">
+                            <h4 style="margin: 0 0 12px 0; font-size: 0.95rem;">新增關鍵字</h4>
+                            <div class="keyword-form">
+                                <input type="text" id="kw-input-text" class="keyword-form-input" placeholder="輸入關鍵字">
+                                <select id="kw-input-category" class="keyword-form-input">
+                                    <option value="negative_media">負面媒體</option>
+                                    <option value="risk_entity">高風險實體</option>
+                                    <option value="industry">產業分類</option>
+                                    <option value="location">地點</option>
+                                    <option value="custom">自訂</option>
+                                </select>
+                                <select id="kw-input-level" class="keyword-form-input">
+                                    <option value="L3">個人 (L3)</option>
+                                    <option value="L2">組織 (L2)</option>
+                                    <option value="L1">系統 (L1)</option>
+                                </select>
+                                <button id="btn-add-keyword" class="keyword-form-btn">新增</button>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 24px;">
+                            <h4 style="margin: 0 0 12px 0; font-size: 0.95rem;">系統關鍵字 (L1)</h4>
+                            <div id="kw-level-l1" class="keyword-table">
+                                <!-- JS 生成 -->
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 24px;">
+                            <h4 style="margin: 0 0 12px 0; font-size: 0.95rem;">組織關鍵字 (L2)</h4>
+                            <div id="kw-level-l2" class="keyword-table">
+                                <!-- JS 生成 -->
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 style="margin: 0 0 12px 0; font-size: 0.95rem;">個人關鍵字 (L3)</h4>
+                            <div id="kw-level-l3" class="keyword-table">
+                                <!-- JS 生成 -->
+                            </div>
+                        </div>
                     </div>
 
                     <div id="admin-settings-panel" class="admin-panel" role="tabpanel" style="display:none;">
@@ -491,6 +537,9 @@
                 </div>
                 <div id="detail-content" class="ws-detail-body">
                     <!-- JS 動態生成 -->
+                </div>
+                <div id="node-risk-score" class="ws-section" style="margin-top:var(--space-lg); display:none;">
+                    <!-- Risk score card inserted here -->
                 </div>
                 <div class="ws-detail-actions">
                     <button class="ws-btn-action" id="btn-deep-crawl" data-tooltip="以此節點為起點，繼續深入追蹤更多關聯">

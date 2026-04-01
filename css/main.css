@@ -1516,3 +1516,236 @@ input:focus, select:focus, textarea:focus {
     font-size: 2rem;
   }
 }
+
+/* ===== Risk Score Components ===== */
+.risk-score-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+.risk-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: var(--space-lg);
+  padding-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.risk-gauge-number {
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: var(--space-md);
+}
+
+.risk-gauge-label {
+  font-size: 0.95rem;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-md);
+}
+
+.risk-gauge-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  max-width: 200px;
+}
+
+.risk-gauge-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width var(--transition-normal);
+}
+
+.risk-confidence {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-md);
+}
+
+.risk-summary {
+  font-size: 0.9rem;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-lg);
+  line-height: 1.5;
+}
+
+.risk-indicators {
+  margin-bottom: var(--space-lg);
+}
+
+.risk-indicator-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm) 0;
+}
+
+.risk-ind-name {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+.risk-ind-bar-bg {
+  flex: 1;
+  height: 4px;
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  min-width: 50px;
+}
+
+.risk-ind-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width var(--transition-normal);
+}
+
+.risk-ind-score {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  min-width: 30px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.risk-cross-validations {
+  border-left: 3px solid #ef4444;
+  padding-left: var(--space-md);
+  margin-top: var(--space-lg);
+  padding-top: var(--space-md);
+}
+
+.risk-cv-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-md);
+}
+
+.risk-cv-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  margin-bottom: var(--space-sm);
+  font-size: 0.85rem;
+}
+
+.risk-cv-multiplier {
+  font-weight: 600;
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
+.risk-cv-desc {
+  color: var(--color-text-secondary);
+}
+
+/* ===== Keyword Management Components ===== */
+.keyword-form {
+  display: grid;
+  grid-template-columns: 1fr 180px 150px 80px;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.keyword-form-input {
+  padding: var(--space-md);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+}
+.keyword-form-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.keyword-form-btn {
+  padding: var(--space-md);
+  background: var(--color-accent);
+  border: none;
+  border-radius: var(--radius-md);
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.keyword-form-btn:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+.keyword-form-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.keyword-table {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  min-height: 80px;
+}
+
+.keyword-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.keyword-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+}
+
+.keyword-text {
+  flex: 1;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.keyword-tag {
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.keyword-btn-delete {
+  padding: var(--space-xs) var(--space-sm);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: #B22D20;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+.keyword-btn-delete:hover {
+  background: #B22D20;
+  color: #fff;
+  border-color: #B22D20;
+}
+
+.text-muted {
+  color: var(--color-text-muted);
+}

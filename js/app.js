@@ -739,6 +739,110 @@
     }
     window.triggerDataSync = triggerDataSync;
 
+    // 關鍵字管理
+    async function loadKeywords() {
+        try {
+            const data = await api.get('/keywords');
+            const keywords = data.items || data || [];
+
+            // 按等級分組
+            const levelL1 = keywords.filter(k => k.level === 'L1');
+            const levelL2 = keywords.filter(k => k.level === 'L2');
+            const levelL3 = keywords.filter(k => k.level === 'L3');
+
+            // 渲染 L1
+            const l1Container = document.getElementById('kw-level-l1');
+            if (l1Container) {
+                l1Container.innerHTML = renderKeywordTable(levelL1);
+            }
+
+            // 渲染 L2
+            const l2Container = document.getElementById('kw-level-l2');
+            if (l2Container) {
+                l2Container.innerHTML = renderKeywordTable(levelL2);
+            }
+
+            // 渲染 L3
+            const l3Container = document.getElementById('kw-level-l3');
+            if (l3Container) {
+                l3Container.innerHTML = renderKeywordTable(levelL3);
+            }
+
+        } catch(e) {
+            console.error('[BEDROCK] 載入關鍵字失敗:', e.message);
+            Toast.error('載入關鍵字失敗: ' + e.message);
+        }
+    }
+    window.loadKeywords = loadKeywords;
+
+    function renderKeywordTable(keywords) {
+        if (keywords.length === 0) {
+            return '<div class="text-muted">暫無關鍵字</div>';
+        }
+
+        const categoryLabels = {
+            'negative_media': '負面媒體',
+            'risk_entity': '高風險實體',
+            'industry': '產業分類',
+            'location': '地點',
+            'custom': '自訂'
+        };
+
+        return `
+            <div class="keyword-items">
+                ${keywords.map(kw => `
+                    <div class="keyword-item">
+                        <span class="keyword-text">${esc(kw.keyword || kw.text || kw)}</span>
+                        <span class="keyword-tag" style="background:rgba(74, 158, 191, 0.15); color:#3A7CA5;">${esc(categoryLabels[kw.category] || kw.category || '未分類')}</span>
+                        <button class="keyword-btn-delete" onclick="deleteKeyword('${esc(kw.id || kw.keyword)}', '${kw.level}')">刪除</button>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    async function addKeyword() {
+        const textInput = document.getElementById('kw-input-text');
+        const categorySelect = document.getElementById('kw-input-category');
+        const levelSelect = document.getElementById('kw-input-level');
+
+        const text = (textInput.value || '').trim();
+        const category = categorySelect.value || 'custom';
+        const level = levelSelect.value || 'L3';
+
+        if (!text) {
+            Toast.warning('請輸入關鍵字');
+            return;
+        }
+
+        try {
+            await api.post('/keywords', {
+                keyword: text,
+                category: category,
+                level: level
+            });
+            Toast.success('關鍵字已新增');
+            textInput.value = '';
+            loadKeywords();
+        } catch(e) {
+            Toast.error('新增失敗: ' + e.message);
+        }
+    }
+    window.addKeyword = addKeyword;
+
+    async function deleteKeyword(keywordId, level) {
+        if (!confirm('確定要刪除此關鍵字嗎？')) return;
+
+        try {
+            await api.del(`/keywords/${keywordId}`);
+            Toast.success('關鍵字已刪除');
+            loadKeywords();
+        } catch(e) {
+            Toast.error('刪除失敗: ' + e.message);
+        }
+    }
+    window.deleteKeyword = deleteKeyword;
+
     async function verifyDataSync() {
         const btnVerify = document.getElementById('btn-sync-verify');
         if (!btnVerify) return;
@@ -1404,6 +1508,9 @@
 
         // 暴露 cy 給 onclick 導航用
         window.__bedrockCy = state.cy;
+
+        // 加載風險評分
+        loadNodeRiskScore(data.entity_id || data.id);
     }
 
     function closeDetail() {
@@ -1411,6 +1518,85 @@
         if (panel) panel.style.display = 'none';
     }
     window.closeDetail = closeDetail;
+
+    // 風險評分顯示
+    async function loadNodeRiskScore(taxId) {
+        if (!taxId) return;
+        const scoreContainer = document.getElementById('node-risk-score');
+        if (!scoreContainer) return;
+
+        try {
+            const data = await api.get(`/companies/${taxId}/risk-score`);
+
+            const levelColors = {
+                NORMAL: '#4ade80',
+                NOTICE: '#60a5fa',
+                WARNING: '#fbbf24',
+                HIGH: '#f97316',
+                CRITICAL: '#ef4444'
+            };
+
+            const riskScore = data.risk_score || 0;
+            const riskLevel = data.risk_level || 'NORMAL';
+            const riskColor = levelColors[riskLevel] || '#4ade80';
+
+            let indicatorsHtml = '';
+            if (data.indicators && data.indicators.length > 0) {
+                indicatorsHtml = data.indicators
+                    .filter(i => i.normalized_score > 0)
+                    .map(ind => {
+                        const fillPercent = Math.min(100, ind.normalized_score * 10);
+                        const fillColor = ind.normalized_score > 7 ? '#ef4444' :
+                                        ind.normalized_score > 4 ? '#fbbf24' : '#4ade80';
+                        return `
+                            <div class="risk-indicator-row">
+                                <span class="risk-ind-name">${esc(ind.name)}</span>
+                                <div class="risk-ind-bar-bg">
+                                    <div class="risk-ind-bar-fill" style="width:${fillPercent}%;background:${fillColor}"></div>
+                                </div>
+                                <span class="risk-ind-score">${ind.weighted_score || 0}</span>
+                            </div>
+                        `;
+                    }).join('');
+            }
+
+            let cvHtml = '';
+            if (data.cross_validations && data.cross_validations.length > 0) {
+                cvHtml = `
+                    <div class="risk-cross-validations">
+                        <div class="risk-cv-title">交叉驗證警告</div>
+                        ${data.cross_validations.map(cv => `
+                            <div class="risk-cv-item">
+                                <span class="risk-cv-multiplier">×${cv.multiplier}</span>
+                                <span class="risk-cv-desc">${esc(cv.description)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            scoreContainer.innerHTML = `
+                <div class="risk-score-card">
+                    <div class="risk-gauge">
+                        <div class="risk-gauge-number" style="color:${riskColor}">${riskScore}</div>
+                        <div class="risk-gauge-label">${data.risk_label || riskLevel}</div>
+                        <div class="risk-gauge-bar">
+                            <div class="risk-gauge-fill" style="width:${riskScore}%;background:${riskColor}"></div>
+                        </div>
+                    </div>
+                    ${data.confidence ? `<div class="risk-confidence">信心度: ${data.confidence}</div>` : ''}
+                    ${data.summary ? `<div class="risk-summary">${esc(data.summary)}</div>` : ''}
+                    ${indicatorsHtml ? `<div class="risk-indicators">${indicatorsHtml}</div>` : ''}
+                    ${cvHtml}
+                </div>
+            `;
+            scoreContainer.style.display = '';
+        } catch(e) {
+            scoreContainer.innerHTML = `<div class="text-muted">風險評分暫無法計算</div>`;
+            scoreContainer.style.display = '';
+        }
+    }
+    window.loadNodeRiskScore = loadNodeRiskScore;
 
     // ================================================================
     // 左側面板資料載入
@@ -2093,6 +2279,9 @@
         if (tabName === 'users' || tabName === 'audit') {
             loadAdminData();
         }
+        if (tabName === 'keywords') {
+            loadKeywords();
+        }
     }
     window.switchAdminTab = switchAdminTab;
 
@@ -2136,6 +2325,7 @@
         setupAnalysis();
         setupExport();
         setupAdminTabs();
+        setupKeywordControls();
         setupWorkspaceMediaSearch();
         setupNodeOperationButtons();
 
@@ -2167,6 +2357,14 @@
                 if (panel) panel.style.display = '';
             });
         });
+    }
+
+    // 設置關鍵字管理控制
+    function setupKeywordControls() {
+        const btnAddKeyword = document.getElementById('btn-add-keyword');
+        if (btnAddKeyword) {
+            btnAddKeyword.addEventListener('click', addKeyword);
+        }
     }
 
     // 設置工作台的負面新聞搜尋按鈕
