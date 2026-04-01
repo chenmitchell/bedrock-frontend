@@ -899,7 +899,13 @@
             if (data.status === 'completed' || data.status === 'stopped') {
                 state.crawling = false;
                 updateCrawlUI();
-                Toast.success(`搜尋完成：${processed} 個節點，自動開始分析…`);
+                // 顯示完整摘要
+                const msg = data.error_message
+                    ? `搜尋完成（${processed} 節點）\n${data.error_message}`
+                    : `搜尋完成：發現 ${discovered} 個關聯、處理 ${processed} 個節點`;
+                Toast.success(msg);
+                if (fill) fill.style.width = '100%';
+                if (text) text.textContent = `完成 — ${processed} 個節點`;
                 loadInvestigationData(state.currentInvId);
                 setTimeout(() => runAnalysis(), 1000);
                 return;
