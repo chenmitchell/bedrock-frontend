@@ -2475,30 +2475,145 @@
     /** 檢查 target 是否在當前 cytoscape 圖上 */
     function isTargetInGraph(targetId) {
         if (!state.cy || !targetId) return false;
-        // 嘗試直接 ID match
         const direct = state.cy.getElementById(targetId);
         if (direct && direct.length > 0) return true;
-        // 嘗試 entity_id match
         const byEntity = state.cy.nodes().filter(n => n.data('entity_id') === targetId);
         return byEntity.length > 0;
     }
 
+    /** 檢查 target 是否在當前可見範圍（深度/篩選後仍顯示） */
+    function isTargetVisible(targetId) {
+        if (!state.cy || !targetId) return false;
+        let node = state.cy.getElementById(targetId);
+        if (!node || node.length === 0) {
+            const byEntity = state.cy.nodes().filter(n => n.data('entity_id') === targetId);
+            if (byEntity.length > 0) node = byEntity[0];
+            else return false;
+        }
+        // 節點存在但可能被深度篩選隱藏
+        return node.style('display') !== 'none' && parseFloat(node.style('opacity')) > 0.3;
+    }
+
+    /** 取得當前可見節點的 entity_id 集合（供儀表板過濾） */
+    function getVisibleEntityIds() {
+        if (!state.cy) return null;
+        const ids = new Set();
+        state.cy.nodes().forEach(n => {
+            if (n.style('display') !== 'none' && parseFloat(n.style('opacity')) > 0.3) {
+                const d = n.data();
+                if (d.entity_id) ids.add(d.entity_id);
+                if (d.id) ids.add(d.id);
+                if (d.label) ids.add(d.label);
+            }
+        });
+        return ids;
+    }
+
+    /** 根據可見節點過濾儀表板資料 */
+    function filterDashboardByVisibleNodes(data) {
+        if (!state.cy) return data;
+
+        const visibleIds = getVisibleEntityIds();
+        if (!visibleIds || visibleIds.size === 0) return data;
+
+        // 總節點數與可見節點數相同 → 不需過濾
+        const totalNodes = state.cy.nodes().length;
+        const visibleCount = state.cy.nodes().filter(n => n.style('display') !== 'none').length;
+        if (visibleCount >= totalNodes) return data;
+
+        // 過濾 top_critical
+        const filteredTop = (data.top_critical || []).filter(f =>
+            visibleIds.has(f.target_id) || isTargetVisible(f.target_id)
+        );
+
+        // 過濾 entity_hotspots
+        const filteredHotspots = (data.entity_hotspots || []).filter(h =>
+            visibleIds.has(h.target_id) || isTargetVisible(h.target_id)
+        );
+
+        // 過濾 category_groups 中的 sample_flags 和計數
+        const filteredGroups = {};
+        for (const [catKey, cat] of Object.entries(data.category_groups || {})) {
+            const filteredRules = (cat.rules || []).map(r => {
+                const filteredSamples = (r.sample_flags || []).filter(s =>
+                    visibleIds.has(s.target_id) || isTargetVisible(s.target_id)
+                );
+                // 用過濾後的比例估算 count
+                const ratio = r.sample_flags && r.sample_flags.length > 0
+                    ? filteredSamples.length / r.sample_flags.length : 1;
+                return {
+                    ...r,
+                    sample_flags: filteredSamples,
+                    count: Math.round(r.count * ratio),
+                    by_severity: {
+                        CRITICAL: Math.round((r.by_severity?.CRITICAL || 0) * ratio),
+                        WARNING: Math.round((r.by_severity?.WARNING || 0) * ratio),
+                        INFO: Math.round((r.by_severity?.INFO || 0) * ratio),
+                    },
+                };
+            }).filter(r => r.count > 0);
+
+            if (filteredRules.length > 0) {
+                const total = filteredRules.reduce((s, r) => s + r.count, 0);
+                const bySev = {};
+                filteredRules.forEach(r => {
+                    for (const [k, v] of Object.entries(r.by_severity || {})) {
+                        bySev[k] = (bySev[k] || 0) + v;
+                    }
+                });
+                filteredGroups[catKey] = { ...cat, rules: filteredRules, total, by_severity: bySev };
+            }
+        }
+
+        // 重新計算 severity_summary
+        const sevSummary = {};
+        filteredTop.forEach(f => {
+            sevSummary[f.severity] = (sevSummary[f.severity] || 0) + 1;
+        });
+
+        return {
+            ...data,
+            top_critical: filteredTop,
+            entity_hotspots: filteredHotspots,
+            category_groups: filteredGroups,
+            severity_summary: Object.keys(sevSummary).length > 0 ? sevSummary : data.severity_summary,
+            total_flags: filteredTop.length || data.total_flags,
+            _filtered: true,
+            _visibleCount: visibleCount,
+            _totalNodes: totalNodes,
+        };
+    }
+
     function renderAnalysisDashboard(data) {
+        // 根據深度/篩選過濾儀表板資料
+        const filtered = _dashboardFilterInGraph ? data : filterDashboardByVisibleNodes(data);
+
         // 嚴重程度卡
         const el = (id) => document.getElementById(id);
-        el('ad-total').textContent = data.total_flags || 0;
-        el('ad-critical').textContent = (data.severity_summary || {}).CRITICAL || 0;
-        el('ad-warning').textContent = (data.severity_summary || {}).WARNING || 0;
-        el('ad-info').textContent = (data.severity_summary || {}).INFO || 0;
+        el('ad-total').textContent = filtered.total_flags || 0;
+        el('ad-critical').textContent = (filtered.severity_summary || {}).CRITICAL || 0;
+        el('ad-warning').textContent = (filtered.severity_summary || {}).WARNING || 0;
+        el('ad-info').textContent = (filtered.severity_summary || {}).INFO || 0;
+
+        // 如果有過濾，顯示提示
+        const filterHint = document.getElementById('ad-filter-hint');
+        if (filterHint) {
+            if (filtered._filtered && filtered._visibleCount < filtered._totalNodes) {
+                filterHint.style.display = '';
+                filterHint.textContent = `目前顯示 ${filtered._visibleCount}/${filtered._totalNodes} 個節點的分析結果（依深度/篩選連動）`;
+            } else {
+                filterHint.style.display = 'none';
+            }
+        }
 
         // 分類群組
-        renderCategoryGroups(data.category_groups || {});
+        renderCategoryGroups(filtered.category_groups || {});
 
         // Top 10
-        renderTopFindings(data.top_critical || []);
+        renderTopFindings(filtered.top_critical || []);
 
         // 實體熱點
-        renderEntityHotspots(data.entity_hotspots || []);
+        renderEntityHotspots(filtered.entity_hotspots || []);
     }
 
     function renderCategoryGroups(groups) {
@@ -3435,6 +3550,17 @@
                     catch { return m.source || ''; }
                 });
             }
+        }
+
+        // ── 連動儀表板：如果儀表板正在顯示，也重新過濾 ──
+        refreshDashboardIfOpen();
+    }
+
+    /** 如果分析儀表板正在顯示，重新 render 以反映可見節點的變化 */
+    function refreshDashboardIfOpen() {
+        const overlay = document.getElementById('analysis-dashboard-overlay');
+        if (overlay && overlay.style.display !== 'none' && _dashboardData) {
+            renderAnalysisDashboard(_dashboardData);
         }
     }
 
