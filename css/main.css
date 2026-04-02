@@ -1385,22 +1385,28 @@ input:focus, select:focus, textarea:focus {
 }
 
 .ws-sidebar.collapsed {
-  width: 40px !important;
   min-width: 40px !important;
+  max-width: 40px !important;
   padding: 8px 4px;
   overflow: hidden;
 }
 .ws-sidebar.collapsed > .ws-section {
   display: none;
 }
+.ws-sidebar.collapsed > .panel-collapse-btn {
+  display: block;
+}
 .ws-detail.collapsed {
-  width: 40px !important;
   min-width: 40px !important;
+  max-width: 40px !important;
   padding: 8px 4px;
   overflow: hidden;
 }
-.ws-detail.collapsed > * {
+.ws-detail.collapsed > *:not(.panel-collapse-btn) {
   display: none;
+}
+.ws-detail.collapsed > .panel-collapse-btn {
+  display: block;
 }
 .panel-collapse-btn {
   display: block;
@@ -1415,9 +1421,11 @@ input:focus, select:focus, textarea:focus {
   line-height: 28px;
   text-align: center;
   margin-bottom: 8px;
+  flex-shrink: 0;
 }
 .panel-collapse-btn:hover {
   background: var(--color-bg);
+  color: var(--color-text-primary);
 }
 
 .ws-sidebar {
@@ -1528,14 +1536,19 @@ input:focus, select:focus, textarea:focus {
 /* Graph legend */
 .graph-legend {
   position: absolute;
-  top: var(--space-lg);
+  bottom: var(--space-lg);
   right: var(--space-lg);
-  background: var(--color-surface);
+  background: rgba(255, 255, 255, 0.95);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
   z-index: 10;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  backdrop-filter: blur(4px);
+  max-width: 180px;
+  cursor: move;
+  user-select: none;
 }
 
 .graph-legend-title {

@@ -334,9 +334,7 @@
             const statusLabel = statusMap[inv.status] || inv.status;
             const statusClass = `status-${inv.status || 'draft'}`;
 
-            // 只有 0 節點的調查才顯示刪除按鈕
             const nodeCount = inv.node_count || 0;
-            const showDelete = nodeCount === 0;
 
             return `
                 <div class="investigation-card" data-id="${inv.id}">
@@ -346,7 +344,7 @@
                         </div>
                         <div style="display: flex; gap: 12px; align-items: start;">
                             <span class="status-badge ${statusClass}">${statusLabel}</span>
-                            ${showDelete ? `<button class="btn-card-delete" data-id="${inv.id}" onclick="deleteInvestigation(event, '${inv.id}')" aria-label="刪除調查" title="刪除此調查"><i class="fas fa-trash-alt"></i></button>` : ''}
+                            <button class="btn-card-delete" data-id="${inv.id}" onclick="deleteInvestigation(event, '${inv.id}', ${nodeCount})" aria-label="刪除調查" title="刪除此調查"><i class="fas fa-trash-alt"></i></button>
                         </div>
                     </div>
                     <div class="investigation-card-desc" onclick="openInvestigation('${inv.id}')" style="cursor: pointer;">${esc(inv.description || '')}</div>
@@ -467,12 +465,20 @@
     }
     window.closeModal = closeModal;
 
-    // 刪除調查（只有 0 節點的調查可以刪除）
-    async function deleteInvestigation(event, invId) {
+    // 刪除調查
+    async function deleteInvestigation(event, invId, nodeCount = 0) {
         event.stopPropagation();  // 防止觸發卡片的 openInvestigation
 
-        const confirmed = confirm('確定要刪除此調查案件嗎？此動作無法復原。');
-        if (!confirmed) return;
+        let msg = '確定要刪除此調查案件嗎？此動作無法復原。';
+        if (nodeCount > 0) {
+            msg = `此案件包含 ${nodeCount} 個節點及相關分析資料。\n確定要永久刪除嗎？此動作無法復原！`;
+        }
+        if (!confirm(msg)) return;
+
+        // 有資料的案件二次確認
+        if (nodeCount > 0) {
+            if (!confirm(`最後確認：刪除後所有節點、紅旗、集群資料都會消失。繼續？`)) return;
+        }
 
         try {
             await api.del(`/investigations/${invId}`);
@@ -1017,14 +1023,23 @@
             listEl.innerHTML = seeds.map(s => {
                 const typeLabel = typeLabels[s.seed_type] || s.seed_type;
                 const resolvedName = s.resolved_company_name || '';
+                const status = s.company_status || '';
+                const capital = s.capital ? (s.capital >= 10000 ? `${Math.round(s.capital / 10000)} 萬` : `${s.capital.toLocaleString()} 元`) : '';
+                const rep = s.representative || '';
+                const statusColor = status === '核准設立' ? '#27AE60' : status === '解散' ? '#C0392B' : '#888';
                 return `
                     <div class="ws-list-item ws-seed-item" data-seed-id="${s.id}" style="cursor:pointer;" onclick="focusSeedNode('${esc(s.seed_value)}')">
-                        <div class="ws-list-item-title" style="display:flex; align-items:center; gap:6px;">
+                        <div style="display:flex; align-items:center; gap:6px;">
                             <span class="ws-seed-type">${typeLabel}</span>
-                            <span style="font-weight:600;">${esc(s.seed_value)}</span>
+                            <span style="font-weight:600; font-size:12px;">${esc(s.seed_value)}</span>
                         </div>
-                        ${resolvedName ? `<div style="font-size:11px; color:#3A7CA5; font-weight:500; margin-top:2px;">${esc(resolvedName)}</div>` : ''}
-                        <div class="ws-list-item-sub">${formatDate(s.created_at)}</div>
+                        ${resolvedName ? `<div style="font-size:12px; color:#3A7CA5; font-weight:600; margin-top:3px;">${esc(resolvedName)}</div>` : ''}
+                        ${(status || capital || rep) ? `
+                        <div style="font-size:10px; color:#999; margin-top:2px; display:flex; gap:6px; flex-wrap:wrap;">
+                            ${status ? `<span style="color:${statusColor};">${esc(status)}</span>` : ''}
+                            ${capital ? `<span>資本 ${capital}</span>` : ''}
+                            ${rep ? `<span>代表：${esc(rep)}</span>` : ''}
+                        </div>` : ''}
                     </div>
                 `;
             }).join('');
@@ -2542,27 +2557,46 @@
     }
     window.filterHistoricalByRange = filterHistoricalByRange;
 
-    // 左側面板展開/收合
+    // 面板展開/收合 + 更新 grid-template-columns
+    function updateGridColumns() {
+        const body = document.querySelector('.workspace-body');
+        if (!body) return;
+        const sidebarCollapsed = document.querySelector('.ws-sidebar.collapsed');
+        const detailCollapsed = document.querySelector('.ws-detail.collapsed');
+        if (sidebarCollapsed && detailCollapsed) {
+            body.style.gridTemplateColumns = '40px 1fr 40px';
+        } else if (sidebarCollapsed) {
+            body.style.gridTemplateColumns = '40px 1fr minmax(200px, 360px)';
+        } else if (detailCollapsed) {
+            body.style.gridTemplateColumns = 'minmax(200px, 260px) 1fr 40px';
+        } else {
+            body.style.gridTemplateColumns = '';  // 回到 CSS 預設
+        }
+    }
+
     function toggleSidebar() {
         const sidebar = document.querySelector('.ws-sidebar');
         const btn = document.getElementById('btn-collapse-sidebar');
         if (!sidebar || !btn) return;
         sidebar.classList.toggle('collapsed');
-        btn.textContent = sidebar.classList.contains('collapsed') ? '▶' : '◀';
-        btn.title = sidebar.classList.contains('collapsed') ? '展開左側面板' : '收合左側面板';
-        if (state.cy) setTimeout(() => state.cy.resize(), 300);
+        const isCollapsed = sidebar.classList.contains('collapsed');
+        btn.textContent = isCollapsed ? '▶' : '◀';
+        btn.title = isCollapsed ? '展開左側面板' : '收合左側面板';
+        updateGridColumns();
+        if (state.cy) setTimeout(() => state.cy.resize(), 100);
     }
     window.toggleSidebar = toggleSidebar;
 
-    // 右側面板展開/收合
     function toggleDetailPanel() {
         const panel = document.getElementById('ws-detail');
         const btn = document.getElementById('btn-collapse-detail');
         if (!panel || !btn) return;
         panel.classList.toggle('collapsed');
-        btn.textContent = panel.classList.contains('collapsed') ? '◀' : '▶';
-        btn.title = panel.classList.contains('collapsed') ? '展開右側面板' : '收合右側面板';
-        if (state.cy) setTimeout(() => state.cy.resize(), 300);
+        const isCollapsed = panel.classList.contains('collapsed');
+        btn.textContent = isCollapsed ? '◀' : '▶';
+        btn.title = isCollapsed ? '展開右側面板' : '收合右側面板';
+        updateGridColumns();
+        if (state.cy) setTimeout(() => state.cy.resize(), 100);
     }
     window.toggleDetailPanel = toggleDetailPanel;
 
