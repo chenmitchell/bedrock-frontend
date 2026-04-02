@@ -1175,6 +1175,25 @@
                         'color': '#8B4513',
                     },
                 },
+                // 查詢主體（seed）：特殊邊框 + 星形光暈
+                {
+                    selector: 'node[is_seed]',
+                    style: {
+                        'border-width': 4,
+                        'border-color': '#1ABC9C',
+                        'border-style': 'double',
+                        'shadow-blur': 20,
+                        'shadow-color': '#1ABC9C',
+                        'shadow-opacity': 0.5,
+                        'shadow-offset-x': 0,
+                        'shadow-offset-y': 0,
+                        'font-size': '13px',
+                        'font-weight': 'bold',
+                        'color': '#0E6655',
+                        'text-max-width': '120px',
+                        'z-index': 999,
+                    },
+                },
                 {
                     selector: 'node[flagged]',
                     style: {
@@ -1319,15 +1338,19 @@
         if (!state.cy) return;
         state.cy.elements().remove();
         state.cy.add(elements);
-        // 大圖用 concentric（快速），小圖用 cola（美觀）
+
         const nodeCount = elements.filter(e => e.group === 'nodes').length;
+        const seedNodes = state.cy.nodes('[?is_seed]');
+
         if (nodeCount > 150) {
+            // 大圖用 concentric：seed 放最中心
             state.cy.layout({
                 name: 'concentric',
                 animate: false,
                 concentric: function(node) {
-                    // 有紅旗的放中心
-                    return node.data('flag_count') ? 10 : node.connectedEdges().length;
+                    if (node.data('is_seed')) return 100;  // seed 最中心
+                    if (node.data('flag_count')) return 50 + node.data('flag_count');
+                    return node.connectedEdges().length;
                 },
                 levelWidth: function() { return 3; },
                 minNodeSpacing: 20,
@@ -1336,6 +1359,7 @@
         } else {
             runLayout('cola');
         }
+
         // 有資料就隱藏空狀態，顯示圖例
         const emptyState = document.getElementById('cy-empty-state');
         const legend = document.getElementById('graph-legend');
@@ -1343,6 +1367,18 @@
             if (emptyState) emptyState.style.display = 'none';
             if (legend) legend.style.display = '';
         }
+
+        // layout 完成後聚焦到 seed 節點
+        setTimeout(() => {
+            if (seedNodes.length > 0) {
+                state.cy.fit(seedNodes, 80);
+                // 如果 seed 很少，zoom out 一些看全貌
+                if (seedNodes.length <= 3 && state.cy.zoom() > 1.5) {
+                    state.cy.zoom(1.2);
+                    state.cy.center(seedNodes);
+                }
+            }
+        }, 600);
     }
 
     // renderDemoGraph 已移除 — 不再使用 demo 資料
