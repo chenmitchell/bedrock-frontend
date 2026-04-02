@@ -1327,11 +1327,12 @@ input:focus, select:focus, textarea:focus {
 .workspace-nav {
   display: flex;
   align-items: center;
-  gap: var(--space-lg);
-  padding: var(--space-lg) var(--space-2xl);
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-lg);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
-  height: 70px;
+  height: 48px;
+  flex-shrink: 0;
 }
 
 .nav-back {
@@ -1339,8 +1340,8 @@ input:focus, select:focus, textarea:focus {
   border: none;
   color: var(--color-text-secondary);
   cursor: pointer;
-  padding: var(--space-md);
-  font-size: 1rem;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 0.9rem;
 }
 
 .nav-title {
@@ -1362,12 +1363,12 @@ input:focus, select:focus, textarea:focus {
   border: none;
   color: var(--color-accent);
   cursor: pointer;
-  padding: var(--space-md);
+  padding: var(--space-xs) var(--space-sm);
 }
 
 .workspace-body {
   display: grid;
-  grid-template-columns: minmax(200px, 260px) 1fr minmax(200px, 360px);
+  grid-template-columns: 240px 1fr 280px;
   flex: 1;
   min-height: 0;
   gap: 1px;
@@ -1375,10 +1376,10 @@ input:focus, select:focus, textarea:focus {
 }
 
 .workspace-body:has(.ws-sidebar.collapsed) {
-  grid-template-columns: 40px 1fr minmax(200px, 360px);
+  grid-template-columns: 40px 1fr 280px;
 }
 .workspace-body:has(.ws-detail.collapsed) {
-  grid-template-columns: minmax(200px, 260px) 1fr 40px;
+  grid-template-columns: 240px 1fr 40px;
 }
 .workspace-body:has(.ws-sidebar.collapsed):has(.ws-detail.collapsed) {
   grid-template-columns: 40px 1fr 40px;
@@ -1430,7 +1431,7 @@ input:focus, select:focus, textarea:focus {
 
 .ws-sidebar {
   background: var(--color-surface);
-  padding: var(--space-lg);
+  padding: var(--space-md);
   overflow-y: auto;
 }
 
@@ -1449,8 +1450,8 @@ input:focus, select:focus, textarea:focus {
 }
 
 .ws-section {
-  margin-bottom: var(--space-xl);
-  padding-bottom: var(--space-xl);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-md);
   border-bottom: 1px solid var(--color-border);
 }
 .ws-section:last-child {
@@ -1458,10 +1459,10 @@ input:focus, select:focus, textarea:focus {
 }
 
 .ws-section-title {
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--color-text-primary);
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-sm);
   display: flex;
   align-items: center;
   gap: var(--space-sm);
@@ -1496,24 +1497,30 @@ input:focus, select:focus, textarea:focus {
   margin-bottom: var(--space-md);
 }
 
+.ws-controls {
+  display: flex;
+  gap: 6px;
+}
 .ws-btn-action {
-  width: 100%;
-  padding: var(--space-md);
+  flex: 1;
+  padding: 6px 0;
   background: var(--color-accent);
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   color: #fff;
   cursor: pointer;
   font-weight: 500;
+  font-size: 0.78rem;
   transition: all var(--transition-fast);
-  margin-bottom: var(--space-sm);
 }
 .ws-btn-action:hover:not(:disabled) {
   background: var(--color-accent-hover);
 }
 .ws-btn-action:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
+  background: var(--color-surface-active);
+  color: var(--color-text-muted);
 }
 
 .ws-detail-header {
@@ -1536,17 +1543,17 @@ input:focus, select:focus, textarea:focus {
 /* Graph legend */
 .graph-legend {
   position: absolute;
-  bottom: var(--space-lg);
-  right: var(--space-lg);
-  background: rgba(255, 255, 255, 0.95);
+  bottom: var(--space-sm);
+  right: var(--space-sm);
+  background: rgba(255, 255, 255, 0.88);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
   z-index: 10;
-  font-size: 0.8rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  font-size: 0.7rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
   backdrop-filter: blur(4px);
-  max-width: 180px;
+  max-width: 150px;
   cursor: move;
   user-select: none;
 }
@@ -1988,28 +1995,28 @@ input:focus, select:focus, textarea:focus {
   display: flex;
   align-items: center;
   gap: 0;
-  margin: 0 12px;
+  flex-shrink: 0;
 }
 .workflow-step {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
+  gap: 3px;
+  padding: 2px 6px;
   border-radius: var(--radius-full);
-  font-size: 0.72rem;
+  font-size: 0.65rem;
   color: var(--color-text-muted);
   transition: all var(--transition-fast);
   white-space: nowrap;
   cursor: default;
 }
 .workflow-step-num {
-  width: 18px;
-  height: 18px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.65rem;
+  font-size: 0.58rem;
   font-weight: 700;
   background: var(--color-surface-active);
   color: var(--color-text-muted);
@@ -2019,8 +2026,8 @@ input:focus, select:focus, textarea:focus {
   font-weight: 500;
 }
 .workflow-step-line {
-  width: 20px;
-  height: 2px;
+  width: 12px;
+  height: 1.5px;
   background: var(--color-border);
   flex-shrink: 0;
 }
@@ -2048,13 +2055,14 @@ input:focus, select:focus, textarea:focus {
 .workflow-hint-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 20px;
-  background: linear-gradient(90deg, rgba(245, 166, 35, 0.08), rgba(42, 143, 168, 0.08));
-  border-bottom: 1px solid rgba(245, 166, 35, 0.2);
-  font-size: 0.82rem;
+  gap: 8px;
+  padding: 5px 16px;
+  background: linear-gradient(90deg, rgba(245, 166, 35, 0.06), rgba(42, 143, 168, 0.06));
+  border-bottom: 1px solid rgba(245, 166, 35, 0.15);
+  font-size: 0.75rem;
   color: var(--color-text-secondary);
   animation: hintSlideDown 0.3s ease;
+  flex-shrink: 0;
 }
 @keyframes hintSlideDown {
   from { transform: translateY(-100%); opacity: 0; }
