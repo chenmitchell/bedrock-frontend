@@ -3451,13 +3451,15 @@
             e.style('arrow-scale', Math.max(0.6, 0.8 * edgeScale));
         });
 
-        // ── 重新排版（只針對可見節點）──
+        // ── 重新排版 ──
+        // 注意：cola/concentric 等 extension layout 必須在 cy 上呼叫，不能在 collection 上
+        // 解法：用 cy.layout() 搭配 eles 參數（部分 layout 支援）或先隱藏後全圖排版
         if (count > 150) {
-            // 大圖用 concentric
-            visible.layout({
+            state.cy.layout({
                 name: 'concentric',
                 animate: true,
                 animationDuration: 400,
+                eles: visible.union(visibleEdges),
                 concentric: function(node) {
                     if (node.data('is_seed')) return 100;
                     if (node.data('flag_count')) return 50 + node.data('flag_count');
@@ -3465,13 +3467,15 @@
                 },
                 levelWidth: function() { return 3; },
                 minNodeSpacing: spacing,
+                fit: true,
+                padding: 40,
             }).run();
         } else {
-            // 中小圖用 cola
-            visible.layout({
+            state.cy.layout({
                 name: 'cola',
                 animate: true,
                 animationDuration: 500,
+                eles: visible.union(visibleEdges),
                 nodeSpacing: spacing,
                 edgeLength: spacing * 2.5,
                 convergenceThreshold: 0.01,
