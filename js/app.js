@@ -1714,7 +1714,37 @@
             const data = await api.get(`/investigations/${invId}/clusters`);
             const clusters = data.items || data || [];
             if (countEl) countEl.textContent = clusters.length;
-            renderSidebarList(listEl, clusters, c => c.name, c => `${c.node_count || 0} 節點`);
+
+            if (clusters.length === 0) {
+                listEl.innerHTML = '<div class="ws-list-empty">尚無集群，請先執行搜尋與分析</div>';
+                return;
+            }
+
+            // 按 algorithm 分類顯示
+            const algorithmLabels = {
+                'address_cluster': { icon: '📍', label: '地址聚集' },
+                'star_structure': { icon: '⭐', label: '星形控制' },
+                'city_cluster': { icon: '🏙️', label: '地理群' },
+                'shared_shareholder': { icon: '🔗', label: '共同股東' },
+                'union_find': { icon: '🔗', label: '關聯群' },
+            };
+
+            listEl.innerHTML = clusters.map(c => {
+                const algo = algorithmLabels[c.algorithm] || { icon: '📋', label: c.algorithm || '自訂' };
+                const memberCount = (c.member_tax_ids || []).length;
+                const confidence = c.confidence ? Math.round(c.confidence * 100) : 0;
+                const confColor = confidence >= 70 ? '#C0392B' : confidence >= 40 ? '#E67E22' : '#95A5A6';
+                return `
+                    <div class="ws-list-item" onclick="highlightCluster(${JSON.stringify(c.member_tax_ids || []).replace(/"/g, '&quot;')})" style="cursor:pointer;">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="font-size:14px;">${algo.icon}</span>
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-size:12px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.name || c.label || c.cluster_id}</div>
+                                <div style="font-size:10px; color:#999;">${algo.label} · ${memberCount} 家 · 信心 <span style="color:${confColor};">${confidence}%</span></div>
+                            </div>
+                        </div>
+                    </div>`;
+            }).join('');
         } catch (e) {
             console.warn('[BEDROCK] 載入集群失敗:', e.message);
             if (countEl) countEl.textContent = '0';
@@ -2535,6 +2565,36 @@
         if (state.cy) setTimeout(() => state.cy.resize(), 300);
     }
     window.toggleDetailPanel = toggleDetailPanel;
+
+    // 高亮集群內的節點（點擊集群列表時觸發）
+    function highlightCluster(memberTaxIds) {
+        if (!state.cy || !memberTaxIds || memberTaxIds.length === 0) return;
+
+        // 先清除之前的高亮
+        state.cy.nodes().removeClass('marked');
+
+        // 高亮集群成員
+        const memberSet = new Set(memberTaxIds);
+        let matched = 0;
+        state.cy.nodes().forEach(node => {
+            const entityId = node.data('entity_id') || node.data('id');
+            if (memberSet.has(entityId)) {
+                node.addClass('marked');
+                matched++;
+            }
+        });
+
+        // 自動聚焦到這些節點
+        const markedNodes = state.cy.nodes('.marked');
+        if (markedNodes.length > 0) {
+            state.cy.animate({
+                fit: { eles: markedNodes, padding: 60 },
+                duration: 500,
+            });
+        }
+        Toast.show(`已標記 ${matched} 個集群成員`, 'info');
+    }
+    window.highlightCluster = highlightCluster;
 
     // 設置管理頁籤切換
     function setupAdminTabs() {
