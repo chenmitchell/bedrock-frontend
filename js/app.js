@@ -2566,6 +2566,149 @@
     }
     window.toggleDetailPanel = toggleDetailPanel;
 
+    // ==================== 深度減法篩選 ====================
+    // 從 seed 節點出發 BFS，計算每個節點的距離（hop），超過指定值則隱藏
+
+    /**
+     * 計算 Cytoscape 圖中所有節點到 seed 的 BFS 距離
+     * @returns {Map<string, number>} nodeId → hop count
+     */
+    function computeNodeDepths() {
+        if (!state.cy) return new Map();
+
+        const depthMap = new Map();
+        const visited = new Set();
+        const queue = [];
+
+        // 取得 seed 節點的 entity_id
+        const seedItems = document.querySelectorAll('.ws-seed-item');
+        const seedValues = new Set();
+        seedItems.forEach(el => {
+            const onclick = el.getAttribute('onclick') || '';
+            const match = onclick.match(/focusSeedNode\('(.+?)'\)/);
+            if (match) seedValues.add(match[1]);
+        });
+
+        // 在圖中找到 seed 節點（seed 距離 = 0）
+        state.cy.nodes().forEach(node => {
+            const d = node.data();
+            const entityId = d.entity_id || d.id;
+            if (seedValues.has(entityId) || seedValues.has(d.label)) {
+                depthMap.set(node.id(), 0);
+                visited.add(node.id());
+                queue.push(node);
+            }
+        });
+
+        // BFS
+        while (queue.length > 0) {
+            const current = queue.shift();
+            const currentDepth = depthMap.get(current.id());
+
+            // 遍歷鄰居（不管邊的方向）
+            current.neighborhood('node').forEach(neighbor => {
+                if (!visited.has(neighbor.id())) {
+                    visited.add(neighbor.id());
+                    depthMap.set(neighbor.id(), currentDepth + 1);
+                    queue.push(neighbor);
+                }
+            });
+        }
+
+        // 未連通的節點給一個大數值
+        state.cy.nodes().forEach(node => {
+            if (!depthMap.has(node.id())) {
+                depthMap.set(node.id(), 999);
+            }
+        });
+
+        return depthMap;
+    }
+
+    // 快取 depth map（圖結構不變時不重算）
+    let _cachedDepthMap = null;
+    let _cachedNodeCount = 0;
+
+    function getDepthMap() {
+        const nodeCount = state.cy ? state.cy.nodes().length : 0;
+        if (!_cachedDepthMap || _cachedNodeCount !== nodeCount) {
+            _cachedDepthMap = computeNodeDepths();
+            _cachedNodeCount = nodeCount;
+        }
+        return _cachedDepthMap;
+    }
+
+    function invalidateDepthCache() {
+        _cachedDepthMap = null;
+        _cachedNodeCount = 0;
+    }
+
+    function filterByDepth(maxDepth) {
+        if (!state.cy) return;
+        maxDepth = parseInt(maxDepth);
+        const label = document.getElementById('depth-filter-label');
+        const slider = document.getElementById('depth-filter-slider');
+
+        const depthMap = getDepthMap();
+        const actualMax = Math.max(...[...depthMap.values()].filter(v => v < 999));
+
+        // 更新 slider max 為實際最大深度
+        if (slider && actualMax > 0 && actualMax < 100) {
+            slider.max = Math.max(actualMax, 2);
+        }
+
+        if (maxDepth >= actualMax || maxDepth >= 10) {
+            // 全部顯示
+            state.cy.nodes().style('display', 'element');
+            state.cy.edges().style('display', 'element');
+            if (label) label.textContent = '全部';
+            return;
+        }
+
+        if (label) label.textContent = `${maxDepth} 層`;
+
+        // 隱藏超過深度的節點與其相連的邊
+        let shown = 0, hidden = 0;
+        state.cy.nodes().forEach(node => {
+            const depth = depthMap.get(node.id()) || 999;
+            if (depth <= maxDepth) {
+                node.style('display', 'element');
+                shown++;
+            } else {
+                node.style('display', 'none');
+                hidden++;
+            }
+        });
+
+        // 邊：兩端都可見才顯示
+        state.cy.edges().forEach(edge => {
+            const srcDepth = depthMap.get(edge.source().id()) || 999;
+            const tgtDepth = depthMap.get(edge.target().id()) || 999;
+            if (srcDepth <= maxDepth && tgtDepth <= maxDepth) {
+                edge.style('display', 'element');
+            } else {
+                edge.style('display', 'none');
+            }
+        });
+
+        Toast.show(`顯示 ${maxDepth} 層內 ${shown} 個節點（隱藏 ${hidden} 個）`, 'info');
+    }
+    window.filterByDepth = filterByDepth;
+
+    function resetDepthFilter() {
+        const slider = document.getElementById('depth-filter-slider');
+        const label = document.getElementById('depth-filter-label');
+        if (slider) slider.value = slider.max || 10;
+        if (label) label.textContent = '全部';
+        invalidateDepthCache();
+        if (state.cy) {
+            state.cy.nodes().style('display', 'element');
+            state.cy.edges().style('display', 'element');
+        }
+        Toast.show('已重設為顯示全部層', 'info');
+    }
+    window.resetDepthFilter = resetDepthFilter;
+
     // 高亮集群內的節點（點擊集群列表時觸發）
     function highlightCluster(memberTaxIds) {
         if (!state.cy || !memberTaxIds || memberTaxIds.length === 0) return;
