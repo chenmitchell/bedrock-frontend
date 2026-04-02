@@ -1480,7 +1480,8 @@ input:focus, select:focus, textarea:focus {
   margin-bottom: var(--space-sm);
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
 .ws-count {

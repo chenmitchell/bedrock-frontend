@@ -1202,59 +1202,67 @@
                 {
                     selector: 'edge',
                     style: {
-                        'width': 1,
-                        'line-color': '#C5C0B8',
+                        'width': 1.5,
+                        'line-color': '#B0AEA8',
                         'curve-style': 'bezier',
                         'target-arrow-shape': 'triangle',
-                        'target-arrow-color': '#C5C0B8',
-                        'arrow-scale': 0.7,
+                        'target-arrow-color': '#B0AEA8',
+                        'arrow-scale': 0.8,
                         'label': 'data(label)',
-                        'font-size': '9px',
-                        'color': '#ADADAB',
+                        'font-size': '10px',
+                        'font-weight': 'bold',
+                        'color': '#777',
                         'text-rotation': 'autorotate',
                         'text-margin-y': -8,
+                        'text-background-color': '#fff',
+                        'text-background-opacity': 0.7,
+                        'text-background-padding': '2px',
                     },
                 },
                 {
                     selector: 'edge[type="director"]',
                     style: {
-                        'line-style': 'dashed',
-                        'line-dash-pattern': [4, 3],
-                        'line-color': '#95E1D3',
-                        'target-arrow-color': '#95E1D3',
+                        'line-color': '#2ECC71',
+                        'target-arrow-color': '#2ECC71',
+                        'width': 1.5,
+                        'color': '#27AE60',
                     },
                 },
                 {
                     selector: 'edge[type="representative"]',
                     style: {
-                        'line-color': '#3A7CA5',
-                        'target-arrow-color': '#3A7CA5',
-                        'width': 2,
+                        'line-color': '#2980B9',
+                        'target-arrow-color': '#2980B9',
+                        'width': 2.5,
+                        'color': '#2471A3',
                     },
                 },
                 {
                     selector: 'edge[type="shareholder"]',
                     style: {
-                        'line-color': '#4ECDC4',
-                        'target-arrow-color': '#4ECDC4',
-                        'width': 1.5,
+                        'line-color': '#E67E22',
+                        'target-arrow-color': '#E67E22',
+                        'width': 2,
+                        'color': '#D35400',
                     },
                 },
                 {
                     selector: 'edge[type="historical"]',
                     style: {
                         'line-style': 'dotted',
-                        'line-color': '#ADADAB',
-                        'target-arrow-color': '#ADADAB',
+                        'line-color': '#BDC3C7',
+                        'target-arrow-color': '#BDC3C7',
                         'opacity': 0.5,
+                        'width': 1,
+                        'color': '#95A5A6',
                     },
                 },
                 {
                     selector: 'edge:selected',
                     style: {
-                        'line-color': '#3A7CA5',
-                        'target-arrow-color': '#3A7CA5',
-                        'width': 2,
+                        'line-color': '#E74C3C',
+                        'target-arrow-color': '#E74C3C',
+                        'width': 3,
                     },
                 },
                 // High-risk PERSON nodes get extra-bold gold pulsing border
@@ -3047,15 +3055,8 @@
     window.toggleSidebar = toggleSidebar;
 
     function toggleDetailPanel() {
-        const panel = document.getElementById('ws-detail');
-        const btn = document.getElementById('btn-collapse-detail');
-        if (!panel || !btn) return;
-        panel.classList.toggle('collapsed');
-        const isCollapsed = panel.classList.contains('collapsed');
-        btn.textContent = isCollapsed ? '◀' : '▶';
-        btn.title = isCollapsed ? '展開右側面板' : '收合右側面板';
-        updateGridColumns();
-        if (state.cy) setTimeout(() => state.cy.resize(), 100);
+        // 右側面板：直接關閉（等同 closeDetail）
+        closeDetail();
     }
     window.toggleDetailPanel = toggleDetailPanel;
 
