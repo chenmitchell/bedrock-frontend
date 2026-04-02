@@ -1407,12 +1407,20 @@
             cola: {
                 name: 'cola',
                 animate: true,
-                animationDuration: 500,
-                nodeSpacing: 30,
-                edgeLength: 120,
-                convergenceThreshold: 0.01,
+                animationDuration: 800,
+                nodeSpacing: 50,
+                edgeLength: 150,
+                convergenceThreshold: 0.001,
                 randomize: false,
                 avoidOverlap: true,
+                handleDisconnected: true,
+                flow: { axis: 'y', minSeparation: 60 },  // 上→下層次流向，減少交叉
+                edgeSymDiffLength: 15,     // 對稱差長度：推開平行邊
+                unconstrIter: 20,          // 無約束迭代：改善初始佈局
+                userConstIter: 30,         // 使用者約束迭代
+                allConstIter: 30,          // 所有約束迭代
+                fit: true,
+                padding: 50,
             },
             grid: {
                 name: 'grid',
@@ -2276,11 +2284,17 @@
                                 state.cy.layout({
                                     name: 'cola',
                                     animate: true,
-                                    animationDuration: 300,
-                                    nodeSpacing: 30,
-                                    edgeLength: 120,
+                                    animationDuration: 400,
+                                    nodeSpacing: 45,
+                                    edgeLength: 140,
+                                    convergenceThreshold: 0.001,
                                     randomize: false,
                                     avoidOverlap: true,
+                                    handleDisconnected: true,
+                                    flow: { axis: 'y', minSeparation: 40 },
+                                    unconstrIter: 10,
+                                    userConstIter: 15,
+                                    allConstIter: 15,
                                     fit: state.cy.nodes().length <= 20,
                                 }).run();
                             }
@@ -3598,13 +3612,19 @@
             state.cy.layout({
                 name: 'cola',
                 animate: true,
-                animationDuration: 500,
+                animationDuration: 600,
                 eles: visible.union(visibleEdges),
                 nodeSpacing: spacing,
-                edgeLength: spacing * 2.5,
-                convergenceThreshold: 0.01,
+                edgeLength: spacing * 3,
+                convergenceThreshold: 0.001,
                 randomize: false,
                 avoidOverlap: true,
+                handleDisconnected: true,
+                flow: { axis: 'y', minSeparation: Math.max(spacing, 40) },
+                edgeSymDiffLength: 10,
+                unconstrIter: 15,
+                userConstIter: 25,
+                allConstIter: 25,
                 fit: true,
                 padding: 40,
             }).run();
