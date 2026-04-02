@@ -553,14 +553,18 @@
                         <i class="fas fa-info-circle" aria-hidden="true"></i>
                         <span>圖例</span>
                     </button>
+                    <button class="ws-tool-btn" id="btn-toggle-filter" title="節點篩選：顯示/隱藏特定類型" onclick="toggleFilterPanel()" aria-label="節點篩選">
+                        <i class="fas fa-filter" aria-hidden="true"></i>
+                        <span>篩選</span>
+                    </button>
                     <span class="ws-tool-divider" aria-hidden="true"></span>
-                    <div style="display:inline-flex; align-items:center; gap:4px;" title="依分群上色節點">
-                        <i class="fas fa-palette" style="font-size:12px; color:#999;" aria-hidden="true"></i>
-                        <select id="cluster-color-mode" class="ws-input" style="width:90px; padding:2px 4px; font-size:10px; height:28px; border-radius:4px;" onchange="applyClusterColorMode(this.value)">
-                            <option value="none">預設配色</option>
-                            <option value="city">依縣市</option>
-                            <option value="address">依地址</option>
-                            <option value="cluster">依集群</option>
+                    <div style="display:inline-flex; align-items:center; gap:4px;" title="依分群排列並上色節點">
+                        <i class="fas fa-project-diagram" style="font-size:12px; color:#999;" aria-hidden="true"></i>
+                        <select id="cluster-color-mode" class="ws-input" style="width:100px; padding:2px 4px; font-size:10px; height:28px; border-radius:4px;" onchange="applyClusterColorMode(this.value)">
+                            <option value="none">預設排列</option>
+                            <option value="city">依縣市分群</option>
+                            <option value="address">依地址分群</option>
+                            <option value="cluster">依集群分群</option>
                         </select>
                     </div>
                     <span class="ws-tool-divider" aria-hidden="true"></span>
@@ -618,6 +622,20 @@
                         <div class="graph-legend-item">
                             <svg width="28" height="10" aria-hidden="true"><line x1="0" y1="5" x2="22" y2="5" stroke="#999" stroke-width="1" stroke-dasharray="2,2"/><polygon points="22,2 28,5 22,8" fill="#999"/></svg> 歷史
                         </div>
+                    </div>
+                    <!-- 節點類型篩選面板 -->
+                    <div class="graph-filter-panel" id="graph-filter-panel" style="display:none;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="font-size:11px; font-weight:600; color:#666;">節點篩選</span>
+                            <button onclick="toggleFilterPanel()" style="background:none; border:none; cursor:pointer; color:#999; font-size:14px; padding:2px 4px;" title="關閉">×</button>
+                        </div>
+                        <label class="graph-filter-item"><input type="checkbox" id="filter-company" checked onchange="applyNodeTypeFilter()"> <div class="graph-legend-dot" style="background:#3A7CA5;"></div> 公司</label>
+                        <label class="graph-filter-item"><input type="checkbox" id="filter-person" checked onchange="applyNodeTypeFilter()"> <div class="graph-legend-dot" style="background:#B8860B; border-radius:50%;"></div> 自然人</label>
+                        <label class="graph-filter-item"><input type="checkbox" id="filter-risk-critical" checked onchange="applyNodeTypeFilter()"> <div class="graph-legend-dot" style="background:#C0392B;"></div> 高風險</label>
+                        <label class="graph-filter-item"><input type="checkbox" id="filter-risk-warning" checked onchange="applyNodeTypeFilter()"> <div class="graph-legend-dot" style="background:#E67E22;"></div> 中風險</label>
+                        <label class="graph-filter-item"><input type="checkbox" id="filter-person-critical" checked onchange="applyNodeTypeFilter()"> <div class="graph-legend-dot" style="background:#DC143C; border-radius:50%; border:2px solid #FFD700;"></div> 高風險人物</label>
+                        <hr style="border:none; border-top:1px solid #eee; margin:6px 0;">
+                        <button onclick="resetNodeTypeFilter()" style="width:100%; background:#f5f5f5; border:1px solid #ddd; border-radius:4px; padding:4px; font-size:10px; cursor:pointer; color:#666;">全部顯示</button>
                     </div>
                     <!-- 右側詳情面板 — 浮動在圖形上方 -->
                     <aside class="ws-detail" id="ws-detail" role="complementary" aria-label="節點詳情">

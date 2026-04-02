@@ -1662,6 +1662,43 @@ input:focus, select:focus, textarea:focus {
   border-radius: 3px;
 }
 
+/* 節點類型篩選面板 */
+.graph-filter-panel {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  z-index: 15;
+  font-size: 0.72rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+  backdrop-filter: blur(6px);
+  max-width: 170px;
+}
+.graph-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+.graph-filter-item:hover {
+  background: rgba(0,0,0,0.04);
+}
+.graph-filter-item input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #3A7CA5;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 /* Cytoscape container */
 .cytoscape-container {
   position: relative;
