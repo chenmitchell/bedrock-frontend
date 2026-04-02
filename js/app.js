@@ -1575,11 +1575,42 @@
                 const otherLabel = otherNode.length ? otherNode.data('label') : otherNodeId;
                 const direction = ed.source === data.id ? '→' : '←';
                 const typeLabel = edgeTypeLabels[ed.type] || ed.type;
+                const isRep = ed.type === 'representative';
+                // 法人代表邊：凸顯派任關係
+                let repBadge = '';
+                if (isRep) {
+                    const appointingId = ed.source;
+                    const appointingNode = state.cy.getElementById(appointingId);
+                    const appointingLabel = appointingNode.length ? appointingNode.data('label') : '';
+                    const directorName = ed.director_name || '';
+                    if (isCompany && data.id === ed.target) {
+                        // 被查看的是目標公司：「XX公司 派任 YY 擔任此公司董事」
+                        repBadge = `<div style="margin-top:2px; font-size:10px; color:#D55E00; background:rgba(213,94,0,0.08); padding:2px 6px; border-radius:4px;">
+                            <i class="fas fa-building" style="margin-right:3px;"></i>由 <b>${esc(appointingLabel || appointingId)}</b> 派任${directorName ? '（' + esc(directorName) + '）' : ''}
+                        </div>`;
+                    } else if (isCompany && data.id === ed.source) {
+                        // 被查看的是派任法人：「此公司派任 YY 至 ZZ公司」
+                        const targetNode = state.cy.getElementById(ed.target);
+                        const targetLabel = targetNode.length ? targetNode.data('label') : ed.target;
+                        repBadge = `<div style="margin-top:2px; font-size:10px; color:#D55E00; background:rgba(213,94,0,0.08); padding:2px 6px; border-radius:4px;">
+                            <i class="fas fa-user-tie" style="margin-right:3px;"></i>派任${directorName ? ' <b>' + esc(directorName) + '</b>' : ''} 至 <b>${esc(targetLabel)}</b>
+                        </div>`;
+                    } else if (!isCompany) {
+                        // 被查看的是人物：顯示是哪家法人派任的
+                        repBadge = `<div style="margin-top:2px; font-size:10px; color:#D55E00; background:rgba(213,94,0,0.08); padding:2px 6px; border-radius:4px;">
+                            <i class="fas fa-building" style="margin-right:3px;"></i>由 <b>${esc(appointingLabel || appointingId)}</b> 派任
+                        </div>`;
+                    }
+                }
+                const badgeColor = isRep ? 'background:rgba(213,94,0,0.15); color:#D55E00; font-weight:600;' : 'background:rgba(58,124,165,0.12); color:#3A7CA5;';
                 return `
-                    <div class="ws-detail-connection" style="padding:4px 0; border-bottom:1px solid rgba(0,0,0,0.06); cursor:pointer;" onclick="(function(){ if(window.__bedrockCy) { var n = window.__bedrockCy.getElementById('${otherNodeId}'); if(n.length){ window.__bedrockCy.center(n); n.select(); } } })()">
-                        <span style="color:#888; font-size:11px;">${direction}</span>
-                        <span style="font-weight:500;">${esc(otherLabel)}</span>
-                        <span style="background:rgba(58,124,165,0.12); color:#3A7CA5; font-size:10px; padding:1px 6px; border-radius:8px; margin-left:4px;">${esc(ed.label || typeLabel)}</span>
+                    <div class="ws-detail-connection" style="padding:5px 0; border-bottom:1px solid rgba(0,0,0,0.06); cursor:pointer;" onclick="(function(){ if(window.__bedrockCy) { var n = window.__bedrockCy.getElementById('${otherNodeId}'); if(n.length){ window.__bedrockCy.center(n); n.select(); } } })()">
+                        <div>
+                            <span style="color:#888; font-size:11px;">${direction}</span>
+                            <span style="font-weight:500;">${esc(otherLabel)}</span>
+                            <span style="${badgeColor} font-size:10px; padding:1px 6px; border-radius:8px; margin-left:4px;">${esc(ed.label || typeLabel)}</span>
+                        </div>
+                        ${repBadge}
                     </div>`;
             }).join('');
         }
@@ -1619,6 +1650,56 @@
         const capitalStr = data.capital != null
             ? `NT$ ${Number(data.capital).toLocaleString()}`
             : '未知';
+
+        // 法人派任區塊：找出所有與此節點相關的 representative 邊
+        let corporateAppointmentHtml = '';
+        if (edges.length > 0) {
+            const repEdges = edges.filter(e => e.data('type') === 'representative');
+            if (repEdges.length > 0 && isCompany) {
+                const incomingReps = []; // 其他公司派任到此公司
+                const outgoingReps = []; // 此公司派任到其他公司
+                repEdges.forEach(e => {
+                    const ed = e.data();
+                    if (ed.target === data.id) {
+                        const srcNode = state.cy.getElementById(ed.source);
+                        incomingReps.push({
+                            company: srcNode.length ? srcNode.data('label') : ed.source,
+                            companyId: ed.source,
+                            person: ed.director_name || ed.label.replace(/法人代表（(.+)）/, '$1') || '',
+                        });
+                    } else if (ed.source === data.id) {
+                        const tgtNode = state.cy.getElementById(ed.target);
+                        outgoingReps.push({
+                            company: tgtNode.length ? tgtNode.data('label') : ed.target,
+                            companyId: ed.target,
+                            person: ed.director_name || ed.label.replace(/法人代表（(.+)）/, '$1') || '',
+                        });
+                    }
+                });
+                if (incomingReps.length > 0 || outgoingReps.length > 0) {
+                    corporateAppointmentHtml = '<div class="ws-detail-section"><div class="ws-detail-section-title" style="color:#D55E00;"><i class="fas fa-user-tie" style="margin-right:4px;"></i>法人派任關係</div>';
+                    if (incomingReps.length > 0) {
+                        corporateAppointmentHtml += '<div style="font-size:11px; color:#888; margin-bottom:4px;">受派任（其他公司派人進入此公司董事會）：</div>';
+                        incomingReps.forEach(r => {
+                            corporateAppointmentHtml += `<div style="padding:4px 0; border-left:3px solid #D55E00; padding-left:8px; margin-bottom:3px; cursor:pointer;" onclick="(function(){ if(window.__bedrockCy) { var n = window.__bedrockCy.getElementById('${r.companyId}'); if(n.length){ window.__bedrockCy.center(n); n.select(); } } })()">
+                                <span style="font-weight:600; color:#D55E00;">${esc(r.company)}</span>
+                                <span style="font-size:11px; color:#666;"> → 派任 <b>${esc(r.person)}</b></span>
+                            </div>`;
+                        });
+                    }
+                    if (outgoingReps.length > 0) {
+                        corporateAppointmentHtml += '<div style="font-size:11px; color:#888; margin-bottom:4px; margin-top:6px;">派出（此公司派人至其他公司董事會）：</div>';
+                        outgoingReps.forEach(r => {
+                            corporateAppointmentHtml += `<div style="padding:4px 0; border-left:3px solid #E67E22; padding-left:8px; margin-bottom:3px; cursor:pointer;" onclick="(function(){ if(window.__bedrockCy) { var n = window.__bedrockCy.getElementById('${r.companyId}'); if(n.length){ window.__bedrockCy.center(n); n.select(); } } })()">
+                                <span style="font-weight:600; color:#E67E22;">${esc(r.company)}</span>
+                                <span style="font-size:11px; color:#666;"> ← 派任 <b>${esc(r.person)}</b></span>
+                            </div>`;
+                        });
+                    }
+                    corporateAppointmentHtml += '</div>';
+                }
+            }
+        }
 
         content.innerHTML = `
             <!-- 風險等級標籤 -->
@@ -1660,6 +1741,8 @@
                 </div>
                 `}
             </div>
+
+            ${corporateAppointmentHtml}
 
             <div class="ws-detail-section">
                 <div class="ws-detail-section-title">關聯架構 (${edgeCount})</div>
