@@ -978,6 +978,9 @@
         _hintDismissed = false;  // 重新開放引導提示
         updateWorkflowStepper();
 
+        // 確保右側面板是關閉狀態
+        closeDetail();
+
         // 重置所有側邊欄為空白，避免顯示前一個調查的殘留資料
         const resetPairs = [
             ['seeds-list', 'seed-count'],
@@ -1430,8 +1433,7 @@
                 Toast.warning(`已排除「${currentSelectedNode}」`);
 
                 // 關閉詳情面板
-                const detailPanel = document.getElementById('ws-detail');
-                if (detailPanel) detailPanel.style.display = 'none';
+                closeDetail();
             });
         }
     }
@@ -1483,7 +1485,15 @@
         currentSelectedNode = data.id;
 
         title.textContent = data.label || data.id;
-        panel.style.display = '';
+
+        // 顯示面板 + 調整 grid 為三欄
+        const wsBody = document.querySelector('.workspace-body');
+        if (wsBody) wsBody.classList.add('detail-open');
+        panel.classList.add('detail-visible');
+        panel.classList.remove('collapsed');
+        updateGridColumns();
+        // 通知 cytoscape resize
+        setTimeout(() => { if (state.cy) state.cy.resize(); }, 150);
 
         const isCompany = data.type === 'company';
         const riskLevel = data.risk_level || 'NONE';
@@ -1619,7 +1629,14 @@
 
     function closeDetail() {
         const panel = document.getElementById('ws-detail');
-        if (panel) panel.style.display = 'none';
+        if (panel) {
+            panel.classList.remove('detail-visible');
+        }
+        const wsBody = document.querySelector('.workspace-body');
+        if (wsBody) wsBody.classList.remove('detail-open');
+        updateGridColumns();
+        // 通知 cytoscape resize
+        setTimeout(() => { if (state.cy) state.cy.resize(); }, 150);
     }
     window.closeDetail = closeDetail;
 
@@ -2947,6 +2964,10 @@
             btn.classList.toggle('ws-tool-btn-active', showHistorical);
             btn.title = showHistorical ? '隱藏歷史關聯' : '顯示歷史關聯';
         }
+        // 重新適配圖形到螢幕
+        setTimeout(() => {
+            if (state.cy) state.cy.fit(undefined, 40);
+        }, 100);
     }
     window.toggleHistoricalEdges = toggleHistoricalEdges;
 
@@ -2985,6 +3006,10 @@
             }
         });
         Toast.show(`篩選 ${years} 年內的歷史關聯`, 'info');
+        // 重新適配圖形
+        setTimeout(() => {
+            if (state.cy) state.cy.fit(undefined, 40);
+        }, 100);
     }
     window.filterHistoricalByRange = filterHistoricalByRange;
 
@@ -2993,15 +3018,18 @@
         const body = document.querySelector('.workspace-body');
         if (!body) return;
         const sidebarCollapsed = document.querySelector('.ws-sidebar.collapsed');
+        const detailVisible = document.querySelector('.ws-detail.detail-visible');
         const detailCollapsed = document.querySelector('.ws-detail.collapsed');
-        if (sidebarCollapsed && detailCollapsed) {
-            body.style.gridTemplateColumns = '40px 1fr 40px';
-        } else if (sidebarCollapsed) {
-            body.style.gridTemplateColumns = '40px 1fr minmax(200px, 360px)';
+
+        if (!detailVisible) {
+            // 右側面板未開 → 二欄
+            body.style.gridTemplateColumns = sidebarCollapsed ? '40px 1fr' : '240px 1fr';
         } else if (detailCollapsed) {
-            body.style.gridTemplateColumns = 'minmax(200px, 260px) 1fr 40px';
+            // 右側面板收合
+            body.style.gridTemplateColumns = sidebarCollapsed ? '40px 1fr 40px' : '240px 1fr 40px';
         } else {
-            body.style.gridTemplateColumns = '';  // 回到 CSS 預設
+            // 完整三欄
+            body.style.gridTemplateColumns = sidebarCollapsed ? '40px 1fr 280px' : '';
         }
     }
 
@@ -3157,6 +3185,16 @@
         });
 
         Toast.show(`顯示 ${maxDepth} 層內 ${shown} 個節點（隱藏 ${hidden} 個）`, 'info');
+
+        // 自動適配可見節點到螢幕
+        setTimeout(() => {
+            if (state.cy) {
+                const visible = state.cy.nodes().filter(n => n.style('display') !== 'none');
+                if (visible.length > 0) {
+                    state.cy.fit(visible, 40);
+                }
+            }
+        }, 50);
     }
     window.filterByDepth = filterByDepth;
 
