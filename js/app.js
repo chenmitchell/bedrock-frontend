@@ -1935,8 +1935,10 @@
                 const desc = (f.detail && f.detail.description) || '';
                 const color = severityColors[f.severity] || '#999';
                 const sevLabel = severityLabels[f.severity] || f.severity;
+                const targetId = esc(f.target_id || '');
+                const targetType = esc(f.target_type || '');
                 return `
-                    <div class="ws-list-item" style="border-left: 3px solid ${color};">
+                    <div class="ws-list-item" style="border-left: 3px solid ${color}; cursor:pointer;" onclick="highlightRedFlagTarget('${targetId}', '${targetType}', ${JSON.stringify(f.detail?.evidence || null).replace(/"/g, '&quot;')})">
                         <div class="ws-list-item-title">
                             <span style="color:${color}; font-weight:600;">[${sevLabel}]</span>
                             ${esc(ruleName)}
@@ -2757,7 +2759,7 @@
         }).join('');
     }
 
-    /** 點擊紅旗 → 在圖上高亮對應節點 */
+    /** 點擊紅旗 → 在圖上高亮對應節點 + 相關公司 */
     function dashboardHighlightTarget(targetId, targetType) {
         if (!targetId) return;
 
@@ -2772,26 +2774,108 @@
         // 清除之前的高亮
         state.cy.nodes().removeClass('marked');
 
-        // 嘗試找到節點
-        let node = state.cy.getElementById(targetId);
-        if (!node || node.length === 0) {
-            // 嘗試用 entity_id
-            const byEntity = state.cy.nodes().filter(n => n.data('entity_id') === targetId);
-            if (byEntity.length > 0) {
-                node = byEntity;
+        // ── 收集所有需要高亮的 ID（主體 + 相關公司）──
+        const highlightIds = new Set();
+        highlightIds.add(targetId);
+
+        // 從 _dashboardData 中找出此 target 的 evidence（UBO 相關）
+        const evidence = findFlagEvidence(targetId);
+        if (evidence) {
+            // UBO_CONCENTRATION: all_controlled 有 tax_id 列表
+            if (evidence.all_controlled) {
+                evidence.all_controlled.forEach(c => {
+                    if (c.tax_id) highlightIds.add(c.tax_id);
+                });
+            }
+            // direct_companies
+            if (evidence.direct_companies) {
+                evidence.direct_companies.forEach(tid => highlightIds.add(tid));
+            }
+            // HIDDEN_UBO: rep_companies, direct_companies_list
+            if (evidence.rep_companies) {
+                evidence.rep_companies.forEach(tid => highlightIds.add(tid));
+            }
+            if (evidence.direct_companies_list) {
+                evidence.direct_companies_list.forEach(tid => highlightIds.add(tid));
             }
         }
 
-        if (node && node.length > 0) {
-            node.addClass('marked');
+        // 也把 person:xxx 格式的 ID 轉成純姓名方便匹配
+        const personName = targetId.startsWith('person:') ? targetId.slice(7) : null;
+
+        // 找到並高亮所有相關節點
+        let matched = state.cy.collection();
+        state.cy.nodes().forEach(node => {
+            const d = node.data();
+            const eid = d.entity_id || d.id;
+            const label = d.label || '';
+
+            if (highlightIds.has(eid) || highlightIds.has(label) ||
+                (personName && label === personName)) {
+                node.addClass('marked');
+                // 確保可見
+                node.style('display', 'element');
+                node.style('opacity', 1);
+                matched = matched.union(node);
+            }
+        });
+
+        // 讓連接這些節點的邊也可見
+        if (matched.length > 1) {
+            matched.edgesWith(matched).style('display', 'element');
+            matched.edgesWith(matched).style('opacity', 1);
+        }
+
+        if (matched.length > 0) {
             state.cy.animate({
-                fit: { eles: node, padding: 100 },
+                fit: { eles: matched, padding: 60 },
                 duration: 500,
             });
-            Toast.show(`已定位到 ${targetId}`, 'info');
+            const names = matched.map(n => n.data('label') || n.data('entity_id')).slice(0, 5).join('、');
+            Toast.show(`已標記 ${matched.length} 個相關節點：${names}${matched.length > 5 ? '…' : ''}`, 'info', 3000);
+
+            // 同時顯示右側詳情面板
+            if (personName) {
+                const personNode = matched.filter(n => n.data('label') === personName || n.data('type') === 'person');
+                if (personNode.length > 0) showNodeDetail(personNode[0].data());
+            } else if (matched.length === 1) {
+                showNodeDetail(matched[0].data());
+            }
         } else {
             Toast.warning(`「${targetId}」不在目前顯示的圖上（可能被深度篩選過濾，或屬於其他調查案件）`);
         }
+    }
+
+    /** 從 _dashboardData 中找出某個 target 的 evidence 資料 */
+    function findFlagEvidence(targetId) {
+        if (!_dashboardData) return null;
+
+        // 搜尋 top_critical
+        for (const f of (_dashboardData.top_critical || [])) {
+            if (f.target_id === targetId && f.detail && f.detail.evidence) {
+                return f.detail.evidence;
+            }
+        }
+
+        // 搜尋 category_groups 中的 sample_flags
+        for (const [, cat] of Object.entries(_dashboardData.category_groups || {})) {
+            for (const r of (cat.rules || [])) {
+                for (const s of (r.sample_flags || [])) {
+                    if (s.target_id === targetId && s.detail && s.detail.evidence) {
+                        return s.detail.evidence;
+                    }
+                }
+            }
+        }
+
+        // 搜尋 entity_hotspots
+        for (const h of (_dashboardData.entity_hotspots || [])) {
+            if (h.target_id === targetId && h.evidence) {
+                return h.evidence;
+            }
+        }
+
+        return null;
     }
     window.dashboardHighlightTarget = dashboardHighlightTarget;
 
@@ -3610,8 +3694,10 @@
             const desc = (f.detail && f.detail.description) || '';
             const color = severityColors[f.severity] || '#999';
             const sevLabel = severityLabels[f.severity] || f.severity;
+            const targetId = esc(f.target_id || '');
+            const targetType = esc(f.target_type || '');
             return `
-                <div class="ws-list-item" style="border-left: 3px solid ${color};">
+                <div class="ws-list-item" style="border-left: 3px solid ${color}; cursor:pointer;" onclick="highlightRedFlagTarget('${targetId}', '${targetType}', ${JSON.stringify(f.detail?.evidence || null).replace(/"/g, '&quot;')})">
                     <div class="ws-list-item-title">
                         <span style="color:${color}; font-weight:600;">[${sevLabel}]</span>
                         ${esc(ruleName)}
@@ -3650,6 +3736,89 @@
         Toast.show(`已標記 ${matched} 個集群成員`, 'info');
     }
     window.highlightCluster = highlightCluster;
+
+    /** 點擊紅旗 → 高亮主體 + 相關公司（UBO 等） */
+    function highlightRedFlagTarget(targetId, targetType, evidence) {
+        if (!state.cy || !targetId) return;
+
+        // 清除之前高亮
+        state.cy.nodes().removeClass('marked');
+
+        // 收集所有相關 ID
+        const highlightIds = new Set();
+        highlightIds.add(targetId);
+
+        // person:xxx 格式
+        const personName = targetId.startsWith('person:') ? targetId.slice(7) : null;
+        if (personName) highlightIds.add(personName);
+
+        // 從 evidence 中提取相關公司
+        if (evidence) {
+            if (evidence.all_controlled) {
+                evidence.all_controlled.forEach(c => {
+                    if (c.tax_id) highlightIds.add(c.tax_id);
+                    if (c.name) highlightIds.add(c.name);
+                });
+            }
+            if (evidence.direct_companies) {
+                evidence.direct_companies.forEach(tid => highlightIds.add(tid));
+            }
+            if (evidence.rep_companies) {
+                evidence.rep_companies.forEach(tid => highlightIds.add(tid));
+            }
+            if (evidence.direct_companies_list) {
+                evidence.direct_companies_list.forEach(tid => highlightIds.add(tid));
+            }
+            // ADDRESS_CLUSTER, STAR_STRUCTURE 等：member_tax_ids
+            if (evidence.member_tax_ids) {
+                evidence.member_tax_ids.forEach(tid => highlightIds.add(tid));
+            }
+            if (evidence.tax_ids) {
+                evidence.tax_ids.forEach(tid => highlightIds.add(tid));
+            }
+        }
+
+        // 在圖上找到並高亮
+        let matched = state.cy.collection();
+        state.cy.nodes().forEach(node => {
+            const d = node.data();
+            const eid = d.entity_id || d.id;
+            const label = d.label || '';
+            if (highlightIds.has(eid) || highlightIds.has(label)) {
+                node.addClass('marked');
+                node.style('display', 'element');
+                node.style('opacity', 1);
+                matched = matched.union(node);
+            }
+        });
+
+        // 讓連接高亮節點的邊也可見
+        if (matched.length > 1) {
+            matched.edgesWith(matched).style('display', 'element');
+            matched.edgesWith(matched).style('opacity', 1);
+        }
+
+        if (matched.length > 0) {
+            state.cy.animate({
+                fit: { eles: matched, padding: 60 },
+                duration: 500,
+            });
+
+            const names = matched.map(n => n.data('label') || n.data('entity_id')).slice(0, 6);
+            Toast.show(`已標記 ${matched.length} 個相關節點：${names.join('、')}${matched.length > 6 ? '…' : ''}`, 'info', 3000);
+
+            // 顯示右側詳情
+            if (personName) {
+                const pNode = matched.filter(n => n.data('label') === personName);
+                if (pNode.length > 0) showNodeDetail(pNode[0].data());
+            } else if (matched.length === 1) {
+                showNodeDetail(matched[0].data());
+            }
+        } else {
+            Toast.warning(`「${targetId}」不在目前的圖上`);
+        }
+    }
+    window.highlightRedFlagTarget = highlightRedFlagTarget;
 
     // ==================== 分群上色模式 ====================
     // 12 色盤（區分度高、色盲友善）
