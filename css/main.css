@@ -326,11 +326,11 @@ label {
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 10px 14px;
   border-radius: var(--radius-md);
   color: var(--color-text-secondary);
-  background: transparent;
-  border: none;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   cursor: pointer;
   transition: all var(--transition-fast);
   font-size: 0.875rem;
@@ -338,15 +338,17 @@ label {
   text-align: left;
 }
 .nav-item:hover {
-  background: var(--color-surface-hover);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
   color: var(--color-text-primary);
 }
 .nav-item.active {
-  background: var(--color-accent-subtle);
-  color: var(--color-accent);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
 }
 .nav-item.active .nav-item-icon {
-  color: var(--color-accent);
+  color: #fff;
 }
 
 .nav-item-icon {
