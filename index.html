@@ -393,7 +393,7 @@
     <!-- ===== 調查工作台 ===== -->
     <div id="workspace-scene" class="scene" style="display:none;" role="main" aria-label="調查工作台">
         <nav class="workspace-nav" aria-label="工作台導覽">
-            <button class="nav-back" onclick="goBackToDashboard()" aria-label="返回儀表板">
+            <button class="nav-back" onclick="goBackToDashboard()" title="返回儀表板" aria-label="返回儀表板">
                 <i class="fas fa-chevron-left" aria-hidden="true"></i>
                 <span class="sr-only">返回</span>
             </button>
@@ -424,7 +424,7 @@
                 </div>
             </div>
             <div class="nav-spacer"></div>
-            <button class="nav-action" id="btn-export" aria-label="匯出報告">
+            <button class="nav-action" id="btn-export" title="匯出調查報告" aria-label="匯出報告">
                 <i class="fas fa-file-export" aria-hidden="true"></i>
             </button>
         </nav>
@@ -449,7 +449,7 @@
                     <div style="display:flex; gap:8px;">
                         <label for="seed-input" class="sr-only">輸入統一編號或公司名</label>
                         <input type="text" id="seed-input" class="ws-input" placeholder="輸入統編或公司名…" aria-label="輸入統一編號或公司名" style="flex:1;">
-                        <button id="btn-add-seed" class="btn btn-primary btn-sm" aria-label="新增查詢目標" data-tooltip="將此統編或名稱加為調查起點" data-tooltip-pos="bottom">新增</button>
+                        <button id="btn-add-seed" class="btn btn-primary btn-sm" title="將此統編或名稱加為調查起點" aria-label="新增查詢目標" data-tooltip="將此統編或名稱加為調查起點" data-tooltip-pos="bottom">新增</button>
                     </div>
                 </div>
                 <div class="ws-section">
@@ -475,13 +475,13 @@
                         </select>
                     </div>
                     <div class="ws-controls" role="group" aria-label="搜尋控制">
-                        <button id="btn-start-crawl" class="ws-btn-action" aria-label="開始搜尋" data-tooltip="開始搜尋，自動追蹤關聯企業與實質受益人" data-tooltip-pos="bottom">
+                        <button id="btn-start-crawl" class="ws-btn-action" title="開始搜尋，自動追蹤關聯企業與實質受益人" aria-label="開始搜尋" data-tooltip="開始搜尋，自動追蹤關聯企業與實質受益人" data-tooltip-pos="bottom">
                             <i class="fas fa-play" aria-hidden="true"></i> 開始
                         </button>
-                        <button id="btn-pause-crawl" class="ws-btn-action" disabled aria-label="暫停搜尋">
+                        <button id="btn-pause-crawl" class="ws-btn-action" title="暫停搜尋" disabled aria-label="暫停搜尋">
                             <i class="fas fa-pause" aria-hidden="true"></i> 暫停
                         </button>
-                        <button id="btn-stop-crawl" class="ws-btn-action" disabled aria-label="停止搜尋">
+                        <button id="btn-stop-crawl" class="ws-btn-action" title="停止搜尋" disabled aria-label="停止搜尋">
                             <i class="fas fa-stop" aria-hidden="true"></i> 停止
                         </button>
                     </div>
@@ -503,10 +503,10 @@
                         紅旗警示
                         <span id="flag-count" class="ws-count" style="background: rgba(255, 59, 48, 0.1); color: var(--color-danger);">0</span>
                         <span class="help-icon" data-tooltip="紅旗是系統自動偵測的可疑模式，例如：殼公司、循環持股、頻繁變更負責人、資本異常等 AML 警訊。">?</span>
-                        <button id="btn-analyze" class="btn btn-sm" style="background: none; color: var(--color-accent); border: none; padding: 0; cursor: pointer; margin-left: auto;" data-tooltip="對已搜尋的網路圖執行結構分析，偵測可疑模式">
+                        <button id="btn-analyze" class="btn btn-sm" style="background: none; color: var(--color-accent); border: none; padding: 0; cursor: pointer; margin-left: auto;" title="對已搜尋的網路圖執行結構分析，偵測可疑模式" data-tooltip="對已搜尋的網路圖執行結構分析，偵測可疑模式">
                             <i class="fas fa-microscope"></i> 分析
                         </button>
-                        <button id="btn-open-dashboard" class="btn btn-sm" style="background: none; color: var(--color-warning); border: none; padding: 0; cursor: pointer;" data-tooltip="開啟分析儀表板，檢視歸納整理後的紅旗" onclick="openAnalysisDashboard()">
+                        <button id="btn-open-dashboard" class="btn btn-sm" style="background: none; color: var(--color-warning); border: none; padding: 0; cursor: pointer;" title="開啟分析儀表板，檢視歸納整理後的紅旗" data-tooltip="開啟分析儀表板，檢視歸納整理後的紅旗" onclick="openAnalysisDashboard()">
                             <i class="fas fa-chart-bar"></i> 儀表板
                         </button>
                     </h4>
@@ -517,7 +517,7 @@
                         負面新聞
                         <span id="media-count" class="ws-count" style="background: rgba(255, 149, 0, 0.1); color: var(--color-warning);">0</span>
                         <span class="help-icon" data-tooltip="系統搜尋節點相關的負面新聞報導，包括詐騙、洗錢、訴訟等 AML 相關資訊。">?</span>
-                        <button id="btn-search-media" class="btn btn-sm" style="background: none; color: var(--color-accent); border: none; padding: 0; cursor: pointer; margin-left: auto;" data-tooltip="搜尋所有節點的負面新聞">
+                        <button id="btn-search-media" class="btn btn-sm" style="background: none; color: var(--color-accent); border: none; padding: 0; cursor: pointer; margin-left: auto;" title="搜尋所有節點的負面新聞" data-tooltip="搜尋所有節點的負面新聞">
                             <i class="fas fa-search"></i> 搜尋
                         </button>
                     </h4>
@@ -528,13 +528,13 @@
             <!-- 中央 Cytoscape -->
             <main class="ws-canvas-area" id="main-content">
                 <div class="ws-canvas-toolbar" role="toolbar" aria-label="圖譜工具列">
-                    <button class="ws-tool-btn" id="btn-zoom-in" aria-label="放大圖譜"><i class="fas fa-search-plus" aria-hidden="true"></i></button>
-                    <button class="ws-tool-btn" id="btn-zoom-out" aria-label="縮小圖譜"><i class="fas fa-search-minus" aria-hidden="true"></i></button>
-                    <button class="ws-tool-btn" id="btn-fit" aria-label="適合畫面"><i class="fas fa-expand" aria-hidden="true"></i></button>
+                    <button class="ws-tool-btn" id="btn-zoom-in" title="放大圖譜" aria-label="放大圖譜"><i class="fas fa-search-plus" aria-hidden="true"></i></button>
+                    <button class="ws-tool-btn" id="btn-zoom-out" title="縮小圖譜" aria-label="縮小圖譜"><i class="fas fa-search-minus" aria-hidden="true"></i></button>
+                    <button class="ws-tool-btn" id="btn-fit" title="適合畫面（自動縮放至全圖）" aria-label="適合畫面"><i class="fas fa-expand" aria-hidden="true"></i></button>
                     <div class="ws-tool-sep" aria-hidden="true"></div>
-                    <button class="ws-tool-btn" id="btn-layout-cola" aria-label="力導向排版"><i class="fas fa-project-diagram" aria-hidden="true"></i></button>
-                    <button class="ws-tool-btn" id="btn-layout-grid" aria-label="網格排版"><i class="fas fa-th" aria-hidden="true"></i></button>
-                    <button class="ws-tool-btn" id="btn-export-png" aria-label="匯出圖片"><i class="fas fa-image" aria-hidden="true"></i></button>
+                    <button class="ws-tool-btn" id="btn-layout-cola" title="力導向排版（自動排列節點）" aria-label="力導向排版"><i class="fas fa-project-diagram" aria-hidden="true"></i></button>
+                    <button class="ws-tool-btn" id="btn-layout-grid" title="網格排版（整齊排列節點）" aria-label="網格排版"><i class="fas fa-th" aria-hidden="true"></i></button>
+                    <button class="ws-tool-btn" id="btn-export-png" title="匯出圖片（下載 PNG）" aria-label="匯出圖片"><i class="fas fa-image" aria-hidden="true"></i></button>
                     <span class="ws-tool-divider" aria-hidden="true"></span>
                     <div style="display:inline-flex; align-items:center; gap:2px;">
                         <button class="ws-tool-btn" id="btn-toggle-historical" title="顯示/隱藏歷史關聯" onclick="toggleHistoricalEdges()" aria-label="切換歷史關聯顯示">
@@ -557,6 +557,10 @@
                         <i class="fas fa-filter" aria-hidden="true"></i>
                         <span>篩選</span>
                     </button>
+                    <button class="ws-tool-btn" id="btn-toggle-report-view" title="切換報表/圖形檢視" onclick="toggleReportView()" aria-label="切換報表檢視">
+                        <i class="fas fa-table" aria-hidden="true"></i>
+                        <span>報表</span>
+                    </button>
                     <span class="ws-tool-divider" aria-hidden="true"></span>
                     <div style="display:inline-flex; align-items:center; gap:4px;" title="依分群排列並上色節點">
                         <i class="fas fa-project-diagram" style="font-size:12px; color:#999;" aria-hidden="true"></i>
@@ -578,6 +582,16 @@
                 </div>
                 <div style="position:relative; flex:1; min-height:0;">
                     <div id="cy" class="cytoscape-container" style="width:100%; height:100%;"></div>
+                    <!-- 報表檢視 -->
+                    <div id="report-view" style="display:none; position:absolute; top:0; left:0; right:0; bottom:0; background:#fff; overflow-y:auto; padding:20px; z-index:5;">
+                        <div id="report-view-content">
+                            <div style="text-align:center; color:#999; padding:60px 20px;">
+                                <i class="fas fa-table" style="font-size:48px; margin-bottom:16px;"></i>
+                                <div style="font-size:16px; font-weight:600;">報表檢視</div>
+                                <div style="font-size:13px; margin-top:8px;">請先執行搜尋與分析，報表將顯示所有節點的結構化資料。</div>
+                            </div>
+                        </div>
+                    </div>
                     <div id="cy-empty-state" class="ws-empty-state" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none;">
                         <i class="fas fa-project-diagram"></i>
                         <div class="ws-empty-state-title">企業關係網路圖</div>
@@ -641,7 +655,7 @@
                     <aside class="ws-detail" id="ws-detail" role="complementary" aria-label="節點詳情">
                     <div class="ws-detail-header">
                         <h4 id="detail-title" style="margin: 0;">節點名稱</h4>
-                        <button class="ws-detail-close" onclick="closeDetail()" aria-label="關閉詳情面板">
+                        <button class="ws-detail-close" onclick="closeDetail()" title="關閉詳情面板" aria-label="關閉詳情面板">
                             <i class="fas fa-times" aria-hidden="true"></i>
                         </button>
                     </div>
@@ -652,13 +666,13 @@
                         <!-- Risk score card inserted here -->
                     </div>
                     <div class="ws-detail-actions">
-                        <button class="ws-btn-action" id="btn-deep-crawl" data-tooltip="以此節點為起點，繼續深入追蹤更多關聯">
+                        <button class="ws-btn-action" id="btn-deep-crawl" title="以此節點為起點，繼續深入追蹤更多關聯" data-tooltip="以此節點為起點，繼續深入追蹤更多關聯">
                             <i class="fas fa-search"></i> 深追
                         </button>
-                        <button class="ws-btn-action" id="btn-mark-node" data-tooltip="標記此節點為重點關注對象">
+                        <button class="ws-btn-action" id="btn-mark-node" title="標記此節點為重點關注對象" data-tooltip="標記此節點為重點關注對象">
                             <i class="fas fa-bookmark"></i> 標記
                         </button>
-                        <button class="ws-btn-action" id="btn-exclude-node" data-tooltip="將此節點從調查範圍中排除">
+                        <button class="ws-btn-action" id="btn-exclude-node" title="將此節點從調查範圍中排除" data-tooltip="將此節點從調查範圍中排除">
                             <i class="fas fa-ban"></i> 排除
                         </button>
                     </div>
@@ -673,7 +687,7 @@
         <div class="analysis-dashboard">
             <div class="analysis-dashboard-header">
                 <h3><i class="fas fa-chart-bar"></i> 分析儀表板</h3>
-                <button class="analysis-dashboard-close" onclick="closeAnalysisDashboard()" aria-label="關閉分析儀表板">
+                <button class="analysis-dashboard-close" onclick="closeAnalysisDashboard()" title="關閉分析儀表板" aria-label="關閉分析儀表板">
                     <i class="fas fa-times"></i>
                 </button>
             </div>

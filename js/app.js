@@ -4186,6 +4186,270 @@
         }
     }
 
+    // ==================== 報表檢視 ====================
+    let _reportViewActive = false;
+
+    function toggleReportView() {
+        _reportViewActive = !_reportViewActive;
+        const cy = document.getElementById('cy');
+        const reportView = document.getElementById('report-view');
+        const btn = document.getElementById('btn-toggle-report-view');
+        if (!cy || !reportView) return;
+
+        if (_reportViewActive) {
+            cy.style.display = 'none';
+            reportView.style.display = 'block';
+            if (btn) { btn.classList.add('active'); btn.innerHTML = '<i class="fas fa-project-diagram" aria-hidden="true"></i><span>圖形</span>'; }
+            buildReportView();
+        } else {
+            cy.style.display = 'block';
+            reportView.style.display = 'none';
+            if (btn) { btn.classList.remove('active'); btn.innerHTML = '<i class="fas fa-table" aria-hidden="true"></i><span>報表</span>'; }
+            if (state.cy) state.cy.resize();
+        }
+    }
+    window.toggleReportView = toggleReportView;
+
+    function buildReportView() {
+        const container = document.getElementById('report-view-content');
+        if (!container) return;
+        if (!state.cy || state.cy.nodes().length === 0) {
+            container.innerHTML = '<div style="text-align:center; color:#999; padding:60px 20px;"><i class="fas fa-table" style="font-size:48px; margin-bottom:16px;"></i><div style="font-size:16px; font-weight:600;">報表檢視</div><div style="font-size:13px; margin-top:8px;">請先執行搜尋，報表將顯示所有節點的結構化資料。</div></div>';
+            return;
+        }
+
+        const nodes = state.cy.nodes();
+        const edges = state.cy.edges();
+
+        // Separate companies and persons
+        const companies = [];
+        const persons = [];
+        nodes.forEach(n => {
+            const d = n.data();
+            if (d.type === 'company') companies.push(d);
+            else if (d.type === 'person') persons.push(d);
+        });
+
+        // Sort: high risk first, then by flag_count
+        const riskOrder = { CRITICAL: 0, WARNING: 1, INFO: 2, NONE: 3 };
+        companies.sort((a, b) => (riskOrder[a.risk_level] || 3) - (riskOrder[b.risk_level] || 3) || (b.flag_count || 0) - (a.flag_count || 0));
+        persons.sort((a, b) => (riskOrder[a.risk_level] || 3) - (riskOrder[b.risk_level] || 3) || (b.flag_count || 0) - (a.flag_count || 0));
+
+        // Build edges lookup
+        const edgeMap = {};
+        edges.forEach(e => {
+            const d = e.data();
+            const key = d.source + '→' + d.target;
+            edgeMap[key] = d;
+        });
+
+        // Count connections per person
+        const personConnections = {};
+        edges.forEach(e => {
+            const d = e.data();
+            if (d.source) {
+                personConnections[d.source] = (personConnections[d.source] || 0) + 1;
+            }
+            if (d.target) {
+                personConnections[d.target] = (personConnections[d.target] || 0) + 1;
+            }
+        });
+
+        // Risk badge helper
+        function riskBadge(level) {
+            const colors = { CRITICAL: '#C0392B', WARNING: '#E67E22', INFO: '#3498DB', NONE: '#95A5A6' };
+            const labels = { CRITICAL: '高風險', WARNING: '中風險', INFO: '資訊', NONE: '正常' };
+            return '<span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; color:#fff; background:' + (colors[level] || colors.NONE) + ';">' + (labels[level] || '正常') + '</span>';
+        }
+
+        // Seed badge
+        function seedBadge(isSeed) {
+            return isSeed ? ' <span style="display:inline-block; padding:1px 6px; border-radius:8px; font-size:9px; font-weight:600; color:#1ABC9C; border:1px solid #1ABC9C;">主體</span>' : '';
+        }
+
+        // Build person detail: list their connected companies
+        function personCompanyList(personId) {
+            const connected = [];
+            edges.forEach(e => {
+                const d = e.data();
+                if (d.source === personId || d.target === personId) {
+                    const otherId = d.source === personId ? d.target : d.source;
+                    const otherNode = state.cy.getElementById(otherId);
+                    if (otherNode.length && otherNode.data('type') === 'company') {
+                        connected.push({
+                            name: otherNode.data('label') || otherId,
+                            role: d.label || d.relationship || '關聯',
+                            risk: otherNode.data('risk_level') || 'NONE',
+                            entity_id: otherNode.data('entity_id') || ''
+                        });
+                    }
+                }
+            });
+            return connected;
+        }
+
+        let html = '';
+
+        // Summary bar
+        html += '<div style="display:flex; gap:16px; margin-bottom:20px; flex-wrap:wrap;">';
+        html += '<div style="background:#f0f7ff; border-radius:8px; padding:12px 20px; flex:1; min-width:120px; text-align:center;"><div style="font-size:24px; font-weight:700; color:#3A7CA5;">' + companies.length + '</div><div style="font-size:11px; color:#888;">公司</div></div>';
+        html += '<div style="background:#fdf6ec; border-radius:8px; padding:12px 20px; flex:1; min-width:120px; text-align:center;"><div style="font-size:24px; font-weight:700; color:#B8860B;">' + persons.length + '</div><div style="font-size:11px; color:#888;">自然人</div></div>';
+        html += '<div style="background:#fdeaea; border-radius:8px; padding:12px 20px; flex:1; min-width:120px; text-align:center;"><div style="font-size:24px; font-weight:700; color:#C0392B;">' + companies.filter(c => c.risk_level === 'CRITICAL').length + '</div><div style="font-size:11px; color:#888;">高風險公司</div></div>';
+        html += '<div style="background:#fef4ea; border-radius:8px; padding:12px 20px; flex:1; min-width:120px; text-align:center;"><div style="font-size:24px; font-weight:700; color:#E67E22;">' + companies.filter(c => c.risk_level === 'WARNING').length + '</div><div style="font-size:11px; color:#888;">中風險公司</div></div>';
+        html += '<div style="background:#eaf7f0; border-radius:8px; padding:12px 20px; flex:1; min-width:120px; text-align:center;"><div style="font-size:24px; font-weight:700; color:#27AE60;">' + edges.length + '</div><div style="font-size:11px; color:#888;">關聯數</div></div>';
+        html += '</div>';
+
+        // Tab bar
+        html += '<div id="report-tabs" style="display:flex; gap:0; border-bottom:2px solid #e0e0e0; margin-bottom:16px;">';
+        html += '<button class="report-tab report-tab-active" onclick="switchReportTab(\'companies\')" data-tab="companies" style="padding:8px 20px; border:none; background:none; font-size:13px; font-weight:600; color:#3A7CA5; border-bottom:2px solid #3A7CA5; margin-bottom:-2px; cursor:pointer;">公司列表</button>';
+        html += '<button class="report-tab" onclick="switchReportTab(\'persons\')" data-tab="persons" style="padding:8px 20px; border:none; background:none; font-size:13px; font-weight:500; color:#888; cursor:pointer;">人物列表</button>';
+        html += '<button class="report-tab" onclick="switchReportTab(\'edges\')" data-tab="edges" style="padding:8px 20px; border:none; background:none; font-size:13px; font-weight:500; color:#888; cursor:pointer;">關聯列表</button>';
+        html += '<button class="report-tab" onclick="switchReportTab(\'flags\')" data-tab="flags" style="padding:8px 20px; border:none; background:none; font-size:13px; font-weight:500; color:#888; cursor:pointer;">紅旗警示</button>';
+        html += '</div>';
+
+        // ===== Companies table =====
+        html += '<div id="report-panel-companies" class="report-panel">';
+        html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+        html += '<thead><tr style="background:#f5f7fa; text-align:left;">';
+        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">公司名稱</th>';
+        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">統一編號</th>';
+        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">風險等級</th>';
+        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">紅旗數</th>';
+        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">地址</th>';
+        html += '</tr></thead><tbody>';
+        companies.forEach((c, i) => {
+            const bg = i % 2 === 0 ? '#fff' : '#fafbfc';
+            const name = c.label || c.id || '';
+            const entityId = c.entity_id || '';
+            const flagCount = c.flag_count || 0;
+            const addr = c.address || '';
+            html += '<tr style="background:' + bg + '; cursor:pointer;" onclick="reportClickNode(\'' + c.id + '\')">';
+            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee;">' + name + seedBadge(c.is_seed) + '</td>';
+            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; font-family:monospace;">' + entityId + '</td>';
+            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee;">' + riskBadge(c.risk_level) + '</td>';
+            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; text-align:center;">' + (flagCount > 0 ? '<span style="color:#C0392B; font-weight:600;">' + flagCount + '</span>' : '0') + '</td>';
+            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; font-size:11px; color:#666; max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + addr + '</td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table></div>';
+
+        // ===== Persons table =====
+        html += '<div id="report-panel-persons" class="report-panel" style="display:none;">';
+        html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+        html += '<thead><tr style="background:#f5f7fa; text-align:left;">';
+        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">姓名</th>';
+        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">風險等級</th>';
+        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">關聯公司數</th>';
+        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">關聯公司</th>';
+        html += '</tr></thead><tbody>';
+        persons.forEach((p, i) => {
+            const bg = i % 2 === 0 ? '#fff' : '#fafbfc';
+            const name = p.label || p.id || '';
+            const connectedCompanies = personCompanyList(p.id);
+            const companyNames = connectedCompanies.map(c => c.name + '(' + c.role + ')').join('、');
+            html += '<tr style="background:' + bg + '; cursor:pointer;" onclick="reportClickNode(\'' + p.id + '\')">';
+            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee;">' + name + '</td>';
+            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee;">' + riskBadge(p.risk_level) + '</td>';
+            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; text-align:center;">' + connectedCompanies.length + '</td>';
+            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; font-size:11px; color:#666; max-width:350px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + companyNames + '</td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table></div>';
+
+        // ===== Edges table =====
+        html += '<div id="report-panel-edges" class="report-panel" style="display:none;">';
+        html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+        html += '<thead><tr style="background:#f5f7fa; text-align:left;">';
+        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">來源</th>';
+        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">關係</th>';
+        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">目標</th>';
+        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">持股比例</th>';
+        html += '</tr></thead><tbody>';
+        edges.forEach((e, i) => {
+            const d = e.data();
+            const bg = i % 2 === 0 ? '#fff' : '#fafbfc';
+            const srcNode = state.cy.getElementById(d.source);
+            const tgtNode = state.cy.getElementById(d.target);
+            const srcLabel = srcNode.length ? (srcNode.data('label') || d.source) : d.source;
+            const tgtLabel = tgtNode.length ? (tgtNode.data('label') || d.target) : d.target;
+            const rel = d.label || d.relationship || '';
+            const shares = d.shares_percentage ? d.shares_percentage + '%' : '';
+            html += '<tr style="background:' + bg + ';">';
+            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; cursor:pointer;" onclick="reportClickNode(\'' + d.source + '\')">' + srcLabel + '</td>';
+            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee;"><span style="display:inline-block; padding:2px 8px; border-radius:4px; font-size:10px; background:#f0f0f0; color:#555;">' + rel + '</span></td>';
+            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; cursor:pointer;" onclick="reportClickNode(\'' + d.target + '\')">' + tgtLabel + '</td>';
+            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; font-family:monospace;">' + shares + '</td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table></div>';
+
+        // ===== Red flags table =====
+        html += '<div id="report-panel-flags" class="report-panel" style="display:none;">';
+        const allFlags = [];
+        nodes.forEach(n => {
+            const d = n.data();
+            if (d.flags && d.flags.length) {
+                d.flags.forEach(f => {
+                    allFlags.push({ entity: d.label || d.id, entity_id: d.entity_id || '', nodeId: d.id, ...f });
+                });
+            }
+        });
+        if (allFlags.length === 0) {
+            html += '<div style="text-align:center; color:#999; padding:40px;">尚無紅旗警示</div>';
+        } else {
+            html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+            html += '<thead><tr style="background:#f5f7fa; text-align:left;">';
+            html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">對象</th>';
+            html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">類型</th>';
+            html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">嚴重度</th>';
+            html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">說明</th>';
+            html += '</tr></thead><tbody>';
+            allFlags.forEach((f, i) => {
+                const bg = i % 2 === 0 ? '#fff' : '#fafbfc';
+                const sevColors = { CRITICAL: '#C0392B', WARNING: '#E67E22', INFO: '#3498DB' };
+                const sevLabels = { CRITICAL: '嚴重', WARNING: '警告', INFO: '資訊' };
+                html += '<tr style="background:' + bg + '; cursor:pointer;" onclick="reportClickNode(\'' + f.nodeId + '\')">';
+                html += '<td style="padding:8px 12px; border-bottom:1px solid #eee;">' + f.entity + '</td>';
+                html += '<td style="padding:8px 12px; border-bottom:1px solid #eee;">' + (f.rule || f.type || '') + '</td>';
+                html += '<td style="padding:8px 12px; border-bottom:1px solid #eee;"><span style="color:' + (sevColors[f.severity] || '#888') + '; font-weight:600;">' + (sevLabels[f.severity] || f.severity || '') + '</span></td>';
+                html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; font-size:11px; color:#666;">' + (f.description || f.message || '') + '</td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+        }
+        html += '</div>';
+
+        container.innerHTML = html;
+    }
+
+    function switchReportTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll('#report-tabs .report-tab').forEach(btn => {
+            const isActive = btn.getAttribute('data-tab') === tabName;
+            btn.style.color = isActive ? '#3A7CA5' : '#888';
+            btn.style.fontWeight = isActive ? '600' : '500';
+            btn.style.borderBottom = isActive ? '2px solid #3A7CA5' : 'none';
+            btn.classList.toggle('report-tab-active', isActive);
+        });
+        // Show/hide panels
+        document.querySelectorAll('.report-panel').forEach(p => p.style.display = 'none');
+        const panel = document.getElementById('report-panel-' + tabName);
+        if (panel) panel.style.display = 'block';
+    }
+    window.switchReportTab = switchReportTab;
+
+    function reportClickNode(nodeId) {
+        // Switch back to graph view and focus on the node
+        if (_reportViewActive) toggleReportView();
+        if (!state.cy) return;
+        const node = state.cy.getElementById(nodeId);
+        if (node.length === 0) return;
+        state.cy.animate({ fit: { eles: node.union(node.neighborhood()), padding: 60 }, duration: 400 });
+        node.select();
+        showNodeDetail(node.data());
+    }
+    window.reportClickNode = reportClickNode;
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
