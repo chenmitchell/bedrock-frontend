@@ -2162,11 +2162,11 @@
     function setupAnalysis() {
         const btnAnalyze = document.getElementById('btn-analyze');
         if (btnAnalyze) {
-            btnAnalyze.addEventListener('click', () => runAnalysis(true));
+            btnAnalyze.addEventListener('click', () => runAnalysis());
         }
     }
 
-    async function runAnalysis(markCompleted = false) {
+    async function runAnalysis() {
         if (!state.currentInvId) return;
 
         // 顯示分析進度條（複用 crawl progress UI）
@@ -2196,8 +2196,7 @@
         }, 1500);
 
         try {
-            const analyzeUrl = `/investigations/${state.currentInvId}/analyze${markCompleted ? '?mark_completed=true' : ''}`;
-            const result = await api.post(analyzeUrl, null, 120000);
+            const result = await api.post(`/investigations/${state.currentInvId}/analyze`, null, 120000);
             clearInterval(stepTimer);
 
             const count = result.total_anomalies || 0;
