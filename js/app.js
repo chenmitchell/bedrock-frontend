@@ -397,6 +397,12 @@
 
         if (btnConfirm) {
             btnConfirm.addEventListener('click', async () => {
+                // Prevent double-click
+                if (btnConfirm.disabled) return;
+                btnConfirm.disabled = true;
+                const originalText = btnConfirm.textContent;
+                btnConfirm.textContent = '建立中…';
+
                 const title = document.getElementById('new-inv-title').value.trim();
                 const desc = document.getElementById('new-inv-desc').value.trim();
                 const seedType = document.getElementById('new-inv-seed-type')?.value || 'company';
@@ -404,6 +410,8 @@
 
                 if (!title) {
                     Toast.warning('請輸入案件名稱');
+                    btnConfirm.disabled = false;
+                    btnConfirm.textContent = originalText;
                     return;
                 }
 
@@ -440,6 +448,9 @@
                 } catch (e) {
                     console.warn('[BEDROCK] 建立失敗:', e.message);
                     Toast.error('建立調查失敗: ' + e.message);
+                    // Re-enable button on error
+                    btnConfirm.disabled = false;
+                    btnConfirm.textContent = originalText;
                 }
             });
         }
@@ -1003,21 +1014,41 @@
             }
 
             const typeLabels = { tax_id: '統編', company: '公司', person: '人名' };
-            listEl.innerHTML = seeds.map(s => `
-                <div class="ws-list-item ws-seed-item" data-seed-id="${s.id}">
-                    <div class="ws-list-item-title">
-                        <span class="ws-seed-type">${typeLabels[s.seed_type] || s.seed_type}</span>
-                        ${esc(s.seed_value)}
+            listEl.innerHTML = seeds.map(s => {
+                const typeLabel = typeLabels[s.seed_type] || s.seed_type;
+                const resolvedName = s.resolved_company_name || '';
+                return `
+                    <div class="ws-list-item ws-seed-item" data-seed-id="${s.id}" style="cursor:pointer;" onclick="focusSeedNode('${esc(s.seed_value)}')">
+                        <div class="ws-list-item-title" style="display:flex; align-items:center; gap:6px;">
+                            <span class="ws-seed-type">${typeLabel}</span>
+                            <span style="font-weight:600;">${esc(s.seed_value)}</span>
+                        </div>
+                        ${resolvedName ? `<div style="font-size:11px; color:#3A7CA5; font-weight:500; margin-top:2px;">${esc(resolvedName)}</div>` : ''}
+                        <div class="ws-list-item-sub">${formatDate(s.created_at)}</div>
                     </div>
-                    <div class="ws-list-item-sub">${formatDate(s.created_at)}</div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         } catch (e) {
             console.warn('[BEDROCK] 載入種子失敗:', e.message);
             if (countEl) countEl.textContent = '0';
             listEl.innerHTML = '<div class="ws-list-empty">載入失敗</div>';
         }
     }
+
+    function focusSeedNode(seedValue) {
+        if (!state.cy) return;
+        // Try to find node by entity_id or label matching
+        const node = state.cy.nodes().filter(n => {
+            const d = n.data();
+            return d.entity_id === seedValue || d.label === seedValue || d.id === seedValue;
+        });
+        if (node.length > 0) {
+            state.cy.center(node[0]);
+            node[0].select();
+            showNodeDetail(node[0].data());
+        }
+    }
+    window.focusSeedNode = focusSeedNode;
 
     // ================================================================
     // Cytoscape 初始化
@@ -1179,6 +1210,36 @@
                         'line-color': '#3A7CA5',
                         'target-arrow-color': '#3A7CA5',
                         'width': 2,
+                    },
+                },
+                // High-risk PERSON nodes get extra-bold gold pulsing border
+                {
+                    selector: 'node[type="person"][risk_level="CRITICAL"]',
+                    style: {
+                        'background-color': '#DC143C',
+                        'border-color': '#FFD700',
+                        'border-width': 5,
+                        'border-style': 'double',
+                        'shadow-blur': 20,
+                        'shadow-color': '#DC143C',
+                        'shadow-opacity': 0.7,
+                        'font-weight': 'bold',
+                        'font-size': '13px',
+                        'color': '#8B0000',
+                    },
+                },
+                {
+                    selector: 'node[type="person"][risk_level="WARNING"]',
+                    style: {
+                        'background-color': '#FF8C00',
+                        'border-color': '#FFD700',
+                        'border-width': 3.5,
+                        'border-style': 'double',
+                        'shadow-blur': 12,
+                        'shadow-color': '#FF8C00',
+                        'shadow-opacity': 0.5,
+                        'font-weight': 'bold',
+                        'color': '#8B4513',
                     },
                 },
             ],
@@ -1530,46 +1591,84 @@
             const data = await api.get(`/companies/${taxId}/risk-score`);
 
             const levelColors = {
-                NORMAL: '#4ade80',
-                NOTICE: '#60a5fa',
-                WARNING: '#fbbf24',
-                HIGH: '#f97316',
-                CRITICAL: '#ef4444'
+                NORMAL: '#4ade80', NOTICE: '#60a5fa',
+                WARNING: '#fbbf24', HIGH: '#f97316', CRITICAL: '#ef4444'
+            };
+            const levelLabels = {
+                NORMAL: '正常', NOTICE: '留意',
+                WARNING: '警告', HIGH: '高風險', CRITICAL: '極高風險'
             };
 
-            const riskScore = data.risk_score || 0;
+            const riskScore10 = Math.round((data.risk_score || 0)) / 10;
             const riskLevel = data.risk_level || 'NORMAL';
             const riskColor = levelColors[riskLevel] || '#4ade80';
+            const riskLabelText = levelLabels[riskLevel] || '正常';
 
+            // Indicator descriptions mapping
+            const indicatorDescriptions = {
+                '殼公司指標': '公司資本額極低、僅一名董事、或使用虛擬地址',
+                '資本異常指標': '資本額有劇烈變動（暴增或驟降）',
+                '地址聚集指標': '同一地址登記多家公司',
+                '代理董事指標': '同一人擔任多家公司董事',
+                '董事異動指標': '短期內頻繁更換代表人或董事',
+                'UBO隱藏指標': '透過多層法人持股隱藏實質受益人',
+                '生命週期指標': '公司快速成立又解散，或疑似鳳凰公司',
+                '變更頻率指標': '公司登記資料變更異常頻繁',
+                '循環持股指標': '偵測到 A→B→A 或 A→B→C→A 持股循環',
+                '星形結構指標': '一人/實體控制多家公司的星形結構',
+                '橋接節點指標': '連接不同群組的關鍵橋接節點',
+            };
+
+            // Build indicators HTML - only show non-zero indicators
             let indicatorsHtml = '';
             if (data.indicators && data.indicators.length > 0) {
-                indicatorsHtml = data.indicators
-                    .filter(i => i.normalized_score > 0)
-                    .map(ind => {
-                        const fillPercent = Math.min(100, ind.normalized_score * 10);
-                        const fillColor = ind.normalized_score > 7 ? '#ef4444' :
-                                        ind.normalized_score > 4 ? '#fbbf24' : '#4ade80';
-                        return `
-                            <div class="risk-indicator-row">
-                                <span class="risk-ind-name">${esc(ind.name)}</span>
-                                <div class="risk-ind-bar-bg">
-                                    <div class="risk-ind-bar-fill" style="width:${fillPercent}%;background:${fillColor}"></div>
-                                </div>
-                                <span class="risk-ind-score">${ind.weighted_score || 0}</span>
+                const activeIndicators = data.indicators.filter(i => i.normalized_score > 0);
+                if (activeIndicators.length > 0) {
+                    indicatorsHtml = `
+                        <div style="margin-top:12px;">
+                            <div style="font-weight:600; font-size:12px; color:#666; margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:4px;">
+                                風險指標明細（0-10 分）
                             </div>
-                        `;
-                    }).join('');
+                            ${activeIndicators.sort((a,b) => b.normalized_score - a.normalized_score).map(ind => {
+                                const score10 = Math.round(ind.normalized_score * 10) / 10;
+                                const fillPct = Math.min(100, ind.normalized_score * 10);
+                                const barColor = ind.normalized_score >= 7 ? '#ef4444' :
+                                               ind.normalized_score >= 4 ? '#f97316' :
+                                               ind.normalized_score >= 2 ? '#fbbf24' : '#4ade80';
+                                const desc = indicatorDescriptions[ind.name] || '';
+                                const sevLabel = ind.normalized_score >= 7 ? '高' :
+                                               ind.normalized_score >= 4 ? '中' : '低';
+                                return `
+                                    <div style="margin-bottom:10px;">
+                                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+                                            <span style="font-size:12px; font-weight:600; color:#333;">${esc(ind.name)}</span>
+                                            <span style="font-size:12px; font-weight:700; color:${barColor}; min-width:60px; text-align:right;">
+                                                ${score10}/10
+                                                <span style="font-size:10px; background:${barColor}22; color:${barColor}; padding:1px 4px; border-radius:3px; margin-left:2px;">${sevLabel}</span>
+                                            </span>
+                                        </div>
+                                        <div style="height:6px; background:#f0f0f0; border-radius:3px; overflow:hidden;">
+                                            <div style="height:100%; width:${fillPct}%; background:${barColor}; border-radius:3px; transition:width 0.3s;"></div>
+                                        </div>
+                                        ${desc ? `<div style="font-size:10px; color:#999; margin-top:2px;">${esc(desc)}</div>` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
+                }
             }
 
+            // Cross-validation warnings
             let cvHtml = '';
             if (data.cross_validations && data.cross_validations.length > 0) {
                 cvHtml = `
-                    <div class="risk-cross-validations">
-                        <div class="risk-cv-title">交叉驗證警告</div>
+                    <div style="margin-top:10px; padding:8px; background:#fef2f2; border-radius:6px; border-left:3px solid #ef4444;">
+                        <div style="font-size:11px; font-weight:700; color:#b91c1c; margin-bottom:4px;">⚠ 複合風險模式</div>
                         ${data.cross_validations.map(cv => `
-                            <div class="risk-cv-item">
-                                <span class="risk-cv-multiplier">×${cv.multiplier}</span>
-                                <span class="risk-cv-desc">${esc(cv.description)}</span>
+                            <div style="font-size:11px; color:#7f1d1d; margin-bottom:2px;">
+                                <span style="background:#ef444422; padding:0 4px; border-radius:2px; font-weight:600;">×${cv.multiplier}</span>
+                                ${esc(cv.description)}
                             </div>
                         `).join('')}
                     </div>
@@ -1577,23 +1676,27 @@
             }
 
             scoreContainer.innerHTML = `
-                <div class="risk-score-card">
-                    <div class="risk-gauge">
-                        <div class="risk-gauge-number" style="color:${riskColor}">${riskScore}</div>
-                        <div class="risk-gauge-label">${data.risk_label || riskLevel}</div>
-                        <div class="risk-gauge-bar">
-                            <div class="risk-gauge-fill" style="width:${riskScore}%;background:${riskColor}"></div>
+                <div style="padding:12px; background:#fafafa; border-radius:8px; border:1px solid #eee;">
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+                        <div style="width:56px; height:56px; border-radius:50%; background:${riskColor}18; border:3px solid ${riskColor}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                            <span style="font-size:18px; font-weight:800; color:${riskColor};">${riskScore10.toFixed(1)}</span>
+                        </div>
+                        <div>
+                            <div style="font-size:14px; font-weight:700; color:${riskColor};">${riskLabelText}</div>
+                            <div style="font-size:11px; color:#999;">
+                                綜合風險 ${riskScore10.toFixed(1)}/10
+                                ${data.confidence ? ` · 信心度 ${data.confidence}` : ''}
+                            </div>
                         </div>
                     </div>
-                    ${data.confidence ? `<div class="risk-confidence">信心度: ${data.confidence}</div>` : ''}
-                    ${data.summary ? `<div class="risk-summary">${esc(data.summary)}</div>` : ''}
-                    ${indicatorsHtml ? `<div class="risk-indicators">${indicatorsHtml}</div>` : ''}
+                    ${data.summary ? `<div style="font-size:11px; color:#666; line-height:1.5; margin-bottom:8px; padding:6px 8px; background:#fff; border-radius:4px; border:1px solid #f0f0f0;">${esc(data.summary)}</div>` : ''}
+                    ${indicatorsHtml}
                     ${cvHtml}
                 </div>
             `;
             scoreContainer.style.display = '';
         } catch(e) {
-            scoreContainer.innerHTML = `<div class="text-muted">風險評分暫無法計算</div>`;
+            scoreContainer.innerHTML = '<div style="color:#999; font-size:12px; padding:8px;">風險評分暫無法計算</div>';
             scoreContainer.style.display = '';
         }
     }
@@ -1789,7 +1892,9 @@
             btnStart.addEventListener('click', async () => {
                 if (!state.currentInvId) return;
                 try {
-                    await api.post(`/investigations/${state.currentInvId}/crawl/start`);
+                    const depthSelect = document.getElementById('crawl-depth');
+                    const maxDepth = depthSelect ? parseInt(depthSelect.value) : 3;
+                    await api.post(`/investigations/${state.currentInvId}/crawl/start`, { max_depth: maxDepth || 0 });
                     state.crawling = true;
                     updateCrawlUI();
                     Toast.success('搜尋已開始，自動追蹤關聯企業…');
@@ -1910,7 +2015,8 @@
             if (fill) fill.style.width = pct + '%';
             if (progressEl) progressEl.setAttribute('aria-valuenow', pct);
             if (text) {
-                text.textContent = `${processed}/${discovered} 節點 (${pct}%)${entity ? ' — ' + entity : ''}`;
+                const depthInfo = data.current_depth ? ` · 第 ${data.current_depth}/${data.max_depth || '?'} 層` : '';
+                text.textContent = `${processed}/${discovered} 節點 (${pct}%)${depthInfo}${entity ? ' — ' + entity : ''}`;
             }
 
             // === 即時更新關聯圖（每次 poll 都刷新，讓使用者看到圖慢慢長出來）===
@@ -2335,6 +2441,100 @@
             checkAndSkipLogin();
         }, 100);
     }
+
+    // 圖例顯示/隱藏
+    function toggleLegend() {
+        const legend = document.getElementById('graph-legend');
+        if (legend) {
+            const isVisible = legend.style.display !== 'none';
+            legend.style.display = isVisible ? 'none' : '';
+        }
+    }
+    window.toggleLegend = toggleLegend;
+
+    // 歷史關聯顯示/隱藏
+    let showHistorical = true;
+    function toggleHistoricalEdges() {
+        if (!state.cy) return;
+        showHistorical = !showHistorical;
+        const historicalEdges = state.cy.edges('[type="historical"]');
+        if (showHistorical) {
+            historicalEdges.style('display', 'element');
+            Toast.show('已顯示歷史關聯', 'info');
+        } else {
+            historicalEdges.style('display', 'none');
+            Toast.show('已隱藏歷史關聯', 'info');
+        }
+        // Update button state
+        const btn = document.getElementById('btn-toggle-historical');
+        if (btn) {
+            btn.classList.toggle('ws-tool-btn-active', showHistorical);
+            btn.title = showHistorical ? '隱藏歷史關聯' : '顯示歷史關聯';
+        }
+    }
+    window.toggleHistoricalEdges = toggleHistoricalEdges;
+
+    // 歷史關聯時間範圍篩選
+    function filterHistoricalByRange() {
+        if (!state.cy) return;
+        const rangeSelect = document.getElementById('historical-range');
+        const years = rangeSelect ? parseInt(rangeSelect.value) : 0;
+
+        const historicalEdges = state.cy.edges('[type="historical"]');
+
+        if (!years || years === 0) {
+            // Show all historical edges (if toggle is on)
+            if (showHistorical) {
+                historicalEdges.style('display', 'element');
+            }
+            Toast.show(`顯示所有歷史關聯`, 'info');
+            return;
+        }
+
+        const cutoffDate = new Date();
+        cutoffDate.setFullYear(cutoffDate.getFullYear() - years);
+
+        historicalEdges.forEach(edge => {
+            const endDate = edge.data('end_date') || edge.data('dissolved_date');
+            if (endDate) {
+                const edgeDate = new Date(endDate);
+                if (edgeDate >= cutoffDate) {
+                    edge.style('display', showHistorical ? 'element' : 'none');
+                } else {
+                    edge.style('display', 'none');
+                }
+            } else {
+                // No date info — show by default
+                edge.style('display', showHistorical ? 'element' : 'none');
+            }
+        });
+        Toast.show(`篩選 ${years} 年內的歷史關聯`, 'info');
+    }
+    window.filterHistoricalByRange = filterHistoricalByRange;
+
+    // 左側面板展開/收合
+    function toggleSidebar() {
+        const sidebar = document.querySelector('.ws-sidebar');
+        const btn = document.getElementById('btn-collapse-sidebar');
+        if (!sidebar || !btn) return;
+        sidebar.classList.toggle('collapsed');
+        btn.textContent = sidebar.classList.contains('collapsed') ? '▶' : '◀';
+        btn.title = sidebar.classList.contains('collapsed') ? '展開左側面板' : '收合左側面板';
+        if (state.cy) setTimeout(() => state.cy.resize(), 300);
+    }
+    window.toggleSidebar = toggleSidebar;
+
+    // 右側面板展開/收合
+    function toggleDetailPanel() {
+        const panel = document.getElementById('ws-detail');
+        const btn = document.getElementById('btn-collapse-detail');
+        if (!panel || !btn) return;
+        panel.classList.toggle('collapsed');
+        btn.textContent = panel.classList.contains('collapsed') ? '◀' : '▶';
+        btn.title = panel.classList.contains('collapsed') ? '展開右側面板' : '收合右側面板';
+        if (state.cy) setTimeout(() => state.cy.resize(), 300);
+    }
+    window.toggleDetailPanel = toggleDetailPanel;
 
     // 設置管理頁籤切換
     function setupAdminTabs() {

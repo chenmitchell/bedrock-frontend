@@ -1367,11 +1367,57 @@ input:focus, select:focus, textarea:focus {
 
 .workspace-body {
   display: grid;
-  grid-template-columns: 260px 1fr 320px;
+  grid-template-columns: minmax(200px, 260px) 1fr minmax(200px, 360px);
   flex: 1;
   min-height: 0;
   gap: 1px;
   background: var(--color-border);
+}
+
+.workspace-body:has(.ws-sidebar.collapsed) {
+  grid-template-columns: 40px 1fr minmax(200px, 360px);
+}
+.workspace-body:has(.ws-detail.collapsed) {
+  grid-template-columns: minmax(200px, 260px) 1fr 40px;
+}
+.workspace-body:has(.ws-sidebar.collapsed):has(.ws-detail.collapsed) {
+  grid-template-columns: 40px 1fr 40px;
+}
+
+.ws-sidebar.collapsed {
+  width: 40px !important;
+  min-width: 40px !important;
+  padding: 8px 4px;
+  overflow: hidden;
+}
+.ws-sidebar.collapsed > .ws-section {
+  display: none;
+}
+.ws-detail.collapsed {
+  width: 40px !important;
+  min-width: 40px !important;
+  padding: 8px 4px;
+  overflow: hidden;
+}
+.ws-detail.collapsed > * {
+  display: none;
+}
+.panel-collapse-btn {
+  display: block;
+  width: 28px;
+  height: 28px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 28px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+.panel-collapse-btn:hover {
+  background: var(--color-bg);
 }
 
 .ws-sidebar {

@@ -405,6 +405,7 @@
         <div class="workspace-body">
             <!-- 左側面板 -->
             <aside class="ws-sidebar">
+                <button class="panel-collapse-btn" id="btn-collapse-sidebar" title="收合左側面板" onclick="toggleSidebar()">◀</button>
                 <div class="ws-section">
                     <h4 class="ws-section-title">
                         搜尋與新增
@@ -429,6 +430,15 @@
                         搜尋控制
                         <span class="help-icon" data-tooltip="點擊「開始」後，系統會從查詢目標出發，自動追蹤董監事與法人代表，直到找到所有實質受益人為止。" data-tooltip-pos="bottom">?</span>
                     </h4>
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                        <label for="crawl-depth" style="font-size:12px; color:#888; white-space:nowrap;">搜尋深度</label>
+                        <select id="crawl-depth" class="ws-input" style="flex:1; padding:4px 8px; font-size:12px;">
+                            <option value="2">2 層</option>
+                            <option value="3" selected>3 層（預設）</option>
+                            <option value="5">5 層</option>
+                            <option value="0">自動（直到找到 UBO）</option>
+                        </select>
+                    </div>
                     <div class="ws-controls" role="group" aria-label="搜尋控制">
                         <button id="btn-start-crawl" class="ws-btn-action" aria-label="開始搜尋" data-tooltip="開始搜尋，自動追蹤關聯企業與實質受益人" data-tooltip-pos="bottom">
                             <i class="fas fa-play" aria-hidden="true"></i> 開始
@@ -487,6 +497,24 @@
                     <button class="ws-tool-btn" id="btn-layout-cola" aria-label="力導向排版"><i class="fas fa-project-diagram" aria-hidden="true"></i></button>
                     <button class="ws-tool-btn" id="btn-layout-grid" aria-label="網格排版"><i class="fas fa-th" aria-hidden="true"></i></button>
                     <button class="ws-tool-btn" id="btn-export-png" aria-label="匯出圖片"><i class="fas fa-image" aria-hidden="true"></i></button>
+                    <span class="ws-tool-divider" aria-hidden="true"></span>
+                    <div style="display:inline-flex; align-items:center; gap:2px;">
+                        <button class="ws-tool-btn" id="btn-toggle-historical" title="顯示/隱藏歷史關聯" onclick="toggleHistoricalEdges()" aria-label="切換歷史關聯顯示">
+                            <i class="fas fa-history" aria-hidden="true"></i>
+                            <span>歷史</span>
+                        </button>
+                        <select id="historical-range" class="ws-input" style="width:80px; padding:2px 4px; font-size:10px; height:28px; border-radius:4px;" title="歷史關聯時間範圍" onchange="filterHistoricalByRange()">
+                            <option value="all">全部</option>
+                            <option value="1">1 年內</option>
+                            <option value="3">3 年內</option>
+                            <option value="5" selected>5 年內</option>
+                            <option value="10">10 年內</option>
+                        </select>
+                    </div>
+                    <button class="ws-tool-btn" id="btn-toggle-legend" title="顯示/隱藏圖例" onclick="toggleLegend()" aria-label="切換圖例顯示">
+                        <i class="fas fa-info-circle" aria-hidden="true"></i>
+                        <span>圖例</span>
+                    </button>
                 </div>
                 <div style="position:relative; flex:1; min-height:0;">
                     <div id="cy" class="cytoscape-container" style="width:100%; height:100%;"></div>
@@ -500,7 +528,10 @@
                     </div>
                     <!-- 圖例 -->
                     <div class="graph-legend" id="graph-legend" style="display:none;">
-                        <div class="graph-legend-title">圖例</div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="font-size:11px; font-weight:600; color:#666;">圖例</span>
+                            <button onclick="toggleLegend()" style="background:none; border:none; cursor:pointer; color:#999; font-size:14px; padding:2px 4px;" title="關閉圖例">×</button>
+                        </div>
                         <div class="graph-legend-item">
                             <div class="graph-legend-dot" style="background:#3A7CA5;"></div> 正常公司
                         </div>
@@ -514,6 +545,9 @@
                             <div class="graph-legend-dot" style="background:#C0392B; animation: pulse 2s infinite;"></div> 高風險
                         </div>
                         <div class="graph-legend-item">
+                            <div class="graph-legend-dot" style="background:#DC143C; border-radius:50%; border: 2px solid #FFD700;"></div> 高風險人物
+                        </div>
+                        <div class="graph-legend-item">
                             <div class="graph-legend-line" style="background:#C5C0B8;"></div> 董監事
                         </div>
                         <div class="graph-legend-item">
@@ -525,6 +559,7 @@
 
             <!-- 右側詳情面板 -->
             <aside class="ws-detail" id="ws-detail" style="display:none;" role="complementary" aria-label="節點詳情">
+                <button class="panel-collapse-btn" id="btn-collapse-detail" title="收合右側面板" onclick="toggleDetailPanel()">▶</button>
                 <div class="ws-detail-header">
                     <h4 id="detail-title" style="margin: 0;">節點名稱</h4>
                     <button class="ws-detail-close" onclick="closeDetail()" aria-label="關閉詳情面板">
