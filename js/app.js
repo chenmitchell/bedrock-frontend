@@ -3215,27 +3215,60 @@
 
     // 歷史關聯顯示/隱藏
     let showHistorical = true;
+
+    // 隱藏只剩歷史邊（無現任邊）的人物節點
+    function updateHistoricalOrphanNodes() {
+        if (!state.cy) return;
+        const personNodes = state.cy.nodes('[type="person"]');
+        personNodes.forEach(node => {
+            const edges = node.connectedEdges();
+            if (edges.length === 0) return;
+            // 檢查是否有任何「非歷史」且可見的邊
+            const hasVisibleCurrentEdge = edges.some(e => {
+                return e.data('type') !== 'historical' && e.style('display') !== 'none';
+            });
+            // 檢查是否有可見的歷史邊
+            const hasVisibleHistoricalEdge = edges.some(e => {
+                return e.data('type') === 'historical' && e.style('display') !== 'none';
+            });
+            if (!hasVisibleCurrentEdge && !hasVisibleHistoricalEdge) {
+                // 沒有任何可見的邊 → 隱藏此人
+                node.style('display', 'none');
+            } else if (!hasVisibleCurrentEdge && !showHistorical) {
+                // 只有歷史邊但歷史已關閉 → 隱藏此人
+                node.style('display', 'none');
+            } else {
+                // 有可見的現任邊或歷史邊 → 顯示
+                node.style('display', 'element');
+            }
+        });
+    }
+
     function toggleHistoricalEdges() {
         if (!state.cy) return;
         showHistorical = !showHistorical;
         const historicalEdges = state.cy.edges('[type="historical"]');
         if (showHistorical) {
             historicalEdges.style('display', 'element');
-            Toast.show('已顯示歷史關聯', 'info');
+            Toast.show('已顯示歷史關聯（含離任人員）', 'info');
         } else {
             historicalEdges.style('display', 'none');
-            Toast.show('已隱藏歷史關聯', 'info');
+            Toast.show('已隱藏歷史關聯與離任人員', 'info');
         }
+        // 同步隱藏/顯示只有歷史邊的人物節點
+        updateHistoricalOrphanNodes();
         // Update button state
         const btn = document.getElementById('btn-toggle-historical');
         if (btn) {
             btn.classList.toggle('ws-tool-btn-active', showHistorical);
-            btn.title = showHistorical ? '隱藏歷史關聯' : '顯示歷史關聯';
+            btn.title = showHistorical ? '隱藏歷史關聯與離任人員' : '顯示歷史關聯與離任人員';
         }
         // 重新適配圖形到螢幕
-        setTimeout(() => {
-            if (state.cy) state.cy.fit(undefined, 40);
-        }, 100);
+        if (typeof autoResizeAndRelayout === 'function') {
+            autoResizeAndRelayout();
+        } else {
+            setTimeout(() => { if (state.cy) state.cy.fit(undefined, 40); }, 100);
+        }
     }
     window.toggleHistoricalEdges = toggleHistoricalEdges;
 
@@ -3274,10 +3307,14 @@
             }
         });
         Toast.show(`篩選 ${years} 年內的歷史關聯`, 'info');
+        // 同步隱藏只剩被篩掉的歷史邊的人物節點
+        updateHistoricalOrphanNodes();
         // 重新適配圖形
-        setTimeout(() => {
-            if (state.cy) state.cy.fit(undefined, 40);
-        }, 100);
+        if (typeof autoResizeAndRelayout === 'function') {
+            autoResizeAndRelayout();
+        } else {
+            setTimeout(() => { if (state.cy) state.cy.fit(undefined, 40); }, 100);
+        }
     }
     window.filterHistoricalByRange = filterHistoricalByRange;
 
