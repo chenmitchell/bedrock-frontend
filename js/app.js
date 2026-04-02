@@ -2046,8 +2046,10 @@
                 if (!state.currentInvId) return;
                 try {
                     const depthSelect = document.getElementById('crawl-depth');
-                    const maxDepth = depthSelect ? parseInt(depthSelect.value) : 3;
-                    await api.post(`/investigations/${state.currentInvId}/crawl/start`, { max_depth: maxDepth || 0 });
+                    const maxDepth = depthSelect ? parseInt(depthSelect.value) : 0;
+                    const crossCaseSelect = document.getElementById('cross-case-depth');
+                    const crossCaseDepth = crossCaseSelect ? parseInt(crossCaseSelect.value) : 4;
+                    await api.post(`/investigations/${state.currentInvId}/crawl/start`, { max_depth: maxDepth, cross_case_depth: crossCaseDepth });
                     state.crawling = true;
                     updateCrawlUI();
                     Toast.success('搜尋已開始，自動追蹤關聯企業…');
