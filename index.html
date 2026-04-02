@@ -81,24 +81,18 @@
 
         <div class="nav-spacer"></div>
 
-        <!-- 使用者資訊 -->
-        <div class="nav-section">
-            <button class="nav-user" id="btn-user-menu" onclick="toggleUserMenu()">
-                <div class="nav-user-avatar" id="nav-user-avatar">M</div>
-                <div class="nav-user-info">
-                    <div class="nav-user-name" id="nav-username">Mitch</div>
-                    <div class="nav-user-role">管理員</div>
-                </div>
-            </button>
-            <div id="user-menu-dropdown" class="user-menu-dropdown" style="display:none;">
-                <button class="user-menu-item" id="btn-user-settings" onclick="handleUserSettings()">
-                    <i class="fas fa-cog"></i> 設定
-                </button>
-                <button class="user-menu-item" id="btn-user-logout" onclick="handleLogout()">
-                    <i class="fas fa-sign-out-alt"></i> 登出
-                </button>
+        <!-- 使用者資訊 + 登出 -->
+        <div class="nav-divider"></div>
+        <div class="nav-user" id="btn-user-menu">
+            <div class="nav-user-avatar" id="nav-user-avatar">M</div>
+            <div class="nav-user-info">
+                <div class="nav-user-name" id="nav-username">Mitch</div>
+                <div class="nav-user-role">管理員</div>
             </div>
         </div>
+        <button class="nav-logout-btn" onclick="handleLogout()" title="登出系統">
+            <i class="fas fa-sign-out-alt"></i> 登出
+        </button>
     </nav>
 
     <!-- ===== 登入頁 ===== -->
@@ -216,14 +210,19 @@
                 </div>
 
                 <div class="dashboard-header">
-                    <div>
-                        <h2 class="section-title">調查案件</h2>
-                        <p class="section-desc">管理您的加強盡職調查案件</p>
+                    <div style="display:flex; align-items:center; gap:16px;">
+                        <div>
+                            <h2 class="section-title">調查案件</h2>
+                            <p class="section-desc">管理您的加強盡職調查案件</p>
+                        </div>
+                        <button id="btn-new-investigation" class="btn btn-primary" onclick="openNewInvestigationModal()">
+                            <i class="fas fa-plus"></i> 新增個案
+                        </button>
                     </div>
-                    <div style="display:flex; gap:12px; align-items:center;">
+                    <div style="display:flex; gap:10px; align-items:center;">
                         <div class="dashboard-search">
                             <i class="fas fa-search" aria-hidden="true"></i>
-                            <input type="text" id="investigations-search" class="dashboard-search-input" placeholder="搜尋案件名稱…" aria-label="搜尋調查案件">
+                            <input type="text" id="investigations-search" class="dashboard-search-input" placeholder="搜尋案件…" aria-label="搜尋調查案件">
                         </div>
                         <div class="dashboard-filters" role="group" aria-label="案件狀態篩選">
                             <button class="filter-btn filter-btn-active" data-filter="all" onclick="filterInvestigations('all')">全部</button>
@@ -232,9 +231,6 @@
                             <button class="filter-btn" data-filter="analyzing" onclick="filterInvestigations('analyzing')">分析中</button>
                             <button class="filter-btn" data-filter="completed" onclick="filterInvestigations('completed')">已完成</button>
                         </div>
-                        <button id="btn-new-investigation" class="btn btn-primary" onclick="openNewInvestigationModal()">
-                            <i class="fas fa-plus"></i> 新增調查
-                        </button>
                     </div>
                 </div>
                 <div id="investigations-list" class="investigations-grid">
