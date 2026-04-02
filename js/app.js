@@ -335,6 +335,21 @@
             const statusClass = `status-${inv.status || 'draft'}`;
 
             const nodeCount = inv.node_count || 0;
+            const flagCount = inv.red_flag_count || 0;
+
+            // 計算下一步提示
+            let nextStepHtml = '';
+            if (inv.status === 'completed') {
+                nextStepHtml = `<span class="card-next-step card-next-review"><i class="fas fa-chart-bar"></i> 檢視報告</span>`;
+            } else if (flagCount > 0) {
+                nextStepHtml = `<span class="card-next-step card-next-review"><i class="fas fa-chart-bar"></i> 檢視結果</span>`;
+            } else if (nodeCount > 0) {
+                nextStepHtml = `<span class="card-next-step card-next-analyze"><i class="fas fa-microscope"></i> 下一步：分析</span>`;
+            } else if (inv.status === 'crawling') {
+                nextStepHtml = `<span class="card-next-step card-next-crawling"><i class="fas fa-spinner fa-spin"></i> 搜尋中…</span>`;
+            } else {
+                nextStepHtml = `<span class="card-next-step card-next-start"><i class="fas fa-play"></i> 下一步：搜尋</span>`;
+            }
 
             return `
                 <div class="investigation-card" data-id="${inv.id}">
@@ -350,8 +365,9 @@
                     <div class="investigation-card-desc" onclick="openInvestigation('${inv.id}')" style="cursor: pointer;">${esc(inv.description || '')}</div>
                     <div class="investigation-card-footer" onclick="openInvestigation('${inv.id}')" style="cursor: pointer;">
                         <span class="investigation-card-meta">
-                            ${nodeCount} 節點 · ${inv.red_flag_count || 0} 紅旗
+                            ${nodeCount} 節點 · ${flagCount} 紅旗
                         </span>
+                        ${nextStepHtml}
                         <span class="investigation-card-meta">${formatDate(inv.updated_at)}</span>
                     </div>
                 </div>
@@ -959,6 +975,8 @@
 
         showScene('workspace');
         initCytoscape();
+        _hintDismissed = false;  // 重新開放引導提示
+        updateWorkflowStepper();
 
         // 重置所有側邊欄為空白，避免顯示前一個調查的殘留資料
         const resetPairs = [
@@ -999,6 +1017,9 @@
         loadClusters(id);
         loadRedFlags(id);
         loadMedia(id);
+
+        // 延遲更新 stepper (等紅旗等資料載完)
+        setTimeout(() => updateWorkflowStepper(), 500);
     }
 
     // ================================================================
@@ -1017,6 +1038,12 @@
             if (seeds.length === 0) {
                 listEl.innerHTML = '<div class="ws-list-empty">尚無查詢目標，請在上方輸入統編或人名</div>';
                 return;
+            }
+
+            // 有 seeds → 更新 stepper 到至少 crawl 步驟
+            if (seeds.length > 0) {
+                const currentStep = detectWorkflowStep();
+                if (currentStep === 'seed') updateWorkflowStepper('crawl');
             }
 
             const typeLabels = { tax_id: '統編', company: '公司', person: '人名' };
@@ -2110,6 +2137,8 @@
                 if (fill) fill.style.width = '100%';
                 if (text) text.textContent = `完成 — ${processed} 個節點`;
                 loadInvestigationData(state.currentInvId);
+                _hintDismissed = false;  // 搜尋完成後重新顯示引導
+                updateWorkflowStepper('analyze');
                 state._analysisTimer = setTimeout(() => runAnalysis(), 1000);
                 return;
             }
@@ -2133,11 +2162,11 @@
     function setupAnalysis() {
         const btnAnalyze = document.getElementById('btn-analyze');
         if (btnAnalyze) {
-            btnAnalyze.addEventListener('click', () => runAnalysis());
+            btnAnalyze.addEventListener('click', () => runAnalysis(true));
         }
     }
 
-    async function runAnalysis() {
+    async function runAnalysis(markCompleted = false) {
         if (!state.currentInvId) return;
 
         // 顯示分析進度條（複用 crawl progress UI）
@@ -2167,7 +2196,8 @@
         }, 1500);
 
         try {
-            const result = await api.post(`/investigations/${state.currentInvId}/analyze`, null, 120000);
+            const analyzeUrl = `/investigations/${state.currentInvId}/analyze${markCompleted ? '?mark_completed=true' : ''}`;
+            const result = await api.post(analyzeUrl, null, 120000);
             clearInterval(stepTimer);
 
             const count = result.total_anomalies || 0;
@@ -2181,6 +2211,15 @@
             loadRedFlags(state.currentInvId);
             loadClusters(state.currentInvId);
             loadMedia(state.currentInvId);
+
+            // 更新 stepper 到 review 步驟
+            _hintDismissed = false;
+            updateWorkflowStepper('review');
+
+            // 如果紅旗數量較多（>30），自動打開分析儀表板
+            if (flagsSaved > 30) {
+                setTimeout(() => openAnalysisDashboard(), 500);
+            }
 
             // 在圖上標記有紅旗的節點
             if (state.cy && result.anomalies) {
@@ -2315,6 +2354,399 @@
         }
     }
     window.exportInvestigation = exportInvestigation;
+
+    // ================================================================
+    // 分析儀表板
+    // ================================================================
+    let _dashboardData = null;
+    let _dashboardFilterInGraph = false;  // 是否只顯示圖內的
+
+    function openAnalysisDashboard() {
+        if (!state.currentInvId) {
+            Toast.warning('請先選擇一個調查案件');
+            return;
+        }
+        const overlay = document.getElementById('analysis-dashboard-overlay');
+        if (overlay) overlay.style.display = 'flex';
+        loadAnalysisDashboard();
+    }
+    window.openAnalysisDashboard = openAnalysisDashboard;
+
+    function closeAnalysisDashboard() {
+        const overlay = document.getElementById('analysis-dashboard-overlay');
+        if (overlay) overlay.style.display = 'none';
+    }
+    window.closeAnalysisDashboard = closeAnalysisDashboard;
+
+    async function loadAnalysisDashboard() {
+        try {
+            const data = await api.get(`/investigations/${state.currentInvId}/analysis-dashboard`);
+            _dashboardData = data;
+            renderAnalysisDashboard(data);
+        } catch (e) {
+            console.warn('[BEDROCK] 載入分析儀表板失敗:', e.message);
+            Toast.error('載入分析儀表板失敗: ' + e.message);
+        }
+    }
+
+    /** 檢查 target 是否在當前 cytoscape 圖上 */
+    function isTargetInGraph(targetId) {
+        if (!state.cy || !targetId) return false;
+        // 嘗試直接 ID match
+        const direct = state.cy.getElementById(targetId);
+        if (direct && direct.length > 0) return true;
+        // 嘗試 entity_id match
+        const byEntity = state.cy.nodes().filter(n => n.data('entity_id') === targetId);
+        return byEntity.length > 0;
+    }
+
+    function renderAnalysisDashboard(data) {
+        // 嚴重程度卡
+        const el = (id) => document.getElementById(id);
+        el('ad-total').textContent = data.total_flags || 0;
+        el('ad-critical').textContent = (data.severity_summary || {}).CRITICAL || 0;
+        el('ad-warning').textContent = (data.severity_summary || {}).WARNING || 0;
+        el('ad-info').textContent = (data.severity_summary || {}).INFO || 0;
+
+        // 分類群組
+        renderCategoryGroups(data.category_groups || {});
+
+        // Top 10
+        renderTopFindings(data.top_critical || []);
+
+        // 實體熱點
+        renderEntityHotspots(data.entity_hotspots || []);
+    }
+
+    function renderCategoryGroups(groups) {
+        const container = document.getElementById('analysis-category-list');
+        if (!container) return;
+
+        const catColorMap = {
+            structure: '#6366F1',
+            capital: '#F59E0B',
+            temporal: '#8B5CF6',
+            industry: '#10B981',
+            cross_inv: '#EF4444',
+            other: '#6B7280',
+        };
+
+        // 按 order 排序
+        const sorted = Object.entries(groups).sort((a, b) => (a[1].order || 99) - (b[1].order || 99));
+
+        if (sorted.length === 0) {
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:var(--color-text-muted); font-size:0.85rem;">尚無分析結果，請先執行分析</div>';
+            return;
+        }
+
+        container.innerHTML = sorted.map(([catKey, cat]) => {
+            const sev = cat.by_severity || {};
+            const sevText = [];
+            if (sev.CRITICAL) sevText.push(`<span style="color:var(--color-danger);">${sev.CRITICAL} 嚴重</span>`);
+            if (sev.WARNING) sevText.push(`<span style="color:var(--color-warning);">${sev.WARNING} 警告</span>`);
+            if (sev.INFO) sevText.push(`<span style="color:var(--color-success);">${sev.INFO} 資訊</span>`);
+
+            const rules = cat.rules || [];
+            const rulesHtml = rules.map(r => {
+                const rSev = r.by_severity || {};
+                const dots = [];
+                if (rSev.CRITICAL) dots.push(`<span class="sev-dot critical" title="${rSev.CRITICAL} 嚴重"></span>`);
+                if (rSev.WARNING) dots.push(`<span class="sev-dot warning" title="${rSev.WARNING} 警告"></span>`);
+                if (rSev.INFO) dots.push(`<span class="sev-dot info" title="${rSev.INFO} 資訊"></span>`);
+
+                // 範例
+                const samples = (r.sample_flags || []).map(s => {
+                    const desc = (s.detail && s.detail.description) || s.target_id || '';
+                    const inGraph = isTargetInGraph(s.target_id);
+                    const badge = inGraph ? '' : '<span class="out-of-scope-badge">圖外</span>';
+                    return `<div class="analysis-sample-item" onclick="dashboardHighlightTarget('${esc(s.target_id || '')}', '${esc(s.target_type || '')}')">
+                        <span style="color:${s.severity === 'CRITICAL' ? 'var(--color-danger)' : s.severity === 'WARNING' ? 'var(--color-warning)' : 'var(--color-success)'};">●</span>
+                        ${esc(desc.substring(0, 80))}${desc.length > 80 ? '…' : ''}
+                        ${badge}
+                    </div>`;
+                }).join('');
+
+                return `
+                    <div class="analysis-rule-row" onclick="toggleRuleSamples(this)">
+                        <span class="analysis-rule-name">${esc(r.label)}</span>
+                        <div class="analysis-rule-severity-dots">${dots.join('')}</div>
+                        <span class="analysis-rule-count">${r.count}</span>
+                    </div>
+                    <div class="analysis-rule-samples">${samples || '<div style="font-size:0.72rem; color:var(--color-text-muted); padding:4px;">無範例</div>'}</div>
+                `;
+            }).join('');
+
+            return `
+                <div class="analysis-cat-card" onclick="toggleCatCard(event, this)">
+                    <div class="analysis-cat-header">
+                        <div class="analysis-cat-icon cat-${catKey}">
+                            <i class="fas ${cat.icon || 'fa-flag'}"></i>
+                        </div>
+                        <div class="analysis-cat-info">
+                            <div class="analysis-cat-name">${esc(cat.label)}</div>
+                            <div class="analysis-cat-stats">${cat.total} 筆 · ${sevText.join(' / ') || '無'}</div>
+                        </div>
+                        <span class="analysis-cat-arrow"><i class="fas fa-chevron-right"></i></span>
+                    </div>
+                    <div class="analysis-cat-body" onclick="event.stopPropagation()">
+                        ${rulesHtml}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function renderTopFindings(topList) {
+        const container = document.getElementById('analysis-top-list');
+        if (!container) return;
+
+        if (topList.length === 0) {
+            container.innerHTML = '<div style="padding:16px; text-align:center; color:var(--color-text-muted); font-size:0.82rem;">尚無紅旗</div>';
+            return;
+        }
+
+        container.innerHTML = topList.map((f, idx) => {
+            const desc = (f.detail && f.detail.description) || '';
+            const rankClass = f.severity === 'CRITICAL' ? 'rank-critical' : f.severity === 'WARNING' ? 'rank-warning' : '';
+            const inGraph = isTargetInGraph(f.target_id);
+            const badge = inGraph ? '' : '<span class="out-of-scope-badge">圖外</span>';
+
+            return `
+                <div class="analysis-top-item" onclick="dashboardHighlightTarget('${esc(f.target_id || '')}', '${esc(f.target_type || '')}')">
+                    <div class="analysis-top-rank ${rankClass}">${idx + 1}</div>
+                    <div class="analysis-top-content">
+                        <div class="analysis-top-title">
+                            <span style="color:${f.severity === 'CRITICAL' ? 'var(--color-danger)' : f.severity === 'WARNING' ? 'var(--color-warning)' : 'var(--color-success)'};">[${f.severity === 'CRITICAL' ? '嚴重' : f.severity === 'WARNING' ? '警告' : '資訊'}]</span>
+                            ${esc(f.rule_label)}
+                        </div>
+                        <div class="analysis-top-desc" title="${esc(desc)}">${esc(desc.substring(0, 60))}${desc.length > 60 ? '…' : ''}</div>
+                    </div>
+                    ${badge}
+                </div>
+            `;
+        }).join('');
+    }
+
+    function renderEntityHotspots(hotspots) {
+        const container = document.getElementById('analysis-hotspot-list');
+        if (!container) return;
+
+        if (hotspots.length === 0) {
+            container.innerHTML = '<div style="padding:16px; text-align:center; color:var(--color-text-muted); font-size:0.82rem;">尚無實體資料</div>';
+            return;
+        }
+
+        const maxCount = Math.max(...hotspots.map(h => h.flag_count));
+
+        container.innerHTML = hotspots.map(h => {
+            const barColor = h.critical > 0 ? 'var(--color-danger)' : h.warning > 0 ? 'var(--color-warning)' : 'var(--color-success)';
+            const typeLabel = h.target_type === 'company' ? '公司' : h.target_type === 'person' ? '自然人' : h.target_type;
+            const inGraph = isTargetInGraph(h.target_id);
+            const badge = inGraph ? '' : '<span class="out-of-scope-badge">圖外</span>';
+            const rulesSummary = (h.rules || []).length + ' 種類型';
+
+            return `
+                <div class="analysis-hotspot-item" onclick="dashboardHighlightTarget('${esc(h.target_id || '')}', '${esc(h.target_type || '')}')">
+                    <div class="analysis-hotspot-bar" style="background:${barColor};"></div>
+                    <div class="analysis-hotspot-info">
+                        <div class="analysis-hotspot-name">${esc(h.target_id)}</div>
+                        <div class="analysis-hotspot-meta">${typeLabel} · ${rulesSummary} · ${h.critical || 0} 嚴重 ${h.warning || 0} 警告</div>
+                    </div>
+                    ${badge}
+                    <div class="analysis-hotspot-count">${h.flag_count}</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    /** 點擊紅旗 → 在圖上高亮對應節點 */
+    function dashboardHighlightTarget(targetId, targetType) {
+        if (!targetId) return;
+
+        // 關閉儀表板 overlay
+        closeAnalysisDashboard();
+
+        if (!state.cy) {
+            Toast.warning('圖譜尚未載入');
+            return;
+        }
+
+        // 清除之前的高亮
+        state.cy.nodes().removeClass('marked');
+
+        // 嘗試找到節點
+        let node = state.cy.getElementById(targetId);
+        if (!node || node.length === 0) {
+            // 嘗試用 entity_id
+            const byEntity = state.cy.nodes().filter(n => n.data('entity_id') === targetId);
+            if (byEntity.length > 0) {
+                node = byEntity;
+            }
+        }
+
+        if (node && node.length > 0) {
+            node.addClass('marked');
+            state.cy.animate({
+                fit: { eles: node, padding: 100 },
+                duration: 500,
+            });
+            Toast.show(`已定位到 ${targetId}`, 'info');
+        } else {
+            Toast.warning(`「${targetId}」不在目前顯示的圖上（可能被深度篩選過濾，或屬於其他調查案件）`);
+        }
+    }
+    window.dashboardHighlightTarget = dashboardHighlightTarget;
+
+    /** 切換只顯示圖內紅旗 */
+    function toggleDashboardInGraphFilter(checked) {
+        _dashboardFilterInGraph = checked;
+        if (_dashboardData) renderAnalysisDashboard(_dashboardData);
+    }
+    window.toggleDashboardInGraphFilter = toggleDashboardInGraphFilter;
+
+    /** 切換大類卡片展開/收合 */
+    function toggleCatCard(event, card) {
+        // 不要在 body 內觸發
+        if (event.target.closest('.analysis-cat-body')) return;
+        card.classList.toggle('expanded');
+    }
+    window.toggleCatCard = toggleCatCard;
+
+    /** 切換子規則範例顯示 */
+    function toggleRuleSamples(ruleRow) {
+        event.stopPropagation();
+        ruleRow.classList.toggle('expanded');
+    }
+    window.toggleRuleSamples = toggleRuleSamples;
+
+    // ================================================================
+    // 引導步驟流程 (Workflow Stepper)
+    // ================================================================
+    const WORKFLOW_STEPS = ['seed', 'crawl', 'analyze', 'review'];
+    let _currentWorkflowStep = 'seed';
+    let _hintDismissed = false;
+
+    /** 根據調查狀態與資料來判斷目前的工作流步驟 */
+    function detectWorkflowStep() {
+        if (!state.currentInv) return 'seed';
+
+        const inv = state.currentInv;
+        const nodeCount = inv.node_count || 0;
+        const flagCount = inv.red_flag_count || 0;
+        const status = inv.status || 'draft';
+
+        // 已完成 → review
+        if (status === 'completed') return 'review';
+        // 有紅旗 → review (可能是跑完分析了)
+        if (flagCount > 0) return 'review';
+        // 有節點但沒紅旗 → analyze
+        if (nodeCount > 0 && flagCount === 0) return 'analyze';
+        // 搜尋中
+        if (status === 'crawling') return 'crawl';
+        // 分析中
+        if (status === 'analyzing') return 'analyze';
+        // 草稿 → 看有沒有 seeds
+        return 'seed';
+    }
+
+    function updateWorkflowStepper(stepOverride) {
+        const step = stepOverride || detectWorkflowStep();
+        _currentWorkflowStep = step;
+
+        const stepOrder = { seed: 0, crawl: 1, analyze: 2, review: 3 };
+        const currentIdx = stepOrder[step] || 0;
+
+        WORKFLOW_STEPS.forEach((s, idx) => {
+            const el = document.getElementById(`wf-step-${s}`);
+            if (!el) return;
+            el.classList.remove('active', 'done');
+            if (idx < currentIdx) {
+                el.classList.add('done');
+            } else if (idx === currentIdx) {
+                el.classList.add('active');
+            }
+        });
+
+        // 更新連接線
+        for (let i = 1; i <= 3; i++) {
+            const line = document.getElementById(`wf-line-${i}`);
+            if (line) {
+                line.classList.toggle('done', i <= currentIdx);
+            }
+        }
+
+        // 替 done step 的數字改成勾號
+        WORKFLOW_STEPS.forEach((s, idx) => {
+            const numEl = document.querySelector(`#wf-step-${s} .workflow-step-num`);
+            if (!numEl) return;
+            if (idx < currentIdx) {
+                numEl.innerHTML = '<i class="fas fa-check" style="font-size:9px;"></i>';
+            } else {
+                numEl.textContent = idx + 1;
+            }
+        });
+
+        // 顯示引導提示
+        if (!_hintDismissed) {
+            showWorkflowHint(step);
+        }
+    }
+
+    function showWorkflowHint(step) {
+        const bar = document.getElementById('workflow-hint-bar');
+        const text = document.getElementById('workflow-hint-text');
+        const btnText = document.getElementById('workflow-hint-btn-text');
+        if (!bar || !text || !btnText) return;
+
+        const hints = {
+            seed: { text: '步驟 1/4：請在左側輸入統一編號或公司名，新增調查目標。', btn: '新增目標', show: true },
+            crawl: { text: '步驟 2/4：調查目標已新增完成。點擊「開始」按鈕搜尋關聯企業網路。', btn: '開始搜尋', show: true },
+            analyze: { text: '步驟 3/4：搜尋完成！點擊「分析」偵測可疑模式與紅旗。', btn: '執行分析', show: true },
+            review: { text: '步驟 4/4：分析完成！打開儀表板檢視歸納後的結果，或匯出報告。', btn: '開啟儀表板', show: true },
+        };
+
+        const hint = hints[step];
+        if (!hint || !hint.show) {
+            bar.style.display = 'none';
+            return;
+        }
+
+        text.textContent = hint.text;
+        btnText.textContent = hint.btn;
+        bar.style.display = 'flex';
+    }
+
+    function executeWorkflowHint() {
+        switch (_currentWorkflowStep) {
+            case 'seed':
+                // 聚焦到輸入框
+                const seedInput = document.getElementById('seed-input');
+                if (seedInput) seedInput.focus();
+                break;
+            case 'crawl':
+                // 點擊開始搜尋
+                const btnCrawl = document.getElementById('btn-start-crawl');
+                if (btnCrawl && !btnCrawl.disabled) btnCrawl.click();
+                break;
+            case 'analyze':
+                // 點擊分析
+                const btnAnalyze = document.getElementById('btn-analyze');
+                if (btnAnalyze) btnAnalyze.click();
+                break;
+            case 'review':
+                openAnalysisDashboard();
+                break;
+        }
+        dismissWorkflowHint();
+    }
+    window.executeWorkflowHint = executeWorkflowHint;
+
+    function dismissWorkflowHint() {
+        _hintDismissed = true;
+        const bar = document.getElementById('workflow-hint-bar');
+        if (bar) bar.style.display = 'none';
+    }
+    window.dismissWorkflowHint = dismissWorkflowHint;
 
     // ================================================================
     // 工具函式

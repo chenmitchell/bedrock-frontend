@@ -398,10 +398,42 @@
             <span id="ws-title" class="nav-title">調查案件</span>
             <span id="ws-status" class="ws-status-badge" role="status" aria-live="polite">草稿</span>
             <div class="nav-spacer"></div>
+            <!-- 引導步驟條 -->
+            <div class="workflow-stepper" id="workflow-stepper">
+                <div class="workflow-step active" data-step="seed" id="wf-step-seed">
+                    <span class="workflow-step-num">1</span>
+                    <span class="workflow-step-label">新增目標</span>
+                </div>
+                <div class="workflow-step-line" id="wf-line-1"></div>
+                <div class="workflow-step" data-step="crawl" id="wf-step-crawl">
+                    <span class="workflow-step-num">2</span>
+                    <span class="workflow-step-label">搜尋網路</span>
+                </div>
+                <div class="workflow-step-line" id="wf-line-2"></div>
+                <div class="workflow-step" data-step="analyze" id="wf-step-analyze">
+                    <span class="workflow-step-num">3</span>
+                    <span class="workflow-step-label">風險分析</span>
+                </div>
+                <div class="workflow-step-line" id="wf-line-3"></div>
+                <div class="workflow-step" data-step="review" id="wf-step-review">
+                    <span class="workflow-step-num">4</span>
+                    <span class="workflow-step-label">檢視報告</span>
+                </div>
+            </div>
+            <div class="nav-spacer"></div>
             <button class="nav-action" id="btn-export" aria-label="匯出報告">
                 <i class="fas fa-file-export" aria-hidden="true"></i>
             </button>
         </nav>
+        <!-- 下一步引導提示 -->
+        <div class="workflow-hint-bar" id="workflow-hint-bar" style="display:none;">
+            <i class="fas fa-lightbulb" style="color: var(--color-warning);"></i>
+            <span id="workflow-hint-text">下一步</span>
+            <button class="workflow-hint-action" id="workflow-hint-btn" onclick="executeWorkflowHint()">
+                <i class="fas fa-arrow-right"></i> <span id="workflow-hint-btn-text">執行</span>
+            </button>
+            <button class="workflow-hint-dismiss" onclick="dismissWorkflowHint()" title="關閉提示">×</button>
+        </div>
         <div class="workspace-body">
             <!-- 左側面板 -->
             <aside class="ws-sidebar">
@@ -470,6 +502,9 @@
                         <span class="help-icon" data-tooltip="紅旗是系統自動偵測的可疑模式，例如：殼公司、循環持股、頻繁變更負責人、資本異常等 AML 警訊。">?</span>
                         <button id="btn-analyze" class="btn btn-sm" style="background: none; color: var(--color-accent); border: none; padding: 0; cursor: pointer; margin-left: auto;" data-tooltip="對已搜尋的網路圖執行結構分析，偵測可疑模式">
                             <i class="fas fa-microscope"></i> 分析
+                        </button>
+                        <button id="btn-open-dashboard" class="btn btn-sm" style="background: none; color: var(--color-warning); border: none; padding: 0; cursor: pointer;" data-tooltip="開啟分析儀表板，檢視歸納整理後的紅旗" onclick="openAnalysisDashboard()">
+                            <i class="fas fa-chart-bar"></i> 儀表板
                         </button>
                     </h4>
                     <div id="red-flags-list" class="ws-list"></div>
@@ -592,6 +627,73 @@
                     </button>
                 </div>
             </aside>
+        </div>
+    </div>
+
+    <!-- ===== 分析儀表板 Overlay ===== -->
+    <div id="analysis-dashboard-overlay" class="analysis-dashboard-overlay" style="display:none;">
+        <div class="analysis-dashboard">
+            <div class="analysis-dashboard-header">
+                <h3><i class="fas fa-chart-bar"></i> 分析儀表板</h3>
+                <button class="analysis-dashboard-close" onclick="closeAnalysisDashboard()" aria-label="關閉分析儀表板">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- 嚴重程度摘要卡 -->
+            <div class="analysis-severity-cards" id="analysis-severity-cards">
+                <div class="severity-card severity-card-total">
+                    <div class="severity-card-value" id="ad-total">0</div>
+                    <div class="severity-card-label">紅旗總數</div>
+                </div>
+                <div class="severity-card severity-card-critical">
+                    <div class="severity-card-value" id="ad-critical">0</div>
+                    <div class="severity-card-label">嚴重</div>
+                </div>
+                <div class="severity-card severity-card-warning">
+                    <div class="severity-card-value" id="ad-warning">0</div>
+                    <div class="severity-card-label">警告</div>
+                </div>
+                <div class="severity-card severity-card-info">
+                    <div class="severity-card-value" id="ad-info">0</div>
+                    <div class="severity-card-label">資訊</div>
+                </div>
+            </div>
+
+            <!-- 篩選列 -->
+            <div class="analysis-filter-bar">
+                <label>
+                    <input type="checkbox" id="ad-filter-in-graph" onchange="toggleDashboardInGraphFilter(this.checked)">
+                    只顯示圖內的紅旗（隱藏不在目前網路圖上的項目）
+                </label>
+            </div>
+
+            <!-- 雙欄內容 -->
+            <div class="analysis-dashboard-body">
+                <!-- 左欄：分類群組 -->
+                <div class="analysis-categories" id="analysis-categories">
+                    <h4 class="analysis-section-title"><i class="fas fa-layer-group"></i> 按類型分組</h4>
+                    <div id="analysis-category-list">
+                        <!-- JS 動態生成 -->
+                    </div>
+                </div>
+
+                <!-- 右欄：TOP 發現 + 實體熱點 -->
+                <div class="analysis-right-col">
+                    <div class="analysis-top-findings">
+                        <h4 class="analysis-section-title"><i class="fas fa-exclamation-triangle"></i> 最關鍵發現 (Top 10)</h4>
+                        <div id="analysis-top-list">
+                            <!-- JS 動態生成 -->
+                        </div>
+                    </div>
+                    <div class="analysis-hotspots">
+                        <h4 class="analysis-section-title"><i class="fas fa-fire"></i> 實體熱點 (Top 10)</h4>
+                        <div id="analysis-hotspot-list">
+                            <!-- JS 動態生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
