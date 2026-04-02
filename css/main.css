@@ -274,6 +274,7 @@ label {
   display: flex;
   flex-direction: column;
   z-index: 100;
+  transition: width 0.25s ease, padding 0.25s ease;
 }
 
 .nav-logo {
@@ -282,6 +283,68 @@ label {
   gap: 12px;
   padding: var(--space-md) var(--space-sm);
   margin-bottom: var(--space-lg);
+}
+.nav-collapse-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  transition: var(--transition-fast);
+  flex-shrink: 0;
+}
+.nav-collapse-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+/* 收合狀態 */
+.nav-sidebar.nav-collapsed {
+  width: 56px;
+  padding: var(--space-sm) 6px;
+  overflow: hidden;
+}
+.nav-sidebar.nav-collapsed .nav-logo-text,
+.nav-sidebar.nav-collapsed .nav-section-title,
+.nav-sidebar.nav-collapsed .nav-item-text,
+.nav-sidebar.nav-collapsed .nav-user-info,
+.nav-sidebar.nav-collapsed .nav-logout-btn {
+  display: none;
+}
+.nav-sidebar.nav-collapsed .nav-logo {
+  justify-content: center;
+  padding: var(--space-sm) 0;
+  gap: 0;
+  margin-bottom: var(--space-sm);
+}
+.nav-sidebar.nav-collapsed .nav-collapse-btn {
+  margin-left: 0;
+}
+.nav-sidebar.nav-collapsed .nav-collapse-btn i {
+  transform: rotate(180deg);
+}
+.nav-sidebar.nav-collapsed .nav-item {
+  justify-content: center;
+  padding: 8px 0;
+}
+.nav-sidebar.nav-collapsed .nav-item-icon {
+  margin: 0;
+}
+.nav-sidebar.nav-collapsed .nav-user {
+  justify-content: center;
+  padding: 8px 0;
+}
+.nav-sidebar.nav-collapsed .nav-user-avatar {
+  margin: 0;
+}
+/* 收合 nav 時調整主區域寬度 */
+body:has(.nav-sidebar.nav-collapsed) #welcome-scene,
+body:has(.nav-sidebar.nav-collapsed) #workspace-scene {
+  width: calc(100% - 56px);
+  margin-left: 56px;
 }
 
 .nav-logo-svg {
@@ -983,6 +1046,7 @@ input:focus, select:focus, textarea:focus {
   height: 100%;
   width: calc(100% - var(--sidebar-width));
   margin-left: var(--sidebar-width);
+  transition: width 0.25s ease, margin-left 0.25s ease;
 }
 
 .welcome-nav {
@@ -1322,6 +1386,7 @@ input:focus, select:focus, textarea:focus {
   height: 100%;
   width: calc(100% - var(--sidebar-width));
   margin-left: var(--sidebar-width);
+  transition: width 0.25s ease, margin-left 0.25s ease;
 }
 
 .workspace-nav {
@@ -1373,22 +1438,12 @@ input:focus, select:focus, textarea:focus {
   min-height: 0;
   gap: 1px;
   background: var(--color-border);
+  position: relative;
 }
-.workspace-body.detail-open {
-  grid-template-columns: 240px 1fr 280px;
-}
+/* detail-open 不再改 grid — 右側面板改為浮動 */
 
 .workspace-body:has(.ws-sidebar.collapsed) {
   grid-template-columns: 40px 1fr;
-}
-.workspace-body.detail-open:has(.ws-sidebar.collapsed) {
-  grid-template-columns: 40px 1fr 280px;
-}
-.workspace-body.detail-open:has(.ws-detail.collapsed) {
-  grid-template-columns: 240px 1fr 40px;
-}
-.workspace-body.detail-open:has(.ws-sidebar.collapsed):has(.ws-detail.collapsed) {
-  grid-template-columns: 40px 1fr 40px;
 }
 
 .ws-sidebar.collapsed {
@@ -1401,18 +1456,6 @@ input:focus, select:focus, textarea:focus {
   display: none;
 }
 .ws-sidebar.collapsed > .panel-collapse-btn {
-  display: block;
-}
-.ws-detail.collapsed {
-  min-width: 40px !important;
-  max-width: 40px !important;
-  padding: 8px 4px;
-  overflow: hidden;
-}
-.ws-detail.collapsed > *:not(.panel-collapse-btn) {
-  display: none;
-}
-.ws-detail.collapsed > .panel-collapse-btn {
   display: block;
 }
 .panel-collapse-btn {
@@ -1448,19 +1491,30 @@ input:focus, select:focus, textarea:focus {
   position: relative;
 }
 
+/* 右側詳情面板 — 浮動覆蓋，不擠壓圖形 */
 .ws-detail {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
   background: var(--color-surface);
   padding: var(--space-lg);
   overflow-y: auto;
   border-left: 1px solid var(--color-border);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.1);
+  z-index: 20;
   display: none;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
 }
 .ws-detail.detail-visible {
   display: block;
+  transform: translateX(0);
   animation: slideInRight 0.25s ease;
 }
 @keyframes slideInRight {
-  from { opacity: 0; transform: translateX(30px); }
+  from { opacity: 0; transform: translateX(100%); }
   to { opacity: 1; transform: translateX(0); }
 }
 
@@ -1593,6 +1647,19 @@ input:focus, select:focus, textarea:focus {
   height: 12px;
   border-radius: 2px;
   flex-shrink: 0;
+}
+
+.cluster-legend {
+  left: var(--space-sm);
+  right: auto;
+  bottom: var(--space-sm);
+  max-width: 180px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.cluster-legend .graph-legend-item:hover {
+  background: rgba(0,0,0,0.04);
+  border-radius: 3px;
 }
 
 /* Cytoscape container */

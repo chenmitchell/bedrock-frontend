@@ -99,6 +99,9 @@
             navSidebar.style.display = (name === 'login') ? 'none' : 'flex';
         }
 
+        // 收合 nav 時也要 resize cytoscape
+        if (state.cy) setTimeout(() => state.cy.resize(), 200);
+
         // 調整 canvas 大小
         if (name === 'login' && window._bedrockLoginCanvas) {
             window._bedrockLoginCanvas.resize();
@@ -1238,42 +1241,54 @@
                         'text-background-padding': '2px',
                     },
                 },
+                // ── 色盲友善邊線設計 ──
+                // 每種關聯同時使用「顏色 + 線型 + 粗細 + 箭頭形狀」四重區分
+                // 配色採 Wong (2011) 色盲安全色盤
                 {
                     selector: 'edge[type="director"]',
                     style: {
-                        'line-color': '#2ECC71',
-                        'target-arrow-color': '#2ECC71',
-                        'width': 1.5,
-                        'color': '#27AE60',
+                        'line-color': '#0072B2',        // 藍（色盲安全）
+                        'target-arrow-color': '#0072B2',
+                        'line-style': 'solid',           // 實線
+                        'width': 1.8,
+                        'target-arrow-shape': 'triangle',
+                        'color': '#0072B2',
                     },
                 },
                 {
                     selector: 'edge[type="representative"]',
                     style: {
-                        'line-color': '#2980B9',
-                        'target-arrow-color': '#2980B9',
+                        'line-color': '#D55E00',        // 橘紅（色盲安全）
+                        'target-arrow-color': '#D55E00',
+                        'line-style': 'dashed',          // 虛線 ── 明確與實線區分
+                        'line-dash-pattern': [8, 4],
                         'width': 2.5,
-                        'color': '#2471A3',
+                        'target-arrow-shape': 'diamond',  // 菱形箭頭
+                        'color': '#D55E00',
                     },
                 },
                 {
                     selector: 'edge[type="shareholder"]',
                     style: {
-                        'line-color': '#E67E22',
-                        'target-arrow-color': '#E67E22',
+                        'line-color': '#009E73',        // 青綠（色盲安全）
+                        'target-arrow-color': '#009E73',
+                        'line-style': 'dashed',          // 虛線（長段）
+                        'line-dash-pattern': [12, 3],
                         'width': 2,
-                        'color': '#D35400',
+                        'target-arrow-shape': 'vee',      // V 形箭頭
+                        'color': '#009E73',
                     },
                 },
                 {
                     selector: 'edge[type="historical"]',
                     style: {
-                        'line-style': 'dotted',
-                        'line-color': '#BDC3C7',
-                        'target-arrow-color': '#BDC3C7',
+                        'line-style': 'dotted',          // 點線
+                        'line-color': '#999999',
+                        'target-arrow-color': '#999999',
+                        'target-arrow-shape': 'triangle',
                         'opacity': 0.5,
                         'width': 1,
-                        'color': '#95A5A6',
+                        'color': '#999999',
                     },
                 },
                 {
@@ -1530,14 +1545,9 @@
 
         title.textContent = data.label || data.id;
 
-        // 顯示面板 + 調整 grid 為三欄
-        const wsBody = document.querySelector('.workspace-body');
-        if (wsBody) wsBody.classList.add('detail-open');
+        // 顯示浮動面板（不改變 grid）
         panel.classList.add('detail-visible');
         panel.classList.remove('collapsed');
-        updateGridColumns();
-        // 通知 cytoscape resize
-        setTimeout(() => { if (state.cy) state.cy.resize(); }, 150);
 
         const isCompany = data.type === 'company';
         const riskLevel = data.risk_level || 'NONE';
@@ -1676,11 +1686,6 @@
         if (panel) {
             panel.classList.remove('detail-visible');
         }
-        const wsBody = document.querySelector('.workspace-body');
-        if (wsBody) wsBody.classList.remove('detail-open');
-        updateGridColumns();
-        // 通知 cytoscape resize
-        setTimeout(() => { if (state.cy) state.cy.resize(); }, 150);
     }
     window.closeDetail = closeDetail;
 
@@ -1817,6 +1822,15 @@
             const data = await api.get(`/investigations/${invId}/clusters`);
             const clusters = data.items || data || [];
             if (countEl) countEl.textContent = clusters.length;
+
+            // 建立 node → cluster label 映射（供分群上色用）
+            state._nodeClusterMap = {};
+            clusters.forEach(c => {
+                const label = c.name || c.label || c.cluster_id;
+                (c.member_tax_ids || []).forEach(tid => {
+                    state._nodeClusterMap[tid] = label;
+                });
+            });
 
             if (clusters.length === 0) {
                 listEl.innerHTML = '<div class="ws-list-empty">尚無集群，請先執行搜尋與分析</div>';
@@ -2435,6 +2449,11 @@
     function closeAnalysisDashboard() {
         const overlay = document.getElementById('analysis-dashboard-overlay');
         if (overlay) overlay.style.display = 'none';
+        // 關閉儀表板後，恢復 workflow hint 讓使用者可以再次打開
+        if (state.currentInvId) {
+            _hintDismissed = false;
+            showWorkflowHint('review');
+        }
     }
     window.closeAnalysisDashboard = closeAnalysisDashboard;
 
@@ -3057,24 +3076,12 @@
     }
     window.filterHistoricalByRange = filterHistoricalByRange;
 
-    // 面板展開/收合 + 更新 grid-template-columns
+    // 面板展開/收合 + 更新 grid-template-columns（右側面板改為浮動，不影響 grid）
     function updateGridColumns() {
         const body = document.querySelector('.workspace-body');
         if (!body) return;
         const sidebarCollapsed = document.querySelector('.ws-sidebar.collapsed');
-        const detailVisible = document.querySelector('.ws-detail.detail-visible');
-        const detailCollapsed = document.querySelector('.ws-detail.collapsed');
-
-        if (!detailVisible) {
-            // 右側面板未開 → 二欄
-            body.style.gridTemplateColumns = sidebarCollapsed ? '40px 1fr' : '240px 1fr';
-        } else if (detailCollapsed) {
-            // 右側面板收合
-            body.style.gridTemplateColumns = sidebarCollapsed ? '40px 1fr 40px' : '240px 1fr 40px';
-        } else {
-            // 完整三欄
-            body.style.gridTemplateColumns = sidebarCollapsed ? '40px 1fr 280px' : '';
-        }
+        body.style.gridTemplateColumns = sidebarCollapsed ? '40px 1fr' : '240px 1fr';
     }
 
     function toggleSidebar() {
@@ -3089,6 +3096,28 @@
         if (state.cy) setTimeout(() => state.cy.resize(), 100);
     }
     window.toggleSidebar = toggleSidebar;
+
+    // ==================== 主導航欄收合 ====================
+    function toggleNavSidebar() {
+        const nav = document.getElementById('nav-sidebar');
+        if (!nav) return;
+        nav.classList.toggle('nav-collapsed');
+        const isCollapsed = nav.classList.contains('nav-collapsed');
+        const btn = document.getElementById('btn-collapse-nav');
+        if (btn) btn.title = isCollapsed ? '展開選單' : '收合選單';
+
+        // JS fallback for browsers without :has() support
+        const ml = isCollapsed ? '56px' : '';
+        const w = isCollapsed ? 'calc(100% - 56px)' : '';
+        ['welcome-scene', 'workspace-scene'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.style.marginLeft = ml; el.style.width = w; }
+        });
+
+        // 讓主要內容區域 resize
+        if (state.cy) setTimeout(() => state.cy.resize(), 300);
+    }
+    window.toggleNavSidebar = toggleNavSidebar;
 
     function toggleDetailPanel() {
         // 右側面板：直接關閉（等同 closeDetail）
@@ -3278,6 +3307,135 @@
         Toast.show(`已標記 ${matched} 個集群成員`, 'info');
     }
     window.highlightCluster = highlightCluster;
+
+    // ==================== 分群上色模式 ====================
+    // 12 色盤（區分度高、色盲友善）
+    const CLUSTER_PALETTE = [
+        '#E6194B', '#3CB44B', '#4363D8', '#F58231', '#911EB4',
+        '#42D4F4', '#F032E6', '#BFEF45', '#FABED4', '#469990',
+        '#DCBEFF', '#9A6324',
+    ];
+
+    function extractCity(address) {
+        if (!address) return '未知';
+        // 台灣地址格式：XX市 or XX縣
+        const m = address.match(/^([\u4e00-\u9fff]{2,3}[市縣])/);
+        return m ? m[1].replace('臺', '台') : '其他';
+    }
+
+    function extractShortAddress(address) {
+        if (!address) return '未知';
+        // 取到「路/街/段」為止
+        const m = address.match(/^([\u4e00-\u9fff\d]+[路街段])/);
+        return m ? m[1] : address.substring(0, 12);
+    }
+
+    function applyClusterColorMode(mode) {
+        if (!state.cy) return;
+
+        if (mode === 'none') {
+            // 恢復預設配色 — 清除 cluster overlay
+            state.cy.nodes().forEach(n => {
+                n.removeStyle('background-color');
+                n.removeStyle('border-color');
+            });
+            // 隱藏 cluster legend
+            const cLeg = document.getElementById('cluster-legend');
+            if (cLeg) cLeg.style.display = 'none';
+            Toast.show('已恢復預設配色', 'info', 1500);
+            return;
+        }
+
+        // 根據 mode 分組
+        const groups = {};
+        state.cy.nodes().forEach(n => {
+            const d = n.data();
+            let key;
+            if (mode === 'city') {
+                key = extractCity(d.address);
+            } else if (mode === 'address') {
+                key = extractShortAddress(d.address);
+            } else if (mode === 'cluster') {
+                // cluster mode: use cached cluster data from loadClusters
+                key = state._nodeClusterMap ? (state._nodeClusterMap[d.entity_id || d.id] || '未分群') : '未分群';
+            }
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(n);
+        });
+
+        // 排序 group by size desc，分配顏色
+        const sortedKeys = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length);
+        const colorMap = {};
+        sortedKeys.forEach((k, i) => {
+            colorMap[k] = CLUSTER_PALETTE[i % CLUSTER_PALETTE.length];
+        });
+
+        // 套用顏色
+        sortedKeys.forEach(k => {
+            const color = colorMap[k];
+            groups[k].forEach(n => {
+                n.style('background-color', color);
+                n.style('border-color', color);
+            });
+        });
+
+        // 更新 cluster legend
+        renderClusterLegend(sortedKeys, colorMap, groups);
+
+        // 自動重新整理圖形到螢幕
+        state.cy.fit(state.cy.nodes(':visible'), 40);
+
+        const modeLabels = { city: '縣市', address: '地址', cluster: '集群' };
+        Toast.show(`已按${modeLabels[mode] || mode}上色，共 ${sortedKeys.length} 組`, 'info', 2000);
+    }
+    window.applyClusterColorMode = applyClusterColorMode;
+
+    function renderClusterLegend(keys, colorMap, groups) {
+        let cLeg = document.getElementById('cluster-legend');
+        if (!cLeg) {
+            // 在 graph-legend 旁邊建立
+            const parent = document.querySelector('.ws-canvas-area > div:last-child');
+            if (!parent) return;
+            cLeg = document.createElement('div');
+            cLeg.id = 'cluster-legend';
+            cLeg.className = 'graph-legend cluster-legend';
+            parent.appendChild(cLeg);
+        }
+        cLeg.style.display = '';
+        const maxShow = 10;
+        const items = keys.slice(0, maxShow).map(k => `
+            <div class="graph-legend-item" style="cursor:pointer;" onclick="highlightClusterByColor('${k.replace(/'/g, "\\'")}')">
+                <div class="graph-legend-dot" style="background:${colorMap[k]};"></div>
+                <span style="font-size:10px;">${k} (${groups[k].length})</span>
+            </div>
+        `).join('');
+        const more = keys.length > maxShow ? `<div style="font-size:9px; color:#999;">…及其他 ${keys.length - maxShow} 組</div>` : '';
+        cLeg.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-size:11px; font-weight:600; color:#666;">分群圖例</span>
+                <button onclick="document.getElementById('cluster-legend').style.display='none'" style="background:none; border:none; cursor:pointer; color:#999; font-size:14px; padding:2px 4px;" title="關閉">×</button>
+            </div>
+            ${items}${more}
+        `;
+    }
+
+    function highlightClusterByColor(key) {
+        if (!state.cy) return;
+        // 找到這組節點並聚焦
+        const mode = document.getElementById('cluster-color-mode')?.value || 'city';
+        const matched = state.cy.nodes().filter(n => {
+            const d = n.data();
+            if (mode === 'city') return extractCity(d.address) === key;
+            if (mode === 'address') return extractShortAddress(d.address) === key;
+            if (mode === 'cluster') return (state._nodeClusterMap?.[d.entity_id || d.id] || '未分群') === key;
+            return false;
+        });
+        if (matched.length > 0) {
+            state.cy.animate({ fit: { eles: matched, padding: 60 }, duration: 500 });
+            Toast.show(`聚焦 "${key}" — ${matched.length} 個節點`, 'info', 1500);
+        }
+    }
+    window.highlightClusterByColor = highlightClusterByColor;
 
     // 設置管理頁籤切換
     function setupAdminTabs() {

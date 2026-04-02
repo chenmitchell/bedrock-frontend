@@ -41,6 +41,9 @@
                 <line x1="50" y1="50" x2="30" y2="60" stroke="url(#logoGradient)" stroke-width="1.5" opacity="0.4" />
             </svg>
             <span class="nav-logo-text">BEDROCK</span>
+            <button class="nav-collapse-btn" id="btn-collapse-nav" onclick="toggleNavSidebar()" title="收合選單">
+                <i class="fas fa-chevron-left"></i>
+            </button>
         </div>
 
         <div class="nav-menu">
@@ -551,6 +554,16 @@
                         <span>圖例</span>
                     </button>
                     <span class="ws-tool-divider" aria-hidden="true"></span>
+                    <div style="display:inline-flex; align-items:center; gap:4px;" title="依分群上色節點">
+                        <i class="fas fa-palette" style="font-size:12px; color:#999;" aria-hidden="true"></i>
+                        <select id="cluster-color-mode" class="ws-input" style="width:90px; padding:2px 4px; font-size:10px; height:28px; border-radius:4px;" onchange="applyClusterColorMode(this.value)">
+                            <option value="none">預設配色</option>
+                            <option value="city">依縣市</option>
+                            <option value="address">依地址</option>
+                            <option value="cluster">依集群</option>
+                        </select>
+                    </div>
+                    <span class="ws-tool-divider" aria-hidden="true"></span>
                     <div style="display:inline-flex; align-items:center; gap:4px;" title="顯示深度：從查詢起點算起的層數">
                         <i class="fas fa-layer-group" style="font-size:12px; color:#999;" aria-hidden="true"></i>
                         <span style="font-size:10px; color:#888; white-space:nowrap;">深度</span>
@@ -594,45 +607,46 @@
                             <div class="graph-legend-dot" style="background:#DC143C; border-radius:50%; border: 2px solid #FFD700;"></div> 高風險人物
                         </div>
                         <div class="graph-legend-item">
-                            <div class="graph-legend-line" style="background:#2ECC71;"></div> 董監事
+                            <svg width="28" height="10" aria-hidden="true"><line x1="0" y1="5" x2="22" y2="5" stroke="#0072B2" stroke-width="2"/><polygon points="22,2 28,5 22,8" fill="#0072B2"/></svg> 董監事
                         </div>
                         <div class="graph-legend-item">
-                            <div class="graph-legend-line" style="background:#2980B9; height:2.5px;"></div> 法人代表
+                            <svg width="28" height="10" aria-hidden="true"><line x1="0" y1="5" x2="22" y2="5" stroke="#D55E00" stroke-width="2.5" stroke-dasharray="6,3"/><polygon points="20,1 28,5 20,9" fill="none" stroke="#D55E00" stroke-width="1.5"/></svg> 法人代表
                         </div>
                         <div class="graph-legend-item">
-                            <div class="graph-legend-line" style="background:#E67E22; height:2px;"></div> 股東
+                            <svg width="28" height="10" aria-hidden="true"><line x1="0" y1="5" x2="22" y2="5" stroke="#009E73" stroke-width="2" stroke-dasharray="9,2"/><path d="M22,5 L25,2 L28,5 L25,8 Z" fill="#009E73"/></svg> 股東
+                        </div>
+                        <div class="graph-legend-item">
+                            <svg width="28" height="10" aria-hidden="true"><line x1="0" y1="5" x2="22" y2="5" stroke="#999" stroke-width="1" stroke-dasharray="2,2"/><polygon points="22,2 28,5 22,8" fill="#999"/></svg> 歷史
                         </div>
                     </div>
+                    <!-- 右側詳情面板 — 浮動在圖形上方 -->
+                    <aside class="ws-detail" id="ws-detail" role="complementary" aria-label="節點詳情">
+                    <div class="ws-detail-header">
+                        <h4 id="detail-title" style="margin: 0;">節點名稱</h4>
+                        <button class="ws-detail-close" onclick="closeDetail()" aria-label="關閉詳情面板">
+                            <i class="fas fa-times" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div id="detail-content" class="ws-detail-body">
+                        <!-- JS 動態生成 -->
+                    </div>
+                    <div id="node-risk-score" class="ws-section" style="margin-top:var(--space-lg); display:none;">
+                        <!-- Risk score card inserted here -->
+                    </div>
+                    <div class="ws-detail-actions">
+                        <button class="ws-btn-action" id="btn-deep-crawl" data-tooltip="以此節點為起點，繼續深入追蹤更多關聯">
+                            <i class="fas fa-search"></i> 深追
+                        </button>
+                        <button class="ws-btn-action" id="btn-mark-node" data-tooltip="標記此節點為重點關注對象">
+                            <i class="fas fa-bookmark"></i> 標記
+                        </button>
+                        <button class="ws-btn-action" id="btn-exclude-node" data-tooltip="將此節點從調查範圍中排除">
+                            <i class="fas fa-ban"></i> 排除
+                        </button>
+                    </div>
+                </aside>
                 </div>
             </main>
-
-            <!-- 右側詳情面板 -->
-            <aside class="ws-detail" id="ws-detail" role="complementary" aria-label="節點詳情">
-                <button class="panel-collapse-btn" id="btn-collapse-detail" title="收合右側面板" onclick="toggleDetailPanel()">▶</button>
-                <div class="ws-detail-header">
-                    <h4 id="detail-title" style="margin: 0;">節點名稱</h4>
-                    <button class="ws-detail-close" onclick="closeDetail()" aria-label="關閉詳情面板">
-                        <i class="fas fa-times" aria-hidden="true"></i>
-                    </button>
-                </div>
-                <div id="detail-content" class="ws-detail-body">
-                    <!-- JS 動態生成 -->
-                </div>
-                <div id="node-risk-score" class="ws-section" style="margin-top:var(--space-lg); display:none;">
-                    <!-- Risk score card inserted here -->
-                </div>
-                <div class="ws-detail-actions">
-                    <button class="ws-btn-action" id="btn-deep-crawl" data-tooltip="以此節點為起點，繼續深入追蹤更多關聯">
-                        <i class="fas fa-search"></i> 深追
-                    </button>
-                    <button class="ws-btn-action" id="btn-mark-node" data-tooltip="標記此節點為重點關注對象">
-                        <i class="fas fa-bookmark"></i> 標記
-                    </button>
-                    <button class="ws-btn-action" id="btn-exclude-node" data-tooltip="將此節點從調查範圍中排除">
-                        <i class="fas fa-ban"></i> 排除
-                    </button>
-                </div>
-            </aside>
         </div>
     </div>
 
