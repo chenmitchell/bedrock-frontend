@@ -215,6 +215,7 @@
             updateGreeting();
             showScene('welcome');
             loadInvestigations();
+            checkShowOnboarding();
         });
 
         // Enter 鍵登入
@@ -234,6 +235,7 @@
             showScene('welcome');
             updateGreeting();
             loadInvestigations();
+            checkShowOnboarding();
         }
     }
 
@@ -4305,6 +4307,254 @@
         const btnSearchMedia = document.getElementById('btn-search-media');
         if (btnSearchMedia) {
             btnSearchMedia.addEventListener('click', searchNegativeNews);
+        }
+    }
+
+    // ==================== 使用指南 (Onboarding) ====================
+    const ONBOARDING_PAGES = [
+        {
+            icon: 'fa-shield-alt',
+            title: '歡迎使用 BEDROCK 磐石',
+            content: `
+                <p style="color:#555; line-height:1.8; margin-bottom:16px;">
+                    BEDROCK 是一套<b>企業盡職調查 (Enhanced Due Diligence)</b> 平台，
+                    幫助您快速追蹤企業關聯網路、偵測洗錢風險與識別實質受益人。
+                </p>
+                <div style="background:#f0f7ff; border-radius:8px; padding:14px 16px; margin-bottom:12px;">
+                    <div style="font-weight:600; color:#3A7CA5; margin-bottom:6px;">本指南將帶您了解：</div>
+                    <div style="color:#555; font-size:13px; line-height:1.8;">
+                        1. 如何建立調查案件<br>
+                        2. 如何搜尋企業關聯網路<br>
+                        3. 如何執行風險分析<br>
+                        4. 如何閱讀結果與匯出報告<br>
+                        5. 圖形介面的操作方式
+                    </div>
+                </div>
+            `,
+        },
+        {
+            icon: 'fa-plus-circle',
+            title: '步驟一：建立調查案件',
+            content: `
+                <div style="display:flex; gap:12px; margin-bottom:16px;">
+                    <div style="min-width:36px; height:36px; background:#3A7CA5; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700;">1</div>
+                    <div>
+                        <div style="font-weight:600; margin-bottom:4px;">在儀表板點擊「新增調查」</div>
+                        <div style="color:#666; font-size:13px;">輸入案件名稱和查詢目標（統一編號、公司名稱或自然人姓名）。</div>
+                    </div>
+                </div>
+                <div style="display:flex; gap:12px; margin-bottom:16px;">
+                    <div style="min-width:36px; height:36px; background:#3A7CA5; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700;">2</div>
+                    <div>
+                        <div style="font-weight:600; margin-bottom:4px;">進入工作台</div>
+                        <div style="color:#666; font-size:13px;">建立後自動進入調查工作台，左側面板可繼續新增更多查詢目標。</div>
+                    </div>
+                </div>
+                <div style="background:#fef9e7; border-left:4px solid #F1C40F; padding:10px 14px; border-radius:4px; font-size:12px; color:#7D6608;">
+                    <b>提示：</b>可同時輸入多個統一編號或公司名，系統會自動展開關聯網路。
+                </div>
+            `,
+        },
+        {
+            icon: 'fa-search',
+            title: '步驟二：搜尋企業網路',
+            content: `
+                <div style="display:flex; gap:12px; margin-bottom:16px;">
+                    <div style="min-width:36px; height:36px; background:#27AE60; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700;"><i class="fas fa-play" style="font-size:14px;"></i></div>
+                    <div>
+                        <div style="font-weight:600; margin-bottom:4px;">點擊「開始」按鈕</div>
+                        <div style="color:#666; font-size:13px;">系統會自動從查詢目標出發，追蹤董監事、法人代表和股東關係。</div>
+                    </div>
+                </div>
+                <div style="display:flex; gap:16px; margin-bottom:16px;">
+                    <div style="flex:1; background:#f5f7fa; border-radius:8px; padding:12px; text-align:center;">
+                        <div style="font-size:20px; margin-bottom:4px;"><i class="fas fa-layer-group" style="color:#3A7CA5;"></i></div>
+                        <div style="font-size:11px; color:#555;"><b>搜尋深度</b><br>預設自動找到所有 UBO</div>
+                    </div>
+                    <div style="flex:1; background:#f5f7fa; border-radius:8px; padding:12px; text-align:center;">
+                        <div style="font-size:20px; margin-bottom:4px;"><i class="fas fa-history" style="color:#E67E22;"></i></div>
+                        <div style="font-size:11px; color:#555;"><b>歷史關聯</b><br>可切換顯示/隱藏離任人員</div>
+                    </div>
+                    <div style="flex:1; background:#f5f7fa; border-radius:8px; padding:12px; text-align:center;">
+                        <div style="font-size:20px; margin-bottom:4px;"><i class="fas fa-eye" style="color:#9B59B6;"></i></div>
+                        <div style="font-size:11px; color:#555;"><b>檢視深度</b><br>用滑桿控制顯示到第幾層</div>
+                    </div>
+                </div>
+            `,
+        },
+        {
+            icon: 'fa-microscope',
+            title: '步驟三：風險分析',
+            content: `
+                <p style="color:#555; line-height:1.8; margin-bottom:14px;">
+                    搜尋完成後，點擊左側面板的<b>「分析」</b>按鈕，系統將自動偵測 15+ 種可疑模式：
+                </p>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px;">
+                    <div style="background:#fdeaea; border-radius:6px; padding:8px 10px; font-size:11px;"><span style="color:#C0392B; font-weight:600;">循環持股</span> — A→B→C→A</div>
+                    <div style="background:#fdeaea; border-radius:6px; padding:8px 10px; font-size:11px;"><span style="color:#C0392B; font-weight:600;">殼公司</span> — 資本極低無營運</div>
+                    <div style="background:#fef4ea; border-radius:6px; padding:8px 10px; font-size:11px;"><span style="color:#E67E22; font-weight:600;">星形結構</span> — 一人控多家公司</div>
+                    <div style="background:#fef4ea; border-radius:6px; padding:8px 10px; font-size:11px;"><span style="color:#E67E22; font-weight:600;">地址聚集</span> — 同地址大量公司</div>
+                    <div style="background:#eaf7f0; border-radius:6px; padding:8px 10px; font-size:11px;"><span style="color:#27AE60; font-weight:600;">UBO 路徑</span> — 多層持股控制鏈</div>
+                    <div style="background:#eaf7f0; border-radius:6px; padding:8px 10px; font-size:11px;"><span style="color:#27AE60; font-weight:600;">休眠復甦</span> — 長期無變更後恢復</div>
+                </div>
+                <div style="background:#f0f7ff; padding:10px 14px; border-radius:6px; font-size:12px; color:#2C3E50;">
+                    分析完成後，紅旗會顯示在左側面板，也可以打開<b>「儀表板」</b>查看彙總。
+                </div>
+            `,
+        },
+        {
+            icon: 'fa-chart-bar',
+            title: '步驟四：閱讀結果與匯出',
+            content: `
+                <div style="display:flex; gap:12px; margin-bottom:14px;">
+                    <div style="min-width:36px; height:36px; background:#E67E22; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fas fa-chart-bar" style="font-size:14px;"></i></div>
+                    <div>
+                        <div style="font-weight:600; margin-bottom:4px;">儀表板</div>
+                        <div style="color:#666; font-size:13px;">點擊「儀表板」按鈕，檢視風險摘要、關鍵實體和分類紅旗。</div>
+                    </div>
+                </div>
+                <div style="display:flex; gap:12px; margin-bottom:14px;">
+                    <div style="min-width:36px; height:36px; background:#9B59B6; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fas fa-table" style="font-size:14px;"></i></div>
+                    <div>
+                        <div style="font-weight:600; margin-bottom:4px;">報表檢視</div>
+                        <div style="color:#666; font-size:13px;">工具列的「報表」按鈕可切換為表格模式，方便閱讀和複製。</div>
+                    </div>
+                </div>
+                <div style="display:flex; gap:12px; margin-bottom:14px;">
+                    <div style="min-width:36px; height:36px; background:#3A7CA5; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center;"><i class="fas fa-file-export" style="font-size:14px;"></i></div>
+                    <div>
+                        <div style="font-weight:600; margin-bottom:4px;">匯出報告</div>
+                        <div style="color:#666; font-size:13px;">右上角的匯出按鈕可產出完整的調查報告。</div>
+                    </div>
+                </div>
+            `,
+        },
+        {
+            icon: 'fa-mouse-pointer',
+            title: '圖形介面操作指南',
+            content: `
+                <div style="font-size:13px; color:#555; line-height:2;">
+                    <table style="width:100%; border-collapse:collapse;">
+                        <tr style="border-bottom:1px solid #eee;">
+                            <td style="padding:6px 8px; font-weight:600; white-space:nowrap; width:40%;"><i class="fas fa-search-plus" style="color:#3A7CA5; width:20px;"></i> 放大/縮小</td>
+                            <td style="padding:6px 8px; color:#666;">滑鼠滾輪或工具列按鈕</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid #eee;">
+                            <td style="padding:6px 8px; font-weight:600;"><i class="fas fa-hand-paper" style="color:#3A7CA5; width:20px;"></i> 平移畫布</td>
+                            <td style="padding:6px 8px; color:#666;">按住滑鼠左鍵拖動空白處</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid #eee;">
+                            <td style="padding:6px 8px; font-weight:600;"><i class="fas fa-mouse-pointer" style="color:#3A7CA5; width:20px;"></i> 查看節點</td>
+                            <td style="padding:6px 8px; color:#666;">點擊節點 → 右側顯示詳情面板</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid #eee;">
+                            <td style="padding:6px 8px; font-weight:600;"><i class="fas fa-arrows-alt" style="color:#3A7CA5; width:20px;"></i> 移動節點</td>
+                            <td style="padding:6px 8px; color:#666;">按住節點拖動可手動調整位置</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid #eee;">
+                            <td style="padding:6px 8px; font-weight:600;"><i class="fas fa-project-diagram" style="color:#3A7CA5; width:20px;"></i> 重新排版</td>
+                            <td style="padding:6px 8px; color:#666;">工具列的排版按鈕（力導向/網格）</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid #eee;">
+                            <td style="padding:6px 8px; font-weight:600;"><i class="fas fa-filter" style="color:#3A7CA5; width:20px;"></i> 篩選節點</td>
+                            <td style="padding:6px 8px; color:#666;">「篩選」按鈕可隱藏特定類型節點</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:6px 8px; font-weight:600;"><i class="fas fa-palette" style="color:#3A7CA5; width:20px;"></i> 分群上色</td>
+                            <td style="padding:6px 8px; color:#666;">下拉選單可按縣市/地址/集群上色</td>
+                        </tr>
+                    </table>
+                </div>
+            `,
+        },
+    ];
+
+    let _onboardingPage = 0;
+
+    function showOnboarding() {
+        _onboardingPage = 0;
+        const overlay = document.getElementById('onboarding-overlay');
+        if (overlay) {
+            overlay.style.display = 'flex';
+            renderOnboardingPage();
+        }
+    }
+    window.showOnboarding = showOnboarding;
+
+    function closeOnboarding() {
+        const overlay = document.getElementById('onboarding-overlay');
+        if (overlay) overlay.style.display = 'none';
+        // 記住已看過
+        try { localStorage.setItem('bedrock_onboarding_seen', '1'); } catch(e) {}
+    }
+    window.closeOnboarding = closeOnboarding;
+
+    function renderOnboardingPage() {
+        const page = ONBOARDING_PAGES[_onboardingPage];
+        if (!page) return;
+
+        const body = document.getElementById('onboarding-body');
+        const dots = document.getElementById('onboarding-dots');
+        const prevBtn = document.getElementById('onboarding-prev');
+        const nextBtn = document.getElementById('onboarding-next');
+        const header = document.getElementById('onboarding-header');
+
+        if (body) {
+            body.innerHTML = `
+                <div style="text-align:center; margin-bottom:16px;">
+                    <i class="fas ${page.icon}" style="font-size:32px; color:#3A7CA5;"></i>
+                    <h3 style="margin:10px 0 4px; font-size:18px; color:#2C3E50;">${page.title}</h3>
+                </div>
+                ${page.content}
+            `;
+        }
+
+        // Dots
+        if (dots) {
+            dots.innerHTML = ONBOARDING_PAGES.map((_, i) =>
+                `<div style="width:8px; height:8px; border-radius:50%; background:${i === _onboardingPage ? '#3A7CA5' : '#ddd'}; transition:background 0.2s;"></div>`
+            ).join('');
+        }
+
+        // Buttons
+        if (prevBtn) prevBtn.style.display = _onboardingPage === 0 ? 'none' : 'inline-block';
+        if (nextBtn) {
+            if (_onboardingPage === ONBOARDING_PAGES.length - 1) {
+                nextBtn.textContent = '開始使用';
+                nextBtn.style.background = '#27AE60';
+            } else {
+                nextBtn.textContent = '下一步';
+                nextBtn.style.background = '#3A7CA5';
+            }
+        }
+    }
+
+    function onboardingNext() {
+        if (_onboardingPage < ONBOARDING_PAGES.length - 1) {
+            _onboardingPage++;
+            renderOnboardingPage();
+        } else {
+            closeOnboarding();
+        }
+    }
+    window.onboardingNext = onboardingNext;
+
+    function onboardingPrev() {
+        if (_onboardingPage > 0) {
+            _onboardingPage--;
+            renderOnboardingPage();
+        }
+    }
+    window.onboardingPrev = onboardingPrev;
+
+    // 首次登入時自動顯示
+    function checkShowOnboarding() {
+        try {
+            if (!localStorage.getItem('bedrock_onboarding_seen')) {
+                setTimeout(showOnboarding, 600);
+            }
+        } catch(e) {
+            // localStorage 不可用時不顯示
         }
     }
 
