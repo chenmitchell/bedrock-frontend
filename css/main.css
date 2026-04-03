@@ -1439,6 +1439,7 @@ input:focus, select:focus, textarea:focus {
   gap: 1px;
   background: var(--color-border);
   position: relative;
+  transition: grid-template-columns 0.25s ease;
 }
 /* detail-open 不再改 grid — 右側面板改為浮動 */
 
@@ -1482,6 +1483,8 @@ input:focus, select:focus, textarea:focus {
   background: var(--color-surface);
   padding: var(--space-md);
   overflow-y: auto;
+  transition: all 0.25s ease;
+  min-width: 240px;
 }
 
 .ws-canvas-area {
@@ -1608,6 +1611,15 @@ input:focus, select:focus, textarea:focus {
   color: var(--color-text-secondary);
   cursor: pointer;
   font-size: 1.2rem;
+  transition: all var(--transition-fast);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.ws-detail-close:hover {
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  transform: scale(1.1);
 }
 
 /* Graph legend */

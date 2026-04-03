@@ -4610,6 +4610,12 @@
             return;
         }
 
+        // 如果正在查看詳情，直接顯示詳情而不是列表
+        if (_currentReportDetail && _currentReportDetail.nodeId) {
+            renderReportDetail(_currentReportDetail.nodeId, _currentReportDetail.nodeData);
+            return;
+        }
+
         const nodes = state.cy.nodes();
         const edges = state.cy.edges();
 
@@ -4748,32 +4754,93 @@
         });
         html += '</tbody></table></div>';
 
-        // ===== Edges table =====
+        // ===== Edges table (改善 #8 #9：以人為單位分組，現任放上方，歷史在下方) =====
         html += '<div id="report-panel-edges" class="report-panel" style="display:none;">';
-        html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
-        html += '<thead><tr style="background:#f5f7fa; text-align:left;">';
-        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">來源</th>';
-        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">關係</th>';
-        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">目標</th>';
-        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">持股比例</th>';
-        html += '</tr></thead><tbody>';
-        edges.forEach((e, i) => {
+
+        // 重新整理 edges，以人為單位分組
+        const personEdgeGroups = {};
+        const personCurrent = {};  // 追蹤現任角色
+        const personHistorical = {}; // 追蹤歷史角色
+
+        edges.forEach((e) => {
             const d = e.data();
-            const bg = i % 2 === 0 ? '#fff' : '#fafbfc';
             const srcNode = state.cy.getElementById(d.source);
             const tgtNode = state.cy.getElementById(d.target);
-            const srcLabel = srcNode.length ? (srcNode.data('label') || d.source) : d.source;
-            const tgtLabel = tgtNode.length ? (tgtNode.data('label') || d.target) : d.target;
-            const rel = d.label || d.relationship || '';
-            const shares = d.shares_percentage ? d.shares_percentage + '%' : '';
-            html += '<tr style="background:' + bg + ';">';
-            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; cursor:pointer;" onclick="reportClickNode(\'' + d.source + '\')">' + srcLabel + '</td>';
-            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee;"><span style="display:inline-block; padding:2px 8px; border-radius:4px; font-size:10px; background:#f0f0f0; color:#555;">' + rel + '</span></td>';
-            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; cursor:pointer;" onclick="reportClickNode(\'' + d.target + '\')">' + tgtLabel + '</td>';
-            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; font-family:monospace;">' + shares + '</td>';
-            html += '</tr>';
+
+            // 如果來源是人，記錄該人與目標的關聯
+            if (srcNode.length && srcNode.data('type') === 'person') {
+                const personId = d.source;
+                const personLabel = srcNode.data('label') || personId;
+                if (!personEdgeGroups[personId]) {
+                    personEdgeGroups[personId] = { label: personLabel, current: [], historical: [] };
+                }
+                const edgeInfo = {
+                    tgtId: d.target,
+                    tgtLabel: tgtNode.length ? (tgtNode.data('label') || d.target) : d.target,
+                    relationship: d.label || d.relationship || '關聯',
+                    shares: d.shares_percentage ? d.shares_percentage + '%' : '',
+                    isHistorical: d.status === 'historical' || d.is_historical === true,
+                };
+                if (edgeInfo.isHistorical) {
+                    personHistorical[personId] = (personHistorical[personId] || 0) + 1;
+                    personEdgeGroups[personId].historical.push(edgeInfo);
+                } else {
+                    personCurrent[personId] = (personCurrent[personId] || 0) + 1;
+                    personEdgeGroups[personId].current.push(edgeInfo);
+                }
+            }
         });
-        html += '</tbody></table></div>';
+
+        // 依人分組顯示，現任優先
+        const personIds = Object.keys(personEdgeGroups).sort();
+
+        if (personIds.length === 0) {
+            html += '<div style="text-align:center; color:#999; padding:40px;">尚無人員關聯</div>';
+        } else {
+            personIds.forEach((personId) => {
+                const group = personEdgeGroups[personId];
+                html += '<div style="margin-bottom:24px; border:1px solid #e0e0e0; border-radius:4px; overflow:hidden;">';
+                html += '<div style="background:#f5f7fa; padding:12px 16px; border-bottom:1px solid #e0e0e0; cursor:pointer;" onclick="reportClickNode(\'' + personId + '\')">';
+                html += '<h4 style="margin:0; font-size:13px; font-weight:600; color:#333;">' + group.label + '</h4>';
+                html += '<div style="font-size:11px; color:#888; margin-top:4px;">' + (personCurrent[personId] || 0) + ' 個現任 / ' + (personHistorical[personId] || 0) + ' 個歷史</div>';
+                html += '</div>';
+
+                // 現任角色
+                if (group.current.length > 0) {
+                    html += '<div style="padding:12px 16px; background:#fafbfc; border-bottom:1px solid #eee;">';
+                    html += '<div style="font-size:11px; font-weight:600; color:#666; margin-bottom:8px;">現任角色</div>';
+                    group.current.forEach((edge) => {
+                        html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #eee; font-size:12px;">';
+                        html += '<div>';
+                        html += '<span style="cursor:pointer; color:#3A7CA5; text-decoration:underline;" onclick="reportClickNode(\'' + edge.tgtId + '\')">' + edge.tgtLabel + '</span>';
+                        html += ' <span style="display:inline-block; padding:2px 8px; border-radius:4px; font-size:10px; background:#e8f5e9; color:#2e7d32; margin-left:8px;">' + edge.relationship + '</span>';
+                        html += '</div>';
+                        if (edge.shares) html += '<span style="color:#999; font-family:monospace;">' + edge.shares + '</span>';
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                }
+
+                // 歷史角色
+                if (group.historical.length > 0) {
+                    html += '<div style="padding:12px 16px; background:#fff;">';
+                    html += '<div style="font-size:11px; font-weight:600; color:#999; margin-bottom:8px;">歷史角色</div>';
+                    group.historical.forEach((edge) => {
+                        html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f0f0f0; font-size:12px; opacity:0.7;">';
+                        html += '<div>';
+                        html += '<span style="cursor:pointer; color:#3A7CA5; text-decoration:underline;" onclick="reportClickNode(\'' + edge.tgtId + '\')">' + edge.tgtLabel + '</span>';
+                        html += ' <span style="display:inline-block; padding:2px 8px; border-radius:4px; font-size:10px; background:#f5f5f5; color:#888;">' + edge.relationship + '</span>';
+                        html += '</div>';
+                        if (edge.shares) html += '<span style="color:#ccc; font-family:monospace;">' + edge.shares + '</span>';
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                }
+
+                html += '</div>';
+            });
+        }
+        html += '</div>';
 
         // ===== Red flags table =====
         html += '<div id="report-panel-flags" class="report-panel" style="display:none;">';
@@ -4831,16 +4898,72 @@
     window.switchReportTab = switchReportTab;
 
     function reportClickNode(nodeId) {
-        // Switch back to graph view and focus on the node
-        if (_reportViewActive) toggleReportView();
+        // 改善 #7：報表模式中點擊節點，保持在報表檢視內，不跳回圖形
+        // 同時在報表顯示對應節點的詳情和麵包屑導覽
         if (!state.cy) return;
         const node = state.cy.getElementById(nodeId);
         if (node.length === 0) return;
-        state.cy.animate({ fit: { eles: node.union(node.neighborhood()), padding: 60 }, duration: 400 });
-        node.select();
-        showNodeDetail(node.data());
+
+        const nodeData = node.data();
+        const container = document.getElementById('report-view-content');
+        if (!container) return;
+
+        // 如果在報表檢視中，更新報表內容展示該節點的詳情
+        if (_reportViewActive && _currentReportDetail) {
+            _currentReportDetail.nodeId = nodeId;
+            _currentReportDetail.nodeData = nodeData;
+            renderReportDetail(nodeId, nodeData);
+        }
     }
     window.reportClickNode = reportClickNode;
+
+    let _currentReportDetail = null;
+
+    function renderReportDetail(nodeId, nodeData) {
+        // 在報表檢視中顯示節點詳情和麵包屑導覽
+        const container = document.getElementById('report-view-content');
+        if (!container) return;
+
+        // 建構麵包屑導覽
+        let breadcrumbHtml = '<div style="padding:12px 16px; background:#f5f7fa; border-bottom:1px solid #e0e0e0; display:flex; align-items:center; gap:8px;">';
+        breadcrumbHtml += '<button onclick="clearReportDetail()" style="background:none; border:none; color:#3A7CA5; cursor:pointer; font-size:12px; text-decoration:underline;">報表列表</button>';
+        breadcrumbHtml += '<span style="color:#999;">/</span>';
+        breadcrumbHtml += '<span style="font-size:12px; font-weight:600; color:#333;">' + (nodeData.label || nodeId) + '</span>';
+        breadcrumbHtml += '</div>';
+
+        let detailHtml = '<div style="padding:20px;">';
+        detailHtml += '<h3 style="margin:0 0 16px; font-size:16px; font-weight:600;">' + (nodeData.label || nodeId) + '</h3>';
+
+        if (nodeData.type === 'company') {
+            detailHtml += '<div style="background:#f9f9f9; padding:12px; border-radius:4px; margin-bottom:16px;">';
+            detailHtml += '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:13px;">';
+            detailHtml += '<div><strong>統一編號:</strong> ' + (nodeData.entity_id || 'N/A') + '</div>';
+            detailHtml += '<div><strong>類型:</strong> 公司</div>';
+            if (nodeData.capitalDisplay) detailHtml += '<div><strong>資本額:</strong> ' + nodeData.capitalDisplay + '</div>';
+            detailHtml += '<div><strong>狀態:</strong> ' + (nodeData.status === 'dissolved' ? '已解散' : '營運中') + '</div>';
+            detailHtml += '</div>';
+            detailHtml += '</div>';
+        } else if (nodeData.type === 'person') {
+            detailHtml += '<div style="background:#f9f9f9; padding:12px; border-radius:4px; margin-bottom:16px;">';
+            detailHtml += '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:13px;">';
+            detailHtml += '<div><strong>姓名:</strong> ' + (nodeData.label || 'N/A') + '</div>';
+            detailHtml += '<div><strong>類型:</strong> 自然人</div>';
+            detailHtml += '</div>';
+            detailHtml += '</div>';
+        }
+
+        detailHtml += '</div>';
+
+        container.innerHTML = breadcrumbHtml + detailHtml;
+    }
+    window.renderReportDetail = renderReportDetail;
+
+    function clearReportDetail() {
+        // 清除詳情檢視，回到報表列表
+        _currentReportDetail = null;
+        buildReportView();
+    }
+    window.clearReportDetail = clearReportDetail;
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);

@@ -4,6 +4,21 @@
  */
 
 const CYTOSCAPE_CONFIG = {
+    // 計算節點大小基於資本額（log scale）
+    calculateNodeSize: function(capital) {
+        if (!capital || capital <= 0) return 60; // 預設大小
+        // 以資本額的 log scale 計算，範圍 40-150px
+        const minSize = 40;
+        const maxSize = 150;
+        const minCapital = 1;        // 最小資本額為 1
+        const maxCapital = 1000000000; // 最大資本額為 10 億
+        const logCapital = Math.log(Math.max(capital, minCapital));
+        const logMin = Math.log(minCapital);
+        const logMax = Math.log(maxCapital);
+        const normalizedLog = (logCapital - logMin) / (logMax - logMin);
+        return minSize + normalizedLog * (maxSize - minSize);
+    },
+
     // 節點顏色主題
     colors: {
         company: '#3b82f6',        // 公司 - 藍色
@@ -14,12 +29,44 @@ const CYTOSCAPE_CONFIG = {
         adverseMedia: '#f97316',    // 負面新聞 - 橙色
     },
 
-    // 邊線顏色主題
-    edgeColors: {
-        director: '#22c55e',        // 董事 - 綠色
-        chairman: '#ef4444',        // 主席 - 紅色
-        supervisor: '#3b82f6',      // 監察人 - 藍色
-        sameAddress: '#f59e0b',     // 同地址 - 黃色
+    // 邊線樣式主題（色盲友善）
+    edgeStyles: {
+        director: {
+            color: '#1B4965',       // 深藍
+            lineStyle: 'solid',
+            linePattern: null,
+            label: '董事'
+        },
+        chairman: {
+            color: '#C41E3A',       // 深紅
+            lineStyle: 'solid',
+            linePattern: null,
+            label: '主席'
+        },
+        supervisor: {
+            color: '#F08030',       // 橙色
+            lineStyle: 'dashed',
+            linePattern: [5, 4],
+            label: '監察人'
+        },
+        shareholder: {
+            color: '#6B8E23',       // 橄欖綠
+            lineStyle: 'dotted',
+            linePattern: [2, 3],
+            label: '股東'
+        },
+        representative: {
+            color: '#800080',       // 紫色
+            lineStyle: 'solid',
+            linePattern: null,
+            label: '法人代表'
+        },
+        sameAddress: {
+            color: '#888888',       // 灰色
+            lineStyle: 'dotted',
+            linePattern: [2, 3],
+            label: '同地址'
+        },
     },
 
     // 節點樣式
@@ -27,19 +74,20 @@ const CYTOSCAPE_CONFIG = {
         {
             selector: 'node',
             style: {
-                'width': 60,
-                'height': 60,
+                'width': 'data(size)',
+                'height': 'data(size)',
                 'label': 'data(label)',
                 'text-valign': 'center',
                 'text-halign': 'center',
                 'font-size': '11px',
+                'min-zoomed-font-size': 8,
                 'color': '#f8fafc',
                 'font-weight': 'bold',
                 'border-width': 2,
                 'border-color': '#334155',
                 'background-color': '#3b82f6',
                 'text-wrap': 'wrap',
-                'text-max-width': 50,
+                'text-max-width': '80%',
                 'padding': '10px',
             }
         },
@@ -48,8 +96,6 @@ const CYTOSCAPE_CONFIG = {
             selector: 'node[type="company"]',
             style: {
                 'shape': 'round-rectangle',
-                'width': 80,
-                'height': 60,
                 'background-color': CYTOSCAPE_CONFIG.colors.company,
             }
         },
@@ -58,8 +104,6 @@ const CYTOSCAPE_CONFIG = {
             selector: 'node[type="person"]',
             style: {
                 'shape': 'circle',
-                'width': 60,
-                'height': 60,
                 'background-color': CYTOSCAPE_CONFIG.colors.person,
             }
         },
@@ -68,8 +112,6 @@ const CYTOSCAPE_CONFIG = {
             selector: 'node[type="address"]',
             style: {
                 'shape': 'hexagon',
-                'width': 70,
-                'height': 70,
                 'background-color': CYTOSCAPE_CONFIG.colors.address,
             }
         },
@@ -128,7 +170,7 @@ const CYTOSCAPE_CONFIG = {
         },
     ],
 
-    // 邊線樣式
+    // 邊線樣式（色盲友善）
     edgeStyle: [
         {
             selector: 'edge',
@@ -151,18 +193,20 @@ const CYTOSCAPE_CONFIG = {
         {
             selector: 'edge[relationshipType="director"]',
             style: {
-                'line-color': CYTOSCAPE_CONFIG.edgeColors.director,
-                'target-arrow-color': CYTOSCAPE_CONFIG.edgeColors.director,
-                'color': CYTOSCAPE_CONFIG.edgeColors.director,
+                'line-color': CYTOSCAPE_CONFIG.edgeStyles.director.color,
+                'target-arrow-color': CYTOSCAPE_CONFIG.edgeStyles.director.color,
+                'color': CYTOSCAPE_CONFIG.edgeStyles.director.color,
+                'line-style': CYTOSCAPE_CONFIG.edgeStyles.director.lineStyle,
             }
         },
         // 主席關係
         {
             selector: 'edge[relationshipType="chairman"]',
             style: {
-                'line-color': CYTOSCAPE_CONFIG.edgeColors.chairman,
-                'target-arrow-color': CYTOSCAPE_CONFIG.edgeColors.chairman,
-                'color': CYTOSCAPE_CONFIG.edgeColors.chairman,
+                'line-color': CYTOSCAPE_CONFIG.edgeStyles.chairman.color,
+                'target-arrow-color': CYTOSCAPE_CONFIG.edgeStyles.chairman.color,
+                'color': CYTOSCAPE_CONFIG.edgeStyles.chairman.color,
+                'line-style': CYTOSCAPE_CONFIG.edgeStyles.chairman.lineStyle,
                 'width': 3,
             }
         },
@@ -170,19 +214,40 @@ const CYTOSCAPE_CONFIG = {
         {
             selector: 'edge[relationshipType="supervisor"]',
             style: {
-                'line-color': CYTOSCAPE_CONFIG.edgeColors.supervisor,
-                'target-arrow-color': CYTOSCAPE_CONFIG.edgeColors.supervisor,
-                'color': CYTOSCAPE_CONFIG.edgeColors.supervisor,
+                'line-color': CYTOSCAPE_CONFIG.edgeStyles.supervisor.color,
+                'target-arrow-color': CYTOSCAPE_CONFIG.edgeStyles.supervisor.color,
+                'color': CYTOSCAPE_CONFIG.edgeStyles.supervisor.color,
+                'line-style': CYTOSCAPE_CONFIG.edgeStyles.supervisor.lineStyle,
+            }
+        },
+        // 股東關係
+        {
+            selector: 'edge[relationshipType="shareholder"]',
+            style: {
+                'line-color': CYTOSCAPE_CONFIG.edgeStyles.shareholder.color,
+                'target-arrow-color': CYTOSCAPE_CONFIG.edgeStyles.shareholder.color,
+                'color': CYTOSCAPE_CONFIG.edgeStyles.shareholder.color,
+                'line-style': CYTOSCAPE_CONFIG.edgeStyles.shareholder.lineStyle,
+            }
+        },
+        // 法人代表關係
+        {
+            selector: 'edge[relationshipType="representative"]',
+            style: {
+                'line-color': CYTOSCAPE_CONFIG.edgeStyles.representative.color,
+                'target-arrow-color': CYTOSCAPE_CONFIG.edgeStyles.representative.color,
+                'color': CYTOSCAPE_CONFIG.edgeStyles.representative.color,
+                'line-style': CYTOSCAPE_CONFIG.edgeStyles.representative.lineStyle,
             }
         },
         // 同地址關係
         {
             selector: 'edge[relationshipType="sameAddress"]',
             style: {
-                'line-color': CYTOSCAPE_CONFIG.edgeColors.sameAddress,
-                'target-arrow-color': CYTOSCAPE_CONFIG.edgeColors.sameAddress,
-                'color': CYTOSCAPE_CONFIG.edgeColors.sameAddress,
-                'line-style': 'dotted',
+                'line-color': CYTOSCAPE_CONFIG.edgeStyles.sameAddress.color,
+                'target-arrow-color': CYTOSCAPE_CONFIG.edgeStyles.sameAddress.color,
+                'color': CYTOSCAPE_CONFIG.edgeStyles.sameAddress.color,
+                'line-style': CYTOSCAPE_CONFIG.edgeStyles.sameAddress.lineStyle,
                 'width': 1.5,
             }
         },
@@ -198,7 +263,7 @@ const CYTOSCAPE_CONFIG = {
         },
     ],
 
-    // 布局配置
+    // 布局配置（改善 #3：fit: false，nodeSpacing: 30，min-zoomed-font-size: 8）
     layouts: {
         cola: {
             name: 'cola',
@@ -208,9 +273,9 @@ const CYTOSCAPE_CONFIG = {
             randomize: false,
             maxSimulationTime: 4000,
             ungrabifyWhileSimulating: false,
-            fit: true,
+            fit: false,
             padding: 20,
-            nodeSpacing: 10,
+            nodeSpacing: 30,
             flowDirection: 'down',
             alignment: 'vertical',
         },
@@ -222,8 +287,8 @@ const CYTOSCAPE_CONFIG = {
             animationDuration: 500,
             avoidOverlap: true,
             avoidOverlapPadding: 20,
-            nodeSpacing: 10,
-            fit: true,
+            nodeSpacing: 30,
+            fit: false,
             padding: 20,
             randomize: false,
         },
@@ -233,7 +298,7 @@ const CYTOSCAPE_CONFIG = {
             directed: true,
             animate: true,
             animationDuration: 500,
-            fit: true,
+            fit: false,
             padding: 20,
             rows: undefined,
             cols: undefined,
@@ -367,6 +432,15 @@ const CYTOSCAPE_CONFIG = {
         // 添加節點
         if (nodesData && Array.isArray(nodesData)) {
             nodesData.forEach(node => {
+                // 計算節點大小（基於資本額）
+                const capital = node.capital || 0;
+                const size = this.calculateNodeSize(capital);
+                const capitalDisplay = capital > 0
+                    ? (capital >= 1000000
+                        ? (capital / 1000000).toFixed(1) + '百萬'
+                        : capital.toLocaleString())
+                    : '未知';
+
                 elements.push({
                     data: {
                         id: node.id,
@@ -375,6 +449,9 @@ const CYTOSCAPE_CONFIG = {
                         status: node.status,
                         redFlag: node.redFlag || false,
                         adverseMedia: node.adverseMedia || false,
+                        size: size,
+                        capital: capital,
+                        capitalDisplay: capitalDisplay,
                         ...node.data,
                     }
                 });
