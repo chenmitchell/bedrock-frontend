@@ -86,7 +86,7 @@
     // 場景管理
     // ================================================================
     function showScene(name) {
-        const scenes = ['login', 'welcome', 'workspace'];
+        const scenes = ['login', 'register', 'welcome', 'workspace'];
         scenes.forEach(s => {
             const el = document.getElementById(s + '-scene');
             if (el) el.style.display = (s === name) ? '' : 'none';
@@ -96,7 +96,7 @@
         // 控制側邊導航欄顯示
         const navSidebar = document.getElementById('nav-sidebar');
         if (navSidebar) {
-            navSidebar.style.display = (name === 'login') ? 'none' : 'flex';
+            navSidebar.style.display = (name === 'login' || name === 'register') ? 'none' : 'flex';
         }
 
         // 收合 nav 時也要 resize cytoscape
@@ -170,23 +170,84 @@
     };
 
     // ================================================================
-    // 登入邏輯（暫時 mock，Auth 最後加）
+    // 認證狀態管理
+    // ================================================================
+    const auth = {
+        accessToken: null,
+        user: null,
+
+        setToken(token) {
+            this.accessToken = token;
+            if (token) {
+                sessionStorage.setItem('bedrock_access_token', token);
+            } else {
+                sessionStorage.removeItem('bedrock_access_token');
+            }
+        },
+
+        getToken() {
+            if (!this.accessToken) {
+                this.accessToken = sessionStorage.getItem('bedrock_access_token');
+            }
+            return this.accessToken;
+        },
+
+        clearAuth() {
+            this.accessToken = null;
+            this.user = null;
+            sessionStorage.removeItem('bedrock_access_token');
+        },
+    };
+
+    // 覆寫 api.request 以注入 Authorization header
+    const _origRequest = api.request.bind(api);
+    api.request = async function(method, path, body, timeoutMs = 30000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+        const opts = {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            credentials: 'include', // 攜帶 cookie（refresh_token）
+        };
+
+        const token = auth.getToken();
+        if (token) {
+            opts.headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        if (body) opts.body = JSON.stringify(body);
+
+        try {
+            const res = await fetch(API_BASE + path, opts);
+            clearTimeout(timer);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ detail: res.statusText }));
+                throw new Error(err.detail || `HTTP ${res.status}`);
+            }
+            if (res.status === 204) return null;
+            return res.json();
+        } catch (e) {
+            clearTimeout(timer);
+            if (e.name === 'AbortError') throw new Error('請求逾時，請稍後再試');
+            throw e;
+        }
+    };
+
+    // ================================================================
+    // 登入邏輯（Google OAuth）
     // ================================================================
     function setupLogin() {
-        const btnLogin = document.getElementById('btn-login');
-        const inputEmail = document.getElementById('input-email');
-        const inputPassword = document.getElementById('input-password');
         const toggleRequireLogin = document.getElementById('toggle-require-login');
         const toggleSwitch = document.querySelector('.toggle-switch');
 
-        if (!btnLogin) return;
-
         // 從 localStorage 恢復開關狀態
-        const savedRequireLogin = localStorage.getItem('bedrock_require_login') === 'true';
+        const savedDevMode = localStorage.getItem('bedrock_dev_mode') === 'true';
         if (toggleRequireLogin) {
-            toggleRequireLogin.checked = savedRequireLogin;
+            toggleRequireLogin.checked = savedDevMode;
             if (toggleSwitch) {
-                toggleSwitch.setAttribute('aria-checked', savedRequireLogin.toString());
+                toggleSwitch.setAttribute('aria-checked', savedDevMode.toString());
             }
         }
 
@@ -194,50 +255,495 @@
         if (toggleRequireLogin) {
             toggleRequireLogin.addEventListener('change', (e) => {
                 const checked = e.target.checked;
-                localStorage.setItem('bedrock_require_login', checked.toString());
+                localStorage.setItem('bedrock_dev_mode', checked.toString());
                 if (toggleSwitch) {
                     toggleSwitch.setAttribute('aria-checked', checked.toString());
                 }
             });
         }
 
-        btnLogin.addEventListener('click', () => {
-            const email = inputEmail.value.trim();
-            const pass = inputPassword.value.trim();
+        // 檢查 URL 是否有 OAuth callback 參數
+        checkOAuthCallback();
+    }
 
-            if (!email || !pass) {
-                Toast.warning('請輸入帳號密碼');
-                return;
+    // Google OAuth 登入
+    async function handleGoogleLogin() {
+        const btn = document.getElementById('btn-google-login');
+        const statusEl = document.getElementById('login-status');
+
+        try {
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 導向 Google 登入中...';
             }
 
-            // Mock 登入（之後替換為 API 呼叫）
-            state.user = { email, name: email.split('@')[0] };
-            updateGreeting();
-            showScene('welcome');
-            loadInvestigations();
-            checkShowOnboarding();
-        });
+            const data = await api.get('/auth/google/login');
 
-        // Enter 鍵登入
-        [inputEmail, inputPassword].forEach(el => {
-            if (el) el.addEventListener('keydown', e => {
-                if (e.key === 'Enter') btnLogin.click();
-            });
-        });
-    }
-
-    // 檢查是否需要跳過登入
-    function checkAndSkipLogin() {
-        const requireLogin = localStorage.getItem('bedrock_require_login') === 'true';
-        if (!requireLogin) {
-            // 自動 mock 登入並進入儀表板
-            state.user = { email: 'dev@bedrock.local', name: 'test' };
-            showScene('welcome');
-            updateGreeting();
-            loadInvestigations();
-            checkShowOnboarding();
+            if (data && data.google_auth_url) {
+                // 重導向到 Google OAuth 頁面
+                window.location.href = data.google_auth_url;
+            } else {
+                throw new Error('無法取得 Google 登入連結');
+            }
+        } catch (e) {
+            console.error('[BEDROCK] Google OAuth error:', e);
+            if (statusEl) {
+                statusEl.style.display = '';
+                statusEl.className = 'login-status error';
+                statusEl.textContent = '登入失敗：' + e.message;
+            }
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<svg class="google-icon" width="20" height="20" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> 以 Google 帳號登入';
+            }
         }
     }
+    window.handleGoogleLogin = handleGoogleLogin;
+
+    // 處理 OAuth callback（Google 重導回來後）
+    async function checkOAuthCallback() {
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        const oauthState = params.get('state');
+
+        if (!code || !oauthState) return;
+
+        // 清除 URL 參數
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        const statusEl = document.getElementById('login-status');
+        if (statusEl) {
+            statusEl.style.display = '';
+            statusEl.className = 'login-status pending';
+            statusEl.textContent = '正在驗證登入...';
+        }
+
+        try {
+            const res = await fetch(API_BASE + '/auth/google/callback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ code, state: oauthState }),
+            });
+
+            const data = await res.json();
+
+            if (data.success && data.data) {
+                // 登入成功
+                auth.setToken(data.data.access_token);
+
+                // 取得使用者資訊
+                try {
+                    const userInfo = await api.get('/auth/me');
+                    auth.user = userInfo;
+                    state.user = { email: userInfo.email, name: userInfo.full_name || userInfo.email.split('@')[0] };
+
+                    // 根據使用者狀態決定下一步
+                    if (!userInfo.totp_enabled) {
+                        // 需要設定 TOTP → 進入註冊流程 step 3
+                        showScene('register');
+                        showRegStep(3);
+                        initTOTPSetup();
+                    } else if (userInfo.status === 'pending_approval') {
+                        // 等待審核
+                        showScene('register');
+                        showRegStep('pending');
+                    } else {
+                        // 正常進入
+                        updateGreeting();
+                        showScene('welcome');
+                        loadInvestigations();
+                        checkShowOnboarding();
+                    }
+                } catch (userErr) {
+                    console.error('[BEDROCK] Failed to get user info:', userErr);
+                    // 可能是新使用者，需要註冊
+                    showScene('register');
+                    showRegStep(1);
+                }
+            } else if (data.error) {
+                const errorCode = data.error.code;
+                if (errorCode === 'PENDING_APPROVAL') {
+                    showScene('register');
+                    showRegStep('pending');
+                } else {
+                    throw new Error(data.error.message || '登入失敗');
+                }
+            } else {
+                throw new Error('登入失敗，請重試');
+            }
+        } catch (e) {
+            console.error('[BEDROCK] OAuth callback error:', e);
+            if (statusEl) {
+                statusEl.style.display = '';
+                statusEl.className = 'login-status error';
+                statusEl.textContent = e.message;
+            }
+        }
+    }
+
+    // 檢查是否需要跳過登入（開發模式）
+    function checkAndSkipLogin() {
+        const devMode = localStorage.getItem('bedrock_dev_mode') === 'true';
+
+        // 先檢查是否有有效 token
+        const savedToken = auth.getToken();
+        if (savedToken) {
+            // 嘗試用已有 token 取得使用者資訊
+            api.get('/auth/me').then(userInfo => {
+                auth.user = userInfo;
+                state.user = { email: userInfo.email, name: userInfo.full_name || userInfo.email.split('@')[0] };
+                updateGreeting();
+                showScene('welcome');
+                loadInvestigations();
+                checkShowOnboarding();
+            }).catch(() => {
+                auth.clearAuth();
+                if (devMode) {
+                    doDevModeLogin();
+                }
+            });
+            return;
+        }
+
+        if (devMode) {
+            doDevModeLogin();
+        }
+    }
+
+    function doDevModeLogin() {
+        state.user = { email: 'dev@bedrock.local', name: 'Dev' };
+        showScene('welcome');
+        updateGreeting();
+        loadInvestigations();
+        checkShowOnboarding();
+    }
+
+    // ================================================================
+    // 註冊邏輯
+    // ================================================================
+    const regState = {
+        orgType: null,       // financial / designated / judicial / other
+        orgSub: null,        // 子分類
+        jobAttribute: null,  // 工作屬性
+        isChannel2: false,   // 是否管道二
+        currentStep: 1,
+    };
+
+    // 機構子分類選項
+    const orgSubOptions = {
+        financial: [
+            { value: 'bank', label: '銀行業' },
+            { value: 'securities', label: '證券期貨業' },
+            { value: 'insurance', label: '保險業' },
+            { value: 'epayment', label: '電子支付機構' },
+            { value: 'leasing', label: '融資性租賃業' },
+            { value: 'vasp', label: '虛擬資產服務業 (VASP)' },
+            { value: 'remittance', label: '外籍移工匯兌公司' },
+        ],
+        designated: [
+            { value: 'tpp', label: '第三方支付服務業' },
+            { value: 'jewelry', label: '銀樓業' },
+            { value: 'realestate', label: '不動產經紀業及地政士' },
+            { value: 'lawyer', label: '律師及公證人' },
+            { value: 'accountant', label: '會計師' },
+            { value: 'tcsp', label: '信託及公司服務提供業' },
+            { value: 'pawnshop', label: '當舖業' },
+        ],
+        other: [
+            { value: 'internal', label: '企業內部風控及內稽' },
+            { value: 'credit_check', label: '一般商業徵信' },
+            { value: 'other', label: '其他' },
+        ],
+        // judicial 不需要子分類
+    };
+
+    function selectOrgType(el) {
+        // 移除其他選取狀態
+        document.querySelectorAll('.reg-org-card').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+
+        regState.orgType = el.dataset.org;
+        regState.orgSub = null;
+
+        // 顯示子分類（judicial 不需要）
+        const subContainer = document.getElementById('reg-org-sub');
+        const subOptions = document.getElementById('reg-org-sub-options');
+        const jobField = document.getElementById('reg-job-field');
+
+        if (regState.orgType === 'judicial') {
+            // 司法警察不需子分類
+            subContainer.style.display = 'none';
+            jobField.style.display = '';
+            updateRegNextBtn();
+        } else if (orgSubOptions[regState.orgType]) {
+            subContainer.style.display = '';
+            subOptions.innerHTML = orgSubOptions[regState.orgType].map(opt =>
+                `<label><input type="radio" name="reg-org-sub" value="${opt.value}" onchange="selectOrgSub('${opt.value}')"> ${opt.label}</label>`
+            ).join('');
+            jobField.style.display = '';
+            updateRegNextBtn();
+        } else {
+            subContainer.style.display = 'none';
+            jobField.style.display = '';
+            updateRegNextBtn();
+        }
+    }
+    window.selectOrgType = selectOrgType;
+
+    function selectOrgSub(value) {
+        regState.orgSub = value;
+        updateRegNextBtn();
+    }
+    window.selectOrgSub = selectOrgSub;
+
+    function updateRegNextBtn() {
+        const btn = document.getElementById('reg-btn-next1');
+        const jobSel = document.getElementById('reg-job-attribute');
+        const job = jobSel ? jobSel.value : '';
+
+        let canProceed = !!regState.orgType && !!job;
+        // 需要子分類的機構類型
+        if (regState.orgType && orgSubOptions[regState.orgType] && !regState.orgSub) {
+            canProceed = false;
+        }
+        if (btn) btn.disabled = !canProceed;
+    }
+
+    // 監聽工作屬性變更
+    document.addEventListener('DOMContentLoaded', () => {
+        const jobSel = document.getElementById('reg-job-attribute');
+        if (jobSel) {
+            jobSel.addEventListener('change', () => {
+                const otherInput = document.getElementById('reg-job-other');
+                if (otherInput) {
+                    otherInput.style.display = jobSel.value === 'other' ? '' : 'none';
+                }
+                updateRegNextBtn();
+            });
+        }
+    });
+
+    function showRegStep(step) {
+        regState.currentStep = step;
+        // 隱藏所有步驟
+        document.querySelectorAll('.reg-step-content').forEach(el => el.style.display = 'none');
+        // 顯示對應步驟
+        const stepEl = document.getElementById(step === 'pending' ? 'reg-step-pending' : `reg-step-${step}`);
+        if (stepEl) stepEl.style.display = '';
+
+        // 更新步驟指示
+        document.querySelectorAll('.register-steps .reg-step').forEach(el => {
+            const s = parseInt(el.dataset.step);
+            el.classList.remove('active', 'done');
+            if (s < step) el.classList.add('done');
+            if (s === step) el.classList.add('active');
+        });
+    }
+
+    function regNextStep(step) {
+        showRegStep(step);
+    }
+    window.regNextStep = regNextStep;
+
+    function regPrevStep(step) {
+        showRegStep(step);
+    }
+    window.regPrevStep = regPrevStep;
+
+    // 統編輸入處理
+    function handleTaxIdInput(input) {
+        const val = input.value.trim();
+        const lookupBtn = document.getElementById('btn-taxid-lookup');
+        const channel2Hint = document.getElementById('reg-channel2-hint');
+        const channel1Fields = document.getElementById('reg-channel1-fields');
+        const codeSourceField = document.getElementById('reg-code-source-field');
+        const resultEl = document.getElementById('reg-taxid-result');
+        const orgStep1 = document.getElementById('reg-step-1');
+
+        // 8 碼純數字 → 管道一，顯示查詢按鈕
+        if (/^\d{8}$/.test(val)) {
+            regState.isChannel2 = false;
+            if (lookupBtn) lookupBtn.style.display = '';
+            if (channel2Hint) channel2Hint.style.display = 'none';
+            if (channel1Fields) channel1Fields.style.display = '';
+            if (codeSourceField) codeSourceField.style.display = 'none';
+        } else if (val.length > 0 && !/^\d{0,7}$/.test(val)) {
+            // 非 8 碼數字，可能是特殊代碼 → 管道二
+            regState.isChannel2 = true;
+            if (lookupBtn) lookupBtn.style.display = 'none';
+            if (channel2Hint) channel2Hint.style.display = '';
+            if (channel1Fields) channel1Fields.style.display = 'none';
+            if (codeSourceField) codeSourceField.style.display = '';
+            if (resultEl) resultEl.style.display = 'none';
+        } else {
+            regState.isChannel2 = false;
+            if (lookupBtn) lookupBtn.style.display = val.length > 0 ? 'none' : 'none';
+            if (channel2Hint) channel2Hint.style.display = 'none';
+            if (channel1Fields) channel1Fields.style.display = '';
+            if (codeSourceField) codeSourceField.style.display = 'none';
+        }
+    }
+    window.handleTaxIdInput = handleTaxIdInput;
+
+    // 統編查詢
+    async function lookupTaxId() {
+        const taxid = document.getElementById('reg-taxid').value.trim();
+        const resultEl = document.getElementById('reg-taxid-result');
+
+        if (!/^\d{8}$/.test(taxid)) {
+            Toast.warning('統一編號應為 8 碼數字');
+            return;
+        }
+
+        try {
+            const data = await api.get(`/companies/search?query=${taxid}`);
+            if (data && data.companies && data.companies.length > 0) {
+                const co = data.companies[0];
+                resultEl.innerHTML = `<strong>${co.name || co.company_name}</strong><br>地址：${co.address || co.registered_address || '—'}<br>代表人：${co.representative || '—'}<br>狀態：${co.status || '—'}`;
+                resultEl.style.display = '';
+            } else {
+                resultEl.innerHTML = '查無此統編資料';
+                resultEl.style.display = '';
+            }
+        } catch (e) {
+            resultEl.innerHTML = '查詢失敗：' + e.message;
+            resultEl.style.display = '';
+        }
+    }
+    window.lookupTaxId = lookupTaxId;
+
+    // 送出註冊
+    async function submitRegistration() {
+        const fullname = document.getElementById('reg-fullname').value.trim();
+        const agreeTerms = document.getElementById('reg-agree-terms').checked;
+        const taxid = document.getElementById('reg-taxid').value.trim();
+
+        if (!fullname) { Toast.warning('請輸入中文姓名'); return; }
+        if (!agreeTerms) { Toast.warning('請先同意服務條款與個資告知聲明'); return; }
+
+        if (regState.isChannel2) {
+            // 管道二
+            const codeSource = document.getElementById('reg-code-source').value.trim();
+            if (!codeSource) { Toast.warning('請填寫代碼來源'); return; }
+
+            try {
+                const res = await api.post('/auth/register/code', {
+                    code: taxid,
+                    code_source: codeSource,
+                    full_name: fullname,
+                    agree_terms: true,
+                });
+                Toast.success('帳號已建立');
+                // 進入 TOTP 設定
+                showRegStep(3);
+                initTOTPSetup();
+            } catch (e) {
+                Toast.error('註冊失敗：' + e.message);
+            }
+        } else {
+            // 管道一
+            const phone = document.getElementById('reg-phone').value.trim();
+            const jobAttr = document.getElementById('reg-job-attribute').value;
+
+            if (!phone || !/^09\d{8}$/.test(phone)) { Toast.warning('請輸入正確手機號碼（09 開頭 10 碼）'); return; }
+
+            try {
+                const res = await api.post('/auth/register', {
+                    organization_type: regState.orgType,
+                    organization_sub: regState.orgSub,
+                    job_attribute: jobAttr,
+                    organization_taxid: taxid || null,
+                    full_name: fullname,
+                    phone: phone,
+                    agree_terms: true,
+                });
+
+                if (res.next_step === 'totp_setup') {
+                    showRegStep(3);
+                    initTOTPSetup();
+                } else {
+                    // 等待審核
+                    showRegStep('pending');
+                }
+            } catch (e) {
+                Toast.error('註冊失敗：' + e.message);
+            }
+        }
+    }
+    window.submitRegistration = submitRegistration;
+
+    // TOTP 設定
+    async function initTOTPSetup() {
+        const container = document.getElementById('totp-qr-container');
+        const manualKeyEl = document.getElementById('totp-manual-key');
+        const keyDisplay = document.getElementById('totp-key-display');
+
+        try {
+            const data = await api.post('/auth/totp/setup', {});
+            if (data && data.qr_code_url) {
+                container.innerHTML = `<img src="${data.qr_code_url}" alt="TOTP QR Code" style="max-width:200px;">`;
+                if (data.manual_entry_key && manualKeyEl && keyDisplay) {
+                    keyDisplay.textContent = data.manual_entry_key;
+                    manualKeyEl.style.display = '';
+                }
+            } else {
+                container.innerHTML = '<p style="color:var(--color-danger);">QR Code 產生失敗，請重試</p>';
+            }
+        } catch (e) {
+            container.innerHTML = `<p style="color:var(--color-danger);">TOTP 設定失敗：${e.message}</p>`;
+        }
+    }
+
+    // TOTP 驗證
+    async function verifyTOTP() {
+        const code = document.getElementById('totp-verify-code').value.trim();
+        if (!/^\d{6}$/.test(code)) {
+            Toast.warning('請輸入 6 位數驗證碼');
+            return;
+        }
+
+        const btn = document.getElementById('btn-verify-totp');
+        if (btn) { btn.disabled = true; btn.textContent = '驗證中...'; }
+
+        try {
+            const data = await api.post('/auth/totp/verify', { code });
+            Toast.success('TOTP 已成功啟用');
+
+            // 如果是管道二，直接進入系統
+            if (regState.isChannel2) {
+                state.user = auth.user ? { email: auth.user.email, name: auth.user.full_name } : state.user;
+                updateGreeting();
+                showScene('welcome');
+                loadInvestigations();
+            } else {
+                // 管道一，等待審核
+                showRegStep('pending');
+            }
+        } catch (e) {
+            Toast.error('驗證失敗：' + e.message);
+            if (btn) { btn.disabled = false; btn.textContent = '驗證並完成設定'; }
+        }
+    }
+    window.verifyTOTP = verifyTOTP;
+
+    // Modal helpers
+    function showPrivacyNotice() {
+        const modal = document.getElementById('privacy-notice-modal');
+        if (modal) modal.style.display = 'flex';
+    }
+    window.showPrivacyNotice = showPrivacyNotice;
+
+    function showTermsOfService() {
+        Toast.warning('服務條款尚在準備中');
+    }
+    window.showTermsOfService = showTermsOfService;
+
+    function closeModalById(id) {
+        const modal = document.getElementById(id);
+        if (modal) modal.style.display = 'none';
+    }
+    window.closeModalById = closeModalById;
 
     function updateGreeting() {
         const el = document.getElementById('welcome-greeting');
@@ -561,7 +1067,8 @@
         if (btnLogout) {
             btnLogout.addEventListener('click', () => {
                 state.user = null;
-                localStorage.removeItem('bedrock_require_login');
+                auth.clearAuth();
+                localStorage.removeItem('bedrock_dev_mode');
                 showScene('login');
             });
         }
@@ -3228,7 +3735,10 @@
 
     function handleLogout() {
         if (confirm('確定要登出嗎？')) {
+            // 呼叫後端登出（不等結果）
+            api.post('/auth/logout', {}).catch(() => {});
             state.user = null;
+            auth.clearAuth();
             localStorage.removeItem('bedrock_session');
             showScene('login');
             toggleUserMenu();
@@ -3726,11 +4236,15 @@
             // 全部顯示
             state.cy.nodes().style('display', 'element');
             state.cy.edges().style('display', 'element');
-            if (label) label.textContent = '全部';
+            const totalNodes = state.cy.nodes().length;
+            if (label) label.textContent = `全部（${totalNodes} 個節點）`;
             return;
         }
 
-        if (label) label.textContent = `${maxDepth} 層`;
+        // 計算此深度的可見節點數
+        let visibleCount = 0;
+        depthMap.forEach((d) => { if (d <= maxDepth) visibleCount++; });
+        if (label) label.textContent = `第 ${maxDepth} 層（${visibleCount} 個節點）`;
 
         // 隱藏超過深度的節點與其相連的邊
         let shown = 0, hidden = 0;
@@ -4968,7 +5482,7 @@
     window.switchReportTab = switchReportTab;
 
     function reportClickNode(nodeId) {
-        // 改善 #7：報表模式中點擊節點，保持在報表檢視內，不跳回圖形
+        // 規則書 4-A：報表模式中點擊節點，必須留在報表模式，不可跳回圖形
         // 同時在報表顯示對應節點的詳情和麵包屑導覽
         if (!state.cy) return;
         const node = state.cy.getElementById(nodeId);
@@ -4978,11 +5492,17 @@
         const container = document.getElementById('report-view-content');
         if (!container) return;
 
-        // 如果在報表檢視中，更新報表內容展示該節點的詳情
-        if (_reportViewActive && _currentReportDetail) {
+        // 在報表檢視中，一律更新報表內容展示該節點的詳情（不跳回圖形）
+        if (_reportViewActive) {
+            if (!_currentReportDetail) {
+                _currentReportDetail = {};
+            }
             _currentReportDetail.nodeId = nodeId;
             _currentReportDetail.nodeData = nodeData;
             renderReportDetail(nodeId, nodeData);
+        } else {
+            // 如果不在報表模式，也更新右欄詳情面板（不切換模式）
+            showNodeDetail(nodeData);
         }
     }
     window.reportClickNode = reportClickNode;
@@ -5011,6 +5531,7 @@
             detailHtml += '<div><strong>類型:</strong> 公司</div>';
             if (nodeData.capitalDisplay) detailHtml += '<div><strong>資本額:</strong> ' + nodeData.capitalDisplay + '</div>';
             detailHtml += '<div><strong>狀態:</strong> ' + (nodeData.status === 'dissolved' ? '已解散' : '營運中') + '</div>';
+            if (nodeData.address) detailHtml += '<div style="grid-column:1/3;"><strong>地址:</strong> ' + nodeData.address + '</div>';
             detailHtml += '</div>';
             detailHtml += '</div>';
         } else if (nodeData.type === 'person') {
@@ -5020,6 +5541,30 @@
             detailHtml += '<div><strong>類型:</strong> 自然人</div>';
             detailHtml += '</div>';
             detailHtml += '</div>';
+        }
+
+        // 顯示關聯節點清單（留在報表模式中瀏覽）
+        const node = state.cy.getElementById(nodeId);
+        if (node.length > 0) {
+            const connEdges = node.connectedEdges();
+            if (connEdges.length > 0) {
+                detailHtml += '<h4 style="font-size:13px; font-weight:600; margin:16px 0 8px;">關聯列表</h4>';
+                detailHtml += '<div style="border:1px solid #e0e0e0; border-radius:4px; overflow:hidden;">';
+                connEdges.forEach((e, i) => {
+                    const d = e.data();
+                    const otherId = d.source === nodeId ? d.target : d.source;
+                    const otherNode = state.cy.getElementById(otherId);
+                    const otherLabel = otherNode.length ? otherNode.data('label') : otherId;
+                    const rel = d.label || d.relationship || '關聯';
+                    const isHist = d.status === 'historical' || d.is_historical;
+                    const bg = i % 2 === 0 ? '#fff' : '#fafbfc';
+                    detailHtml += '<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid #eee; background:' + bg + '; font-size:12px;' + (isHist ? ' opacity:0.6;' : '') + '">';
+                    detailHtml += '<span style="cursor:pointer; color:#3A7CA5; text-decoration:underline;" onclick="reportClickNode(\'' + otherId + '\')">' + otherLabel + '</span>';
+                    detailHtml += '<span style="padding:2px 8px; border-radius:4px; font-size:10px; background:' + (isHist ? '#f5f5f5; color:#888;' : '#e8f5e9; color:#2e7d32;') + '">' + rel + (isHist ? '（歷史）' : '') + '</span>';
+                    detailHtml += '</div>';
+                });
+                detailHtml += '</div>';
+            }
         }
 
         detailHtml += '</div>';
