@@ -930,12 +930,13 @@ input:focus, select:focus, textarea:focus {
   left: 0;
 }
 
+/* ===== 登入頁 — 暗色主題 ===== */
 #login-scene {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: var(--color-bg);
+  background: #0A0B0D;
   position: relative;
   overflow: hidden;
 }
@@ -961,18 +962,29 @@ input:focus, select:focus, textarea:focus {
   margin-bottom: var(--space-xl);
 }
 
+/* 暗色主題下 logo SVG 用冷灰白 */
+#login-scene .brand-logo svg polygon {
+  stroke: #9A9BA0;
+}
+#login-scene .brand-logo svg circle {
+  fill: #9A9BA0;
+}
+#login-scene .brand-logo svg line {
+  stroke: #9A9BA0;
+}
+
 .brand {
   font-family: var(--font-display);
   font-size: 2.4rem;
   font-weight: 600;
   letter-spacing: 0.15em;
-  color: var(--color-accent);
+  color: #9A9BA0;
   margin-bottom: var(--space-md);
 }
 
 .brand-subtitle {
   font-size: 1rem;
-  color: var(--color-text-muted);
+  color: #6A6B70;
   letter-spacing: 0.1em;
   margin-bottom: var(--space-2xl);
 }
@@ -986,55 +998,41 @@ input:focus, select:focus, textarea:focus {
 
 .login-input {
   padding: var(--space-md);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: var(--radius-md);
-  color: var(--color-text-primary);
+  color: #e0e0e0;
   font-size: 0.95rem;
 }
 .login-input::placeholder {
-  color: var(--color-text-muted);
+  color: #6A6B70;
 }
 .login-input:focus {
   outline: none;
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(74, 158, 191, 0.1);
+  border-color: #4A9EBF;
+  box-shadow: 0 0 0 3px rgba(74, 158, 191, 0.15);
 }
 
 .login-btn {
   padding: var(--space-lg);
-  background: var(--color-accent);
-  border: none;
+  background: transparent;
+  border: 1px solid #9A9BA0;
   border-radius: var(--radius-md);
-  color: #fff;
+  color: #9A9BA0;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--transition-fast);
   font-size: 0.95rem;
 }
 .login-btn:hover {
-  background: var(--color-accent-hover);
-}
-
-.login-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-md);
-  margin-top: var(--space-xl);
-  padding: var(--space-md);
-  background: var(--color-surface);
-  border-radius: var(--radius-md);
-}
-
-.toggle-label {
-  font-size: 0.9rem;
-  color: var(--color-text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  color: #e0e0e0;
+  border-color: #e0e0e0;
 }
 
 .login-description {
   font-size: 0.85rem;
-  color: var(--color-text-muted);
+  color: #6A6B70;
   line-height: 1.6;
   margin-bottom: var(--space-xl);
   max-width: 320px;
@@ -1046,10 +1044,10 @@ input:focus, select:focus, textarea:focus {
   justify-content: center;
   gap: var(--space-md);
   padding: 14px var(--space-xl);
-  background: #fff;
-  border: 2px solid var(--color-border);
+  background: transparent;
+  border: 1px solid #9A9BA0;
   border-radius: var(--radius-md);
-  color: var(--color-text-primary);
+  color: #9A9BA0;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -1057,9 +1055,10 @@ input:focus, select:focus, textarea:focus {
   width: 100%;
 }
 .login-btn-google:hover {
-  border-color: var(--color-accent);
-  box-shadow: 0 2px 12px rgba(42, 143, 168, 0.15);
-  background: #fafbff;
+  border-color: #4A9EBF;
+  box-shadow: 0 0 20px rgba(74, 158, 191, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #e0e0e0;
 }
 .login-btn-google .google-icon {
   flex-shrink: 0;
@@ -1071,14 +1070,14 @@ input:focus, select:focus, textarea:focus {
   font-size: 0.85rem;
   text-align: center;
 }
-.login-status.error { background: #fef2f2; color: #dc2626; }
-.login-status.pending { background: #fefce8; color: #ca8a04; }
-.login-status.success { background: #f0fdf4; color: #16a34a; }
+.login-status.error { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+.login-status.pending { background: rgba(234, 179, 8, 0.15); color: #facc15; }
+.login-status.success { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
 
 .login-footer {
   margin-top: var(--space-2xl);
   text-align: center;
-  color: var(--color-text-muted);
+  color: rgba(255, 255, 255, 0.30);
   font-size: 0.85rem;
 }
 
