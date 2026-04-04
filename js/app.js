@@ -1743,6 +1743,8 @@
             const data = await api.get(`/investigations/${id}/graph`);
             if (data && data.elements && data.elements.length > 0) {
                 renderGraph(data.elements);
+                // 圖渲染完成後建立縣市分群
+                buildCityGroups();
             }
         } catch (e) {
             console.warn('[BEDROCK] 載入圖資料失敗:', e.message);
@@ -3120,6 +3122,122 @@
             listEl.innerHTML = '<div class="ws-list-empty">尚無集群資料</div>';
         }
     }
+
+    // ── 縣市分群（從關聯圖節點地址提取） ──────────────
+    function buildCityGroups() {
+        const listEl = document.getElementById('city-groups-list');
+        const countEl = document.getElementById('city-group-count');
+        if (!listEl || !state.cy) return;
+
+        // 從 Cytoscape 節點提取公司地址，用縣市歸類
+        const cityMap = {};  // { "臺北市": [{ id, label, address }] }
+        const taiwanCities = [
+            '臺北市','台北市','新北市','桃園市','臺中市','台中市','臺南市','台南市',
+            '高雄市','基隆市','新竹市','新竹縣','苗栗縣','彰化縣','南投縣','雲林縣',
+            '嘉義市','嘉義縣','屏東縣','宜蘭縣','花蓮縣','臺東縣','台東縣','澎湖縣',
+            '金門縣','連江縣',
+        ];
+
+        state.cy.nodes().forEach(n => {
+            const d = n.data();
+            if (d.type !== 'company') return;
+            const addr = d.address || '';
+            if (!addr) return;
+
+            // 提取縣市
+            let city = '';
+            for (const c of taiwanCities) {
+                if (addr.includes(c)) {
+                    // 統一「臺」和「台」
+                    city = c.replace('台北', '臺北').replace('台中', '臺中').replace('台南', '臺南').replace('台東', '臺東');
+                    break;
+                }
+            }
+            if (!city) city = '其他/未知';
+
+            if (!cityMap[city]) cityMap[city] = [];
+            cityMap[city].push({
+                id: d.id,
+                label: d.label || d.entity_id,
+                address: addr,
+                entity_id: d.entity_id,
+            });
+        });
+
+        const cities = Object.keys(cityMap).sort((a, b) => cityMap[b].length - cityMap[a].length);
+        if (countEl) countEl.textContent = cities.length;
+
+        if (cities.length === 0) {
+            listEl.innerHTML = '<div class="ws-list-empty">尚無公司地址資料</div>';
+            return;
+        }
+
+        // 顏色列表
+        const cityColors = ['#C0392B','#2980B9','#27AE60','#E67E22','#8E44AD','#16A085','#D35400','#2C3E50','#F39C12','#7F8C8D','#1ABC9C','#E74C3C','#3498DB','#9B59B6'];
+
+        listEl.innerHTML = cities.map((city, idx) => {
+            const companies = cityMap[city];
+            const color = cityColors[idx % cityColors.length];
+            const ids = JSON.stringify(companies.map(c => c.id)).replace(/"/g, '&quot;');
+            return `
+                <div class="ws-list-item" style="cursor:pointer;" onclick="window.__bedrockHighlightCity(${ids}, '${esc(city)}')">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${color}; flex-shrink:0;"></span>
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-size:12px; font-weight:500;">${esc(city)}</div>
+                            <div style="font-size:10px; color:#999;">${companies.length} 家公司</div>
+                        </div>
+                        <i class="fas fa-chevron-right" style="font-size:10px; color:#ccc;"></i>
+                    </div>
+                </div>
+                <div id="city-detail-${idx}" style="display:none; padding-left:20px; border-left:2px solid ${color}20;">
+                    ${companies.slice(0, 20).map(c => `
+                        <div class="ws-list-item" style="padding:3px 0; cursor:pointer; font-size:11px;" onclick="(function(){ if(window.__bedrockCy) { var n = window.__bedrockCy.getElementById('${c.id}'); if(n.length){ window.__bedrockCy.center(n); n.select(); } } })()">
+                            <span style="font-weight:500;">${esc(c.label)}</span>
+                            <span style="color:#999; font-size:10px; margin-left:4px;">${esc(c.entity_id)}</span>
+                        </div>
+                    `).join('')}
+                    ${companies.length > 20 ? `<div style="font-size:10px; color:#999; padding:3px 0;">...還有 ${companies.length - 20} 家</div>` : ''}
+                </div>`;
+        }).join('');
+
+        // 快取供外部使用
+        state._cityGroups = cityMap;
+    }
+
+    window.__bedrockHighlightCity = function(nodeIds, cityName) {
+        // 切換該縣市的展開/收合
+        const items = document.querySelectorAll('[id^="city-detail-"]');
+        items.forEach(el => {
+            if (el.previousElementSibling && el.previousElementSibling.querySelector('div div')?.textContent.includes(cityName)) {
+                el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            }
+        });
+
+        // 在關聯圖上高亮
+        if (!state.cy) return;
+        state.cy.nodes().removeClass('marked cluster-dimmed');
+        state.cy.edges().removeClass('cluster-dimmed');
+
+        const targetNodes = nodeIds.map(id => state.cy.getElementById(id)).filter(n => n.length > 0);
+        if (targetNodes.length === 0) return;
+
+        // 其他節點半透明
+        state.cy.nodes().addClass('cluster-dimmed');
+        state.cy.edges().addClass('cluster-dimmed');
+
+        targetNodes.forEach(n => {
+            n.removeClass('cluster-dimmed');
+            n.addClass('marked');
+            n.connectedEdges().forEach(e => {
+                e.removeClass('cluster-dimmed');
+            });
+        });
+
+        // 聚焦到這些節點
+        const collection = state.cy.collection(targetNodes);
+        state.cy.animate({ fit: { eles: collection, padding: 50 } }, { duration: 500 });
+    };
 
     async function loadRedFlags(invId) {
         const listEl = document.getElementById('red-flags-list');
