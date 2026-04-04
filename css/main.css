@@ -959,10 +959,10 @@ input:focus, select:focus, textarea:focus {
   padding: 0 24px;
 }
 
-/* 品牌名 — Playfair Display, 13px, 寬字距 */
+/* 品牌名 — Playfair Display, 寬字距 */
 .brand {
   font-family: 'Playfair Display', serif;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 400;
   letter-spacing: 10px;
   color: #9A9BA0;
@@ -978,10 +978,10 @@ input:focus, select:focus, textarea:focus {
   margin: 24px auto 20px;
 }
 
-/* 副標 — Noto Serif TC, 14px */
+/* 副標 — Noto Serif TC */
 .brand-subtitle {
   font-family: 'Noto Serif TC', serif;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 400;
   color: #6A6B70;
   letter-spacing: 0.05em;
@@ -996,7 +996,7 @@ input:focus, select:focus, textarea:focus {
 }
 .login-quote p {
   font-family: 'EB Garamond', serif;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 400;
   font-style: italic;
   line-height: 1.8;
@@ -1006,7 +1006,7 @@ input:focus, select:focus, textarea:focus {
 .login-quote cite {
   display: block;
   font-family: 'EB Garamond', serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
   font-style: italic;
   color: rgba(255, 255, 255, 0.30);
@@ -1070,14 +1070,14 @@ input:focus, select:focus, textarea:focus {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  height: 44px;
+  height: 48px;
   padding: 0 24px;
   background: transparent;
   border: 1px solid #9A9BA0;
   border-radius: 6px;
   color: #9A9BA0;
   font-weight: 400;
-  font-size: 14px;
+  font-size: 15px;
   cursor: pointer;
   transition: all 150ms ease;
   width: 100%;
@@ -1099,7 +1099,7 @@ input:focus, select:focus, textarea:focus {
 .login-status {
   padding: 12px 16px;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 14px;
   text-align: center;
 }
 .login-status.error { background: rgba(239, 68, 68, 0.15); color: #f87171; }
@@ -1114,7 +1114,7 @@ input:focus, select:focus, textarea:focus {
   right: 0;
   text-align: center;
   color: rgba(255, 255, 255, 0.30);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.03em;
   z-index: 1;
 }
@@ -1122,7 +1122,30 @@ input:focus, select:focus, textarea:focus {
 /* ===== 登入頁 — 手機版 ===== */
 @media (max-width: 768px) {
   .login-container {
-    padding: 0 24px;
+    padding: 0 28px;
+    max-width: 100%;
+  }
+  .brand {
+    font-size: 18px;
+    letter-spacing: 8px;
+    text-indent: 8px;
+  }
+  .brand-subtitle {
+    font-size: 17px;
+    margin-bottom: 36px;
+  }
+  .login-quote p {
+    font-size: 15px;
+  }
+  .login-btn-google {
+    height: 52px;
+    font-size: 16px;
+  }
+  .login-status {
+    font-size: 15px;
+  }
+  .login-footer {
+    font-size: 13px;
   }
   #network-canvas {
     opacity: 0.10;
