@@ -1326,10 +1326,16 @@
             const hashStatus = document.getElementById('sync-hash-status');
             const statsTbody = document.getElementById('sync-stats-tbody');
 
+            // /sync/status 回傳格式: { status, started_at, processed, ... }
+            const syncTime = data.last_sync_time || data.started_at;
             if (lastTime) {
-                lastTime.textContent = data.last_sync_time
-                    ? formatDate(data.last_sync_time) + ` ${new Date(data.last_sync_time).toLocaleTimeString('zh-TW')}`
-                    : '未曾同步';
+                if (syncTime) {
+                    lastTime.textContent = formatDate(syncTime) + ` ${new Date(syncTime).toLocaleTimeString('zh-TW')}`;
+                } else if (data.status === 'running') {
+                    lastTime.textContent = '同步進行中…';
+                } else {
+                    lastTime.textContent = '未曾同步';
+                }
             }
 
             if (hashStatus) {
@@ -1364,8 +1370,9 @@
 
         try {
             const result = await api.post('/sync/start', {});
-            Toast.success(`資料同步完成：${result.synced_records || 0} 筆記錄`);
-            await loadDataSyncStatus();
+            Toast.success(result.message || '同步任務已提交，背景執行中');
+            // 背景任務需要時間，延遲後重新載入狀態
+            setTimeout(() => loadDataSyncStatus(), 3000);
         } catch (e) {
             console.warn('[BEDROCK] 同步失敗:', e.message);
             Toast.error('資料同步失敗: ' + e.message);
@@ -1380,12 +1387,11 @@
     async function loadKeywords() {
         try {
             const data = await api.get('/keywords');
-            const keywords = data.items || data || [];
-
-            // 按等級分組
-            const levelL1 = keywords.filter(k => k.level === 'L1');
-            const levelL2 = keywords.filter(k => k.level === 'L2');
-            const levelL3 = keywords.filter(k => k.level === 'L3');
+            // API 回傳 { status, data: { L1_keywords, L2_keywords, L3_keywords, total } }
+            const kwData = data.data || data || {};
+            const levelL1 = Array.isArray(kwData.L1_keywords) ? kwData.L1_keywords : [];
+            const levelL2 = Array.isArray(kwData.L2_keywords) ? kwData.L2_keywords : [];
+            const levelL3 = Array.isArray(kwData.L3_keywords) ? kwData.L3_keywords : [];
 
             // 渲染 L1
             const l1Container = document.getElementById('kw-level-l1');
