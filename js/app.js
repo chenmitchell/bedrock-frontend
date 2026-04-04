@@ -239,8 +239,83 @@
     // 登入邏輯（Google OAuth）
     // ================================================================
     function setupLogin() {
-        // 檢查 URL 是否有 OAuth callback 參數
+        // 優先檢查 URL fragment 中的 auth_token（新版一步到位流程）
+        checkAuthToken();
+        // 檢查 URL query 中的 auth_error（新版錯誤回報）
+        checkAuthError();
+        // 舊版：檢查 URL 是否有 OAuth callback 參數（code + state）
         checkOAuthCallback();
+    }
+
+    // 新版：從 URL fragment 讀取 auth_token（後端 GET callback 一步到位）
+    async function checkAuthToken() {
+        const hash = window.location.hash;
+        if (!hash || !hash.includes('auth_token=')) return;
+
+        // 擷取 token
+        const token = hash.split('auth_token=')[1];
+        if (!token) return;
+
+        // 清除 URL fragment
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        console.log('[BEDROCK] Auth token received from redirect');
+        auth.setToken(decodeURIComponent(token));
+
+        const statusEl = document.getElementById('login-status');
+        if (statusEl) {
+            statusEl.style.display = '';
+            statusEl.className = 'login-status pending';
+            statusEl.textContent = '登入成功，載入中...';
+        }
+
+        try {
+            const userInfo = await api.get('/auth/me');
+            auth.user = userInfo;
+            state.user = { email: userInfo.email, name: userInfo.full_name || userInfo.email.split('@')[0] };
+
+            if (!userInfo.totp_enabled) {
+                showScene('register');
+                showRegStep(3);
+                initTOTPSetup();
+            } else if (userInfo.status === 'pending_approval') {
+                showScene('register');
+                showRegStep('pending');
+            } else {
+                updateGreeting();
+                showScene('welcome');
+                loadInvestigations();
+                checkShowOnboarding();
+            }
+        } catch (e) {
+            console.error('[BEDROCK] Failed to get user info after token redirect:', e);
+            showScene('register');
+            showRegStep(1);
+        }
+    }
+
+    // 新版：從 URL query 讀取 auth_error（後端 GET callback 錯誤）
+    function checkAuthError() {
+        const params = new URLSearchParams(window.location.search);
+        const authError = params.get('auth_error');
+        if (!authError) return;
+
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        console.error('[BEDROCK] Auth error from redirect:', authError);
+        const statusEl = document.getElementById('login-status');
+        if (statusEl) {
+            statusEl.style.display = '';
+            statusEl.className = 'login-status error';
+            const errorMessages = {
+                'INVALID_STATE': '驗證過期，請重新登入',
+                'TOKEN_EXCHANGE_FAILED': 'Google 驗證失敗，請重試',
+                'PENDING_APPROVAL': '帳號審核中，請稍後',
+                'ACCOUNT_SUSPENDED': '帳號已停用',
+                'ACCOUNT_REJECTED': '申請已被拒絕',
+            };
+            statusEl.textContent = errorMessages[authError] || `登入失敗（${authError}）`;
+        }
     }
 
     // Google OAuth 登入
