@@ -2642,6 +2642,72 @@
                 `}
             </div>
 
+            ${isCompany && data.directors_data && data.directors_data.length > 0 ? (() => {
+                // 董監事列表與持股比例
+                const dirs = data.directors_data;
+                const totalCapital = data.capital || 0;
+                const issuedShares = data.issued_shares || 0;
+                let dirsHtml = dirs.map(d => {
+                    const name = d['姓名'] || d.name || '';
+                    const title = d['職稱'] || d.title || '';
+                    const repOf = d['所代表法人'] || d.representative_of || '';
+                    const shares = d['出資額'] || d['持有股份數'] || d.shares || 0;
+                    const sharesNum = parseInt(String(shares).replace(/,/g, ''), 10) || 0;
+
+                    // 計算持股比例
+                    let pctStr = '';
+                    let pctWidth = 0;
+                    if (sharesNum > 0 && totalCapital > 0) {
+                        const pct = (sharesNum / totalCapital * 100);
+                        pctStr = pct.toFixed(2) + '%';
+                        pctWidth = Math.min(pct, 100);
+                    } else if (sharesNum > 0 && issuedShares > 0) {
+                        const pct = (sharesNum / issuedShares * 100);
+                        pctStr = pct.toFixed(2) + '%';
+                        pctWidth = Math.min(pct, 100);
+                    }
+
+                    const titleColors = {
+                        '董事長': '#C0392B', '董事': '#2980B9', '監察人': '#8E44AD',
+                        '獨立董事': '#16A085', '負責人': '#D35400', '合夥人': '#E67E22',
+                    };
+                    const tc = titleColors[title] || '#7F8C8D';
+
+                    let repBadge = '';
+                    if (repOf) {
+                        const repName = Array.isArray(repOf) ? repOf.join(', ') : String(repOf);
+                        repBadge = `<div style="font-size:9px; color:#D55E00; margin-top:1px;">
+                            <i class="fas fa-building" style="margin-right:2px;"></i>${esc(repName)}
+                        </div>`;
+                    }
+
+                    return `<div style="padding:4px 0; border-bottom:1px solid rgba(0,0,0,0.04);">
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <span style="font-weight:500; font-size:12px;">${esc(name)}</span>
+                            <span style="font-size:10px; padding:1px 5px; border-radius:8px; background:${tc}18; color:${tc};">${esc(title)}</span>
+                        </div>
+                        ${repBadge}
+                        ${sharesNum > 0 ? `<div style="margin-top:2px;">
+                            <div style="display:flex; align-items:center; gap:4px; font-size:10px;">
+                                <span style="color:#888;">出資額</span>
+                                <span style="font-family:monospace; color:#2C3E50;">NT$ ${sharesNum.toLocaleString()}</span>
+                                ${pctStr ? `<span style="color:#E67E22; font-weight:600;">${pctStr}</span>` : ''}
+                            </div>
+                            ${pctWidth > 0 ? `<div style="height:3px; background:rgba(0,0,0,0.06); border-radius:2px; margin-top:2px;">
+                                <div style="height:100%; width:${pctWidth}%; background:linear-gradient(90deg, #E67E22, #F39C12); border-radius:2px;"></div>
+                            </div>` : ''}
+                        </div>` : ''}
+                    </div>`;
+                }).join('');
+
+                return `<div class="ws-detail-section">
+                    <div class="ws-detail-section-title"><i class="fas fa-users" style="margin-right:4px;"></i>董監事名單 (${dirs.length})</div>
+                    <div style="max-height:200px; overflow-y:auto;">
+                        ${dirsHtml}
+                    </div>
+                </div>`;
+            })() : ''}
+
             ${corporateAppointmentHtml}
 
             <div class="ws-detail-section">
