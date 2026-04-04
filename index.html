@@ -432,6 +432,7 @@
                         <button class="admin-tab" id="admin-tab-settings" role="tab" aria-selected="false" onclick="switchAdminTab('settings')">系統設定</button>
                         <button class="admin-tab" id="admin-tab-audit" role="tab" aria-selected="false" onclick="switchAdminTab('audit')">稽核紀錄</button>
                         <button class="admin-tab" id="admin-tab-sync" role="tab" aria-selected="false" onclick="switchAdminTab('sync')">資料同步</button>
+                        <button class="admin-tab" id="admin-tab-database" role="tab" aria-selected="false" onclick="switchAdminTab('database')">資料庫監控</button>
                     </div>
 
                     <div id="admin-users-panel" class="admin-panel admin-panel-active" role="tabpanel">
@@ -564,6 +565,78 @@
                                     <button id="btn-sync-verify" class="btn" onclick="verifyDataSync()">
                                         <i class="fas fa-check-circle"></i> 驗證完整性
                                     </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== 資料庫監控面板 ===== -->
+                    <div id="admin-database-panel" class="admin-panel" role="tabpanel" style="display:none;">
+                        <h3 class="admin-panel-title">資料庫監控</h3>
+                        <div style="padding: 20px;">
+                            <!-- 全域狀態卡 -->
+                            <div id="db-global-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+                                <div class="stat-card" style="background: #f8f9fa; padding: 16px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 0.8rem; color: #666;">資料庫大小</div>
+                                    <div id="db-total-size" style="font-size: 1.4rem; font-weight: bold; color: #333; margin-top: 4px;">-</div>
+                                </div>
+                                <div class="stat-card" style="background: #f8f9fa; padding: 16px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 0.8rem; color: #666;">活躍連線</div>
+                                    <div id="db-connections" style="font-size: 1.4rem; font-weight: bold; color: #333; margin-top: 4px;">-</div>
+                                </div>
+                                <div class="stat-card" style="background: #f8f9fa; padding: 16px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 0.8rem; color: #666;">連線池使用</div>
+                                    <div id="db-pool-status" style="font-size: 1.4rem; font-weight: bold; color: #333; margin-top: 4px;">-</div>
+                                </div>
+                                <div class="stat-card" style="background: #f8f9fa; padding: 16px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 0.8rem; color: #666;">資料表數</div>
+                                    <div id="db-table-count" style="font-size: 1.4rem; font-weight: bold; color: #333; margin-top: 4px;">-</div>
+                                </div>
+                            </div>
+
+                            <!-- 操作按鈕列 -->
+                            <div style="display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap;">
+                                <button class="btn btn-primary" onclick="dbRefreshOverview()" id="btn-db-refresh">
+                                    <i class="fas fa-sync-alt"></i> 重新整理
+                                </button>
+                                <button class="btn" onclick="dbRepairAll()" id="btn-db-repair" style="background: #e67e22; color: #fff;">
+                                    <i class="fas fa-wrench"></i> 全域修復
+                                </button>
+                                <button class="btn" onclick="dbRunMigration()" id="btn-db-migrate" style="background: #2A7F3B; color: #fff;">
+                                    <i class="fas fa-database"></i> Schema 遷移
+                                </button>
+                                <button class="btn" onclick="dbShowConnections()" id="btn-db-conns">
+                                    <i class="fas fa-plug"></i> 連線詳情
+                                </button>
+                                <button class="btn" onclick="dbShowSlowQueries()" id="btn-db-slow">
+                                    <i class="fas fa-hourglass-half"></i> 慢查詢
+                                </button>
+                            </div>
+
+                            <!-- 表分組列表 -->
+                            <div id="db-tables-container">
+                                <p style="text-align: center; color: #999; padding: 40px;">點擊「重新整理」載入資料庫狀態</p>
+                            </div>
+
+                            <!-- 單表詳情 Modal -->
+                            <div id="db-table-detail-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; overflow-y:auto;">
+                                <div style="max-width: 900px; margin: 40px auto; background: #fff; border-radius: 12px; padding: 24px; max-height: 90vh; overflow-y: auto;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                        <h3 id="db-detail-title" style="margin: 0;">表詳情</h3>
+                                        <button onclick="document.getElementById('db-table-detail-modal').style.display='none'" style="background:none; border:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+                                    </div>
+                                    <div id="db-detail-content">載入中…</div>
+                                </div>
+                            </div>
+
+                            <!-- 連線 Modal -->
+                            <div id="db-connections-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; overflow-y:auto;">
+                                <div style="max-width: 900px; margin: 40px auto; background: #fff; border-radius: 12px; padding: 24px; max-height: 90vh; overflow-y: auto;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                        <h3 style="margin: 0;">連線池詳情</h3>
+                                        <button onclick="document.getElementById('db-connections-modal').style.display='none'" style="background:none; border:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+                                    </div>
+                                    <div id="db-connections-content">載入中…</div>
                                 </div>
                             </div>
                         </div>

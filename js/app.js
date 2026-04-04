@@ -1299,14 +1299,14 @@
 
             tbody.innerHTML = audits.map(a => {
                 const actionLabel = actionMap[a.action] || a.action;
-                const statusLabel = a.status === 'success' || a.status === 'ok' ? '成功' : '失敗';
+                const resource = a.resource_type ? `${a.resource_type}${a.resource_id ? '#' + a.resource_id : ''}` : (a.resource || a.target || 'N/A');
                 return `
                     <tr>
-                        <td>${formatDate(a.timestamp || a.created_at)}</td>
-                        <td>${esc(a.user || a.username || 'N/A')}</td>
+                        <td>${formatDate(a.created_at || a.timestamp)}</td>
+                        <td>${esc(a.user_id != null ? 'UID:' + a.user_id : (a.user || a.username || 'N/A'))}</td>
                         <td>${actionLabel}</td>
-                        <td>${esc(a.resource || a.target || 'N/A')}</td>
-                        <td><span class="status-badge status-${a.status}">${statusLabel}</span></td>
+                        <td>${esc(resource)}</td>
+                        <td><span class="status-badge status-success">成功</span></td>
                     </tr>
                 `;
             }).join('');
@@ -1321,7 +1321,7 @@
     // ================================================================
     async function loadDataSyncStatus() {
         try {
-            const data = await api.get('/admin/sync-status');
+            const data = await api.get('/sync/status');
             const lastTime = document.getElementById('sync-last-time');
             const hashStatus = document.getElementById('sync-hash-status');
             const statsTbody = document.getElementById('sync-stats-tbody');
@@ -1363,7 +1363,7 @@
         btnSync.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 同步中…';
 
         try {
-            const result = await api.post('/admin/sync', {});
+            const result = await api.post('/sync/start', {});
             Toast.success(`資料同步完成：${result.synced_records || 0} 筆記錄`);
             await loadDataSyncStatus();
         } catch (e) {
@@ -3850,6 +3850,9 @@
         if (tabName === 'keywords') {
             loadKeywords();
         }
+        if (tabName === 'database') {
+            dbRefreshOverview();
+        }
     }
     window.switchAdminTab = switchAdminTab;
 
@@ -5651,6 +5654,386 @@
         buildReportView();
     }
     window.clearReportDetail = clearReportDetail;
+
+    // ================================================================
+    // 資料庫監控功能
+    // ================================================================
+    const healthColors = { healthy: '#2A7F3B', warning: '#e67e22', critical: '#B22D20', missing: '#999' };
+    const healthLabels = { healthy: '正常', warning: '需維護', critical: '異常', missing: '未建立' };
+
+    async function dbRefreshOverview() {
+        const container = document.getElementById('db-tables-container');
+        const btn = document.getElementById('btn-db-refresh');
+        if (!container) return;
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 載入中…'; }
+
+        try {
+            const data = await api.get('/admin/db/overview');
+
+            // 更新全域卡片
+            const el = (id) => document.getElementById(id);
+            if (el('db-total-size')) el('db-total-size').textContent = data.database_size_display || '-';
+            if (el('db-connections')) el('db-connections').textContent = data.active_connections || 0;
+            if (el('db-pool-status')) el('db-pool-status').textContent = `${data.active_connections || 0} / ${data.pool_size + data.max_overflow}`;
+
+            // 計算表數量
+            let tableCount = 0;
+            const groups = data.groups || {};
+            Object.values(groups).forEach(g => { tableCount += (g.tables || []).length; });
+            if (el('db-table-count')) el('db-table-count').textContent = tableCount;
+
+            // 渲染分組
+            let html = '';
+            for (const [groupKey, group] of Object.entries(groups)) {
+                const tables = group.tables || [];
+                const healthCounts = { healthy: 0, warning: 0, critical: 0, missing: 0 };
+                tables.forEach(t => { healthCounts[t.health || 'missing']++; });
+
+                html += `
+                    <div style="margin-bottom: 20px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+                        <div style="background: #f5f5f3; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? '' : 'none'">
+                            <div>
+                                <strong>${esc(group.label)}</strong>
+                                <span style="color: #666; font-size: 0.85rem; margin-left: 8px;">${tables.length} 表 · ${_fmtSize(group.total_size || 0)} · ${(group.total_rows || 0).toLocaleString()} 筆</span>
+                            </div>
+                            <div style="display: flex; gap: 6px;">
+                                ${healthCounts.critical > 0 ? `<span style="background:#B22D20; color:#fff; padding:2px 8px; border-radius:12px; font-size:0.75rem;">${healthCounts.critical} 異常</span>` : ''}
+                                ${healthCounts.warning > 0 ? `<span style="background:#e67e22; color:#fff; padding:2px 8px; border-radius:12px; font-size:0.75rem;">${healthCounts.warning} 待維護</span>` : ''}
+                                ${healthCounts.missing > 0 ? `<span style="background:#999; color:#fff; padding:2px 8px; border-radius:12px; font-size:0.75rem;">${healthCounts.missing} 未建立</span>` : ''}
+                                <i class="fas fa-chevron-down" style="color:#666;"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="background: #fafafa; font-size: 0.8rem; color: #666;">
+                                        <th style="padding: 8px 12px; text-align: left;">表名</th>
+                                        <th style="padding: 8px 12px; text-align: right;">筆數</th>
+                                        <th style="padding: 8px 12px; text-align: right;">大小</th>
+                                        <th style="padding: 8px 12px; text-align: right;">索引</th>
+                                        <th style="padding: 8px 12px; text-align: right;">死元組 %</th>
+                                        <th style="padding: 8px 12px; text-align: center;">狀態</th>
+                                        <th style="padding: 8px 12px; text-align: center;">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${tables.map(t => `
+                                        <tr style="border-top: 1px solid #eee;">
+                                            <td style="padding: 8px 12px;">
+                                                <a href="#" onclick="event.preventDefault(); dbShowTableDetail('${esc(t.name)}')" style="color: #3A7CA5; text-decoration: none; font-family: monospace; font-size: 0.85rem;">${esc(t.name)}</a>
+                                            </td>
+                                            <td style="padding: 8px 12px; text-align: right; font-family: monospace;">${t.row_count >= 0 ? t.row_count.toLocaleString() : '<span style="color:#999">N/A</span>'}</td>
+                                            <td style="padding: 8px 12px; text-align: right; font-family: monospace; font-size: 0.85rem;">${t.size_display || '-'}</td>
+                                            <td style="padding: 8px 12px; text-align: right;">${t.index_count != null ? t.index_count : '-'}</td>
+                                            <td style="padding: 8px 12px; text-align: right;">
+                                                <span style="color: ${t.dead_ratio > 20 ? '#e67e22' : t.dead_ratio > 50 ? '#B22D20' : '#666'};">${t.dead_ratio != null ? t.dead_ratio + '%' : '-'}</span>
+                                            </td>
+                                            <td style="padding: 8px 12px; text-align: center;">
+                                                <span style="background: ${healthColors[t.health] || '#999'}; color: #fff; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem;">${healthLabels[t.health] || t.health}</span>
+                                            </td>
+                                            <td style="padding: 8px 12px; text-align: center;">
+                                                <div style="display: flex; gap: 4px; justify-content: center;">
+                                                    <button onclick="dbVacuumTable('${esc(t.name)}')" class="btn" style="font-size: 0.7rem; padding: 2px 6px;" title="VACUUM ANALYZE">
+                                                        <i class="fas fa-broom"></i>
+                                                    </button>
+                                                    <button onclick="dbReindexTable('${esc(t.name)}')" class="btn" style="font-size: 0.7rem; padding: 2px 6px;" title="重建索引">
+                                                        <i class="fas fa-sort-amount-up"></i>
+                                                    </button>
+                                                    <button onclick="dbShowTableDetail('${esc(t.name)}')" class="btn" style="font-size: 0.7rem; padding: 2px 6px;" title="查看詳情">
+                                                        <i class="fas fa-search"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>`;
+            }
+
+            container.innerHTML = html;
+
+        } catch (e) {
+            container.innerHTML = `<p style="text-align:center; color:#B22D20; padding:20px;">載入失敗: ${esc(e.message)}</p>`;
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> 重新整理'; }
+        }
+    }
+    window.dbRefreshOverview = dbRefreshOverview;
+
+    async function dbShowTableDetail(tableName) {
+        const modal = document.getElementById('db-table-detail-modal');
+        const title = document.getElementById('db-detail-title');
+        const content = document.getElementById('db-detail-content');
+        if (!modal) return;
+        modal.style.display = '';
+        if (title) title.textContent = tableName;
+        if (content) content.innerHTML = '<p style="text-align:center; padding:20px;">載入中…</p>';
+
+        try {
+            const data = await api.get(`/admin/db/table/${tableName}`);
+
+            let html = `
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;">
+                    <div style="background:#f8f9fa; padding:12px; border-radius:6px; text-align:center;">
+                        <div style="font-size:0.8rem; color:#666;">筆數</div>
+                        <div style="font-size:1.2rem; font-weight:bold;">${(data.row_count || 0).toLocaleString()}</div>
+                    </div>
+                    <div style="background:#f8f9fa; padding:12px; border-radius:6px; text-align:center;">
+                        <div style="font-size:0.8rem; color:#666;">磁碟用量</div>
+                        <div style="font-size:1.2rem; font-weight:bold;">${data.size_display || '-'}</div>
+                    </div>
+                    <div style="background:#f8f9fa; padding:12px; border-radius:6px; text-align:center;">
+                        <div style="font-size:0.8rem; color:#666;">索引數</div>
+                        <div style="font-size:1.2rem; font-weight:bold;">${(data.indexes || []).length}</div>
+                    </div>
+                </div>`;
+
+            // 欄位結構
+            html += `<h4 style="margin: 16px 0 8px;">欄位結構 (${(data.columns || []).length})</h4>
+                <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                    <thead><tr style="background:#f0f0f0;">
+                        <th style="padding:6px 10px; text-align:left;">欄位名</th>
+                        <th style="padding:6px 10px; text-align:left;">型別</th>
+                        <th style="padding:6px 10px; text-align:center;">Null</th>
+                        <th style="padding:6px 10px; text-align:left;">預設</th>
+                    </tr></thead>
+                    <tbody>${(data.columns || []).map(c => `
+                        <tr style="border-top:1px solid #eee;">
+                            <td style="padding:4px 10px; font-family:monospace;">${esc(c.name)}</td>
+                            <td style="padding:4px 10px; font-family:monospace; color:#3A7CA5;">${esc(c.type)}</td>
+                            <td style="padding:4px 10px; text-align:center;">${c.nullable ? '✓' : '✗'}</td>
+                            <td style="padding:4px 10px; font-size:0.8rem; color:#666;">${esc(c.default || '-')}</td>
+                        </tr>
+                    `).join('')}</tbody>
+                </table>`;
+
+            // 外鍵
+            if (data.foreign_keys && data.foreign_keys.length > 0) {
+                html += `<h4 style="margin: 16px 0 8px;">外鍵關係</h4><ul style="font-size:0.85rem;">`;
+                data.foreign_keys.forEach(fk => {
+                    html += `<li><code>${esc(fk.column)}</code> → <code>${esc(fk.references_table)}.${esc(fk.references_column)}</code></li>`;
+                });
+                html += '</ul>';
+            }
+
+            // 索引
+            if (data.indexes && data.indexes.length > 0) {
+                html += `<h4 style="margin: 16px 0 8px;">索引 (${data.indexes.length})</h4>
+                    <div style="font-size:0.8rem; font-family:monospace; background:#f5f5f3; padding:10px; border-radius:6px; max-height:200px; overflow-y:auto;">`;
+                data.indexes.forEach(idx => {
+                    html += `<div style="margin-bottom:4px;"><strong>${esc(idx.name)}</strong><br/><span style="color:#666;">${esc(idx.definition)}</span></div>`;
+                });
+                html += '</div>';
+            }
+
+            // 統計
+            if (data.stats && Object.keys(data.stats).length > 0) {
+                html += `<h4 style="margin: 16px 0 8px;">數值統計</h4>
+                    <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                        <thead><tr style="background:#f0f0f0;">
+                            <th style="padding:6px 10px;">欄位</th><th style="padding:6px 10px;">最小</th><th style="padding:6px 10px;">最大</th><th style="padding:6px 10px;">平均</th><th style="padding:6px 10px;">非 NULL</th>
+                        </tr></thead><tbody>`;
+                for (const [col, s] of Object.entries(data.stats)) {
+                    html += `<tr style="border-top:1px solid #eee;">
+                        <td style="padding:4px 10px; font-family:monospace;">${esc(col)}</td>
+                        <td style="padding:4px 10px; text-align:right;">${s.min != null ? s.min : '-'}</td>
+                        <td style="padding:4px 10px; text-align:right;">${s.max != null ? s.max : '-'}</td>
+                        <td style="padding:4px 10px; text-align:right;">${s.avg != null ? s.avg : '-'}</td>
+                        <td style="padding:4px 10px; text-align:right;">${s.non_null || 0}</td>
+                    </tr>`;
+                }
+                html += '</tbody></table>';
+            }
+
+            // Preview
+            if (data.preview && data.preview.length > 0) {
+                const cols = Object.keys(data.preview[0]);
+                html += `<h4 style="margin: 16px 0 8px;">最近 ${data.preview.length} 筆資料</h4>
+                    <div style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:0.8rem;">
+                        <thead><tr style="background:#f0f0f0;">
+                            ${cols.map(c => `<th style="padding:4px 8px; text-align:left; white-space:nowrap;">${esc(c)}</th>`).join('')}
+                        </tr></thead><tbody>`;
+                data.preview.forEach(row => {
+                    html += '<tr style="border-top:1px solid #eee;">';
+                    cols.forEach(c => {
+                        let val = row[c];
+                        if (val && typeof val === 'object') val = JSON.stringify(val).substring(0, 80);
+                        if (val && String(val).length > 60) val = String(val).substring(0, 60) + '…';
+                        html += `<td style="padding:4px 8px; white-space:nowrap; max-width:200px; overflow:hidden; text-overflow:ellipsis;">${esc(String(val || ''))}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+
+            // 操作按鈕
+            html += `<div style="display:flex; gap:8px; margin-top:20px; padding-top:16px; border-top:1px solid #eee;">
+                <button class="btn btn-primary" onclick="dbVacuumTable('${esc(tableName)}')"><i class="fas fa-broom"></i> VACUUM</button>
+                <button class="btn" onclick="dbVacuumTable('${esc(tableName)}', true)" style="background:#e67e22; color:#fff;"><i class="fas fa-compress-arrows-alt"></i> VACUUM FULL</button>
+                <button class="btn" onclick="dbReindexTable('${esc(tableName)}')"><i class="fas fa-sort-amount-up"></i> 重建索引</button>
+            </div>`;
+
+            content.innerHTML = html;
+
+        } catch (e) {
+            content.innerHTML = `<p style="color:#B22D20;">載入失敗: ${esc(e.message)}</p>`;
+        }
+    }
+    window.dbShowTableDetail = dbShowTableDetail;
+
+    async function dbVacuumTable(tableName, full) {
+        if (!confirm(`確定要對 ${tableName} 執行 VACUUM${full ? ' FULL' : ''} ？`)) return;
+        try {
+            const result = await api.post(`/admin/db/vacuum/${tableName}`, { full: !!full, analyze: true });
+            Toast.success(result.message || `${tableName} VACUUM 完成`);
+            dbRefreshOverview();
+        } catch (e) {
+            Toast.error('VACUUM 失敗: ' + e.message);
+        }
+    }
+    window.dbVacuumTable = dbVacuumTable;
+
+    async function dbReindexTable(tableName) {
+        if (!confirm(`確定要重建 ${tableName} 的索引？`)) return;
+        try {
+            const result = await api.post(`/admin/db/reindex/${tableName}`, {});
+            Toast.success(result.message || `${tableName} 索引重建完成`);
+            dbRefreshOverview();
+        } catch (e) {
+            Toast.error('索引重建失敗: ' + e.message);
+        }
+    }
+    window.dbReindexTable = dbReindexTable;
+
+    async function dbRepairAll() {
+        if (!confirm('確定要執行全域修復？將對所有表進行 VACUUM ANALYZE。')) return;
+        const btn = document.getElementById('btn-db-repair');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 修復中…'; }
+        try {
+            const result = await api.post('/admin/db/repair', {});
+            Toast.success(result.message || '全域修復完成');
+            dbRefreshOverview();
+        } catch (e) {
+            Toast.error('修復失敗: ' + e.message);
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-wrench"></i> 全域修復'; }
+        }
+    }
+    window.dbRepairAll = dbRepairAll;
+
+    async function dbRunMigration() {
+        if (!confirm('確定要執行 Schema 遷移？將建立缺失的表並補齊欄位。')) return;
+        const btn = document.getElementById('btn-db-migrate');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 遷移中…'; }
+        try {
+            const result = await api.post('/admin/db/migrate', {});
+            Toast.success(result.message || 'Schema 遷移完成');
+            dbRefreshOverview();
+        } catch (e) {
+            Toast.error('遷移失敗: ' + e.message);
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-database"></i> Schema 遷移'; }
+        }
+    }
+    window.dbRunMigration = dbRunMigration;
+
+    async function dbShowConnections() {
+        const modal = document.getElementById('db-connections-modal');
+        const content = document.getElementById('db-connections-content');
+        if (!modal) return;
+        modal.style.display = '';
+        content.innerHTML = '<p style="text-align:center; padding:20px;">載入中…</p>';
+
+        try {
+            const data = await api.get('/admin/db/connections');
+            const pool = data.pool || {};
+            let html = `
+                <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px;">
+                    <div style="background:#f8f9fa; padding:10px; border-radius:6px; text-align:center;">
+                        <div style="font-size:0.75rem; color:#666;">Pool 大小</div>
+                        <div style="font-size:1.1rem; font-weight:bold;">${pool.pool_size || 0}</div>
+                    </div>
+                    <div style="background:#f8f9fa; padding:10px; border-radius:6px; text-align:center;">
+                        <div style="font-size:0.75rem; color:#666;">使用中</div>
+                        <div style="font-size:1.1rem; font-weight:bold; color:#e67e22;">${pool.checked_out || 0}</div>
+                    </div>
+                    <div style="background:#f8f9fa; padding:10px; border-radius:6px; text-align:center;">
+                        <div style="font-size:0.75rem; color:#666;">閒置</div>
+                        <div style="font-size:1.1rem; font-weight:bold; color:#2A7F3B;">${pool.checked_in || 0}</div>
+                    </div>
+                    <div style="background:#f8f9fa; padding:10px; border-radius:6px; text-align:center;">
+                        <div style="font-size:0.75rem; color:#666;">Overflow</div>
+                        <div style="font-size:1.1rem; font-weight:bold;">${pool.overflow || 0} / ${pool.max_overflow || 0}</div>
+                    </div>
+                </div>
+                <table style="width:100%; border-collapse:collapse; font-size:0.8rem;">
+                    <thead><tr style="background:#f0f0f0;">
+                        <th style="padding:6px 8px;">PID</th>
+                        <th style="padding:6px 8px;">使用者</th>
+                        <th style="padding:6px 8px;">來源</th>
+                        <th style="padding:6px 8px;">狀態</th>
+                        <th style="padding:6px 8px;">查詢</th>
+                        <th style="padding:6px 8px;">操作</th>
+                    </tr></thead>
+                    <tbody>`;
+
+            (data.active_connections || []).forEach(c => {
+                const stateColor = c.state === 'active' ? '#2A7F3B' : c.state === 'idle' ? '#666' : '#e67e22';
+                html += `<tr style="border-top:1px solid #eee;">
+                    <td style="padding:4px 8px; font-family:monospace;">${c.pid}</td>
+                    <td style="padding:4px 8px;">${esc(c.user || '-')}</td>
+                    <td style="padding:4px 8px; font-size:0.75rem;">${esc(c.client_addr || '-')}</td>
+                    <td style="padding:4px 8px;"><span style="color:${stateColor};">${esc(c.state || '-')}</span></td>
+                    <td style="padding:4px 8px; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.75rem;" title="${esc(c.query || '')}">${esc((c.query || '').substring(0, 80))}</td>
+                    <td style="padding:4px 8px;"><button onclick="dbKillConnection(${c.pid})" class="btn" style="font-size:0.65rem; padding:1px 4px; color:#B22D20;" title="終止">✕</button></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            content.innerHTML = html;
+        } catch (e) {
+            content.innerHTML = `<p style="color:#B22D20;">載入失敗: ${esc(e.message)}</p>`;
+        }
+    }
+    window.dbShowConnections = dbShowConnections;
+
+    async function dbKillConnection(pid) {
+        if (!confirm(`確定要終止連線 PID ${pid}？`)) return;
+        try {
+            const result = await api.post(`/admin/db/kill-connection/${pid}`, {});
+            Toast.success(result.message || `連線 ${pid} 已終止`);
+            dbShowConnections();
+        } catch (e) {
+            Toast.error('終止失敗: ' + e.message);
+        }
+    }
+    window.dbKillConnection = dbKillConnection;
+
+    async function dbShowSlowQueries() {
+        try {
+            const data = await api.get('/admin/db/slow-queries');
+            const queries = data.slow_queries || [];
+            if (queries.length === 0) {
+                Toast.success('目前沒有慢查詢');
+                return;
+            }
+            let msg = `發現 ${queries.length} 個活躍慢查詢:\n`;
+            queries.forEach(q => { msg += `\nPID ${q.pid} (${q.duration}): ${(q.query || '').substring(0, 100)}`; });
+            alert(msg);
+        } catch (e) {
+            Toast.error('查詢失敗: ' + e.message);
+        }
+    }
+    window.dbShowSlowQueries = dbShowSlowQueries;
+
+    function _fmtSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
