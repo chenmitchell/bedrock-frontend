@@ -4568,64 +4568,146 @@
         if (!state.cy) return;
         maxDepth = parseInt(maxDepth);
         const label = document.getElementById('depth-filter-label');
-        const select = document.getElementById('depth-filter-select');
 
         const depthMap = getDepthMap();
         const actualMax = Math.max(...[...depthMap.values()].filter(v => v < 999), 2);
 
         if (maxDepth >= actualMax || maxDepth >= 10) {
-            // 全部顯示
+            // 全部展開：帶動畫恢復所有節點
+            const hiddenNodes = state.cy.nodes().filter(n => n.style('display') === 'none');
             state.cy.batch(() => {
                 state.cy.nodes().style('display', 'element');
                 state.cy.edges().style('display', 'element');
+                // 清除所有收合狀態
+                state.cy.nodes().forEach(n => {
+                    n.data('_collapsed', false);
+                    n.data('_hiddenChildren', []);
+                    if (!n.data('is_seed')) n.style('border-style', 'solid');
+                });
             });
+            // 新出現的節點做淡入動畫
+            if (hiddenNodes.length > 0) {
+                hiddenNodes.style('opacity', 0);
+                hiddenNodes.animate({ style: { opacity: 1 } }, { duration: 400 });
+            }
             const totalNodes = state.cy.nodes().length;
             if (label) label.textContent = `${totalNodes} 個節點`;
-            // 不重新排版，只 fit
-            state.cy.fit(state.cy.nodes(), 40);
+            // 重新排版讓圖形自然展開
+            if (hiddenNodes.length > 5) {
+                runLayout('cola');
+            } else {
+                state.cy.fit(state.cy.nodes(), 40);
+            }
             filterSidebarByVisibleNodes();
             return;
         }
 
-        // 計算此深度的可見節點數
-        let visibleCount = 0;
-        depthMap.forEach((d) => { if (d <= maxDepth) visibleCount++; });
-        if (label) label.textContent = `${visibleCount} 個節點`;
-
-        // 批量操作避免卡頓
-        let shown = 0, hidden = 0;
-        state.cy.batch(() => {
-            state.cy.nodes().forEach(node => {
-                const depth = depthMap.get(node.id()) || 999;
-                if (depth <= maxDepth) {
-                    node.style('display', 'element');
-                    shown++;
-                } else {
-                    node.style('display', 'none');
-                    hidden++;
-                }
-            });
-            state.cy.edges().forEach(edge => {
-                const srcDepth = depthMap.get(edge.source().id()) || 999;
-                const tgtDepth = depthMap.get(edge.target().id()) || 999;
-                if (srcDepth <= maxDepth && tgtDepth <= maxDepth) {
-                    edge.style('display', 'element');
-                } else {
-                    edge.style('display', 'none');
-                }
-            });
+        // 計算此深度的可見/隱藏節點
+        const toShow = [];
+        const toHide = [];
+        depthMap.forEach((d, nodeId) => {
+            if (d <= maxDepth) toShow.push(nodeId);
+            else toHide.push(nodeId);
         });
+        if (label) label.textContent = `${toShow.length} 個節點`;
 
-        Toast.show(`顯示第 ${maxDepth} 層：${shown} 個節點`, 'info');
+        // 找出需要新隱藏和新顯示的節點（做動畫用）
+        const currentlyHidden = new Set();
+        state.cy.nodes().forEach(n => {
+            if (n.style('display') === 'none') currentlyHidden.add(n.id());
+        });
+        const newlyHidden = toHide.filter(id => !currentlyHidden.has(id));
+        const newlyShown = toShow.filter(id => currentlyHidden.has(id));
 
-        // 只 fit，不重新排版（避免卡頓凍結）
-        const visible = state.cy.nodes().filter(n => n.style('display') !== 'none');
-        if (visible.length > 0) {
-            state.cy.fit(visible, 40);
+        // 收合動畫：先淡出要隱藏的節點
+        if (newlyHidden.length > 0) {
+            const fadingNodes = state.cy.collection();
+            newlyHidden.forEach(id => {
+                const n = state.cy.getElementById(id);
+                if (n.length) fadingNodes.merge(n);
+            });
+            fadingNodes.animate(
+                { style: { opacity: 0 } },
+                {
+                    duration: 300,
+                    complete: () => {
+                        state.cy.batch(() => {
+                            fadingNodes.style('display', 'none').style('opacity', 1);
+                            // 隱藏相關邊
+                            state.cy.edges().forEach(edge => {
+                                const srcD = depthMap.get(edge.source().id()) || 999;
+                                const tgtD = depthMap.get(edge.target().id()) || 999;
+                                edge.style('display', (srcD <= maxDepth && tgtD <= maxDepth) ? 'element' : 'none');
+                            });
+                            // 標記邊界節點為收合狀態（dashed border）
+                            toShow.forEach(id => {
+                                const n = state.cy.getElementById(id);
+                                const nd = depthMap.get(id) || 0;
+                                if (nd === maxDepth) {
+                                    const hasHiddenNeighbor = n.neighborhood('node').some(
+                                        nb => (depthMap.get(nb.id()) || 999) > maxDepth
+                                    );
+                                    if (hasHiddenNeighbor) {
+                                        n.style('border-style', 'dashed');
+                                        n.data('_collapsed', true);
+                                    }
+                                }
+                            });
+                        });
+                        // 重新排版
+                        const visible = state.cy.nodes().filter(n => n.style('display') !== 'none');
+                        if (visible.length > 0) {
+                            runLayout('cola');
+                        }
+                        filterSidebarByVisibleNodes();
+                    }
+                }
+            );
         }
 
-        // 深度連動：過濾側邊欄的集群、紅旗、負面新聞
-        filterSidebarByVisibleNodes();
+        // 展開動畫：顯示新出現的節點
+        if (newlyShown.length > 0 && newlyHidden.length === 0) {
+            state.cy.batch(() => {
+                newlyShown.forEach(id => {
+                    const n = state.cy.getElementById(id);
+                    if (n.length) {
+                        n.style({ display: 'element', opacity: 0 });
+                        // 清除收合標記
+                        n.data('_collapsed', false);
+                        if (!n.data('is_seed')) n.style('border-style', 'solid');
+                    }
+                });
+                // 顯示相關邊
+                state.cy.edges().forEach(edge => {
+                    const srcD = depthMap.get(edge.source().id()) || 999;
+                    const tgtD = depthMap.get(edge.target().id()) || 999;
+                    edge.style('display', (srcD <= maxDepth && tgtD <= maxDepth) ? 'element' : 'none');
+                });
+                // 清除之前邊界節點的 dashed 標記
+                state.cy.nodes().filter(n => n.style('display') !== 'none').forEach(n => {
+                    if (!n.data('is_seed') && n.data('_collapsed')) {
+                        n.data('_collapsed', false);
+                        n.style('border-style', 'solid');
+                    }
+                });
+            });
+            // 淡入新節點
+            const fadingIn = state.cy.collection();
+            newlyShown.forEach(id => {
+                const n = state.cy.getElementById(id);
+                if (n.length) fadingIn.merge(n);
+            });
+            fadingIn.animate({ style: { opacity: 1 } }, { duration: 400 });
+            runLayout('cola');
+            filterSidebarByVisibleNodes();
+        }
+
+        // 沒有變化的情況（深度選回同樣值）
+        if (newlyHidden.length === 0 && newlyShown.length === 0) {
+            filterSidebarByVisibleNodes();
+        }
+
+        Toast.show(`顯示第 ${maxDepth} 層：${toShow.length} 個節點`, 'info');
     }
     window.filterByDepth = filterByDepth;
 
