@@ -277,7 +277,7 @@
     }
     window.handleGoogleLogin = handleGoogleLogin;
 
-    // 處理 OAuth callback（Google 重導回來後）
+    // 處理 OAuth callback（Google 重導回來後，含自動重試）
     async function checkOAuthCallback() {
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
@@ -295,14 +295,45 @@
             statusEl.textContent = '正在驗證登入...';
         }
 
-        try {
-            const res = await fetch(API_BASE + '/auth/google/callback', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ code, state: oauthState }),
-            });
+        // 帶重試的 POST（後端可能正在冷啟動）
+        const MAX_RETRIES = 3;
+        let lastError = null;
+        let res = null;
 
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                console.log(`[BEDROCK] OAuth callback attempt ${attempt}/${MAX_RETRIES}`);
+                if (statusEl && attempt > 1) {
+                    statusEl.textContent = `正在驗證登入...（重試 ${attempt}/${MAX_RETRIES}）`;
+                }
+                res = await fetch(API_BASE + '/auth/google/callback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ code, state: oauthState }),
+                });
+                lastError = null;
+                break; // 成功連線
+            } catch (fetchErr) {
+                lastError = fetchErr;
+                console.warn(`[BEDROCK] OAuth callback fetch failed (attempt ${attempt}):`, fetchErr.message);
+                if (attempt < MAX_RETRIES) {
+                    await new Promise(r => setTimeout(r, 2000 * attempt)); // 2s, 4s 遞增等待
+                }
+            }
+        }
+
+        if (lastError) {
+            console.error('[BEDROCK] OAuth callback error after retries:', lastError);
+            if (statusEl) {
+                statusEl.style.display = '';
+                statusEl.className = 'login-status error';
+                statusEl.textContent = '伺服器連線失敗，請稍後重試';
+            }
+            return;
+        }
+
+        try {
             const data = await res.json();
 
             if (data.success && data.data) {
