@@ -2595,8 +2595,16 @@
                 </div>
                 <div class="ws-detail-row">
                     <span class="ws-detail-label">公司狀態</span>
-                    <span class="ws-detail-value">${esc(data.status || '未知')}</span>
+                    <span class="ws-detail-value">
+                        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; background:${data.status === '核准設立' ? '#27AE60' : data.status === '解散' || data.status === '廢止' ? '#C0392B' : '#E67E22'};"></span>
+                        ${esc(data.status || '未知')}
+                    </span>
                 </div>
+                ${data.company_type ? `
+                <div class="ws-detail-row">
+                    <span class="ws-detail-label">組織類型</span>
+                    <span class="ws-detail-value">${esc(data.company_type)}</span>
+                </div>` : ''}
                 <div class="ws-detail-row">
                     <span class="ws-detail-label">資本額</span>
                     <span class="ws-detail-value">${capitalStr}</span>
@@ -2605,10 +2613,27 @@
                     <span class="ws-detail-label">代表人</span>
                     <span class="ws-detail-value">${esc(data.representative || '未知')}</span>
                 </div>
+                ${data.established_date ? `
+                <div class="ws-detail-row">
+                    <span class="ws-detail-label">設立日期</span>
+                    <span class="ws-detail-value">${esc(data.established_date)}</span>
+                </div>` : ''}
+                ${data.dissolved_date ? `
+                <div class="ws-detail-row">
+                    <span class="ws-detail-label">解散日期</span>
+                    <span class="ws-detail-value" style="color:#C0392B;">${esc(data.dissolved_date)}</span>
+                </div>` : ''}
                 <div class="ws-detail-row">
                     <span class="ws-detail-label">登記地址</span>
                     <span class="ws-detail-value" style="font-size:11px; word-break:break-all;">${esc(data.address || '未知')}</span>
                 </div>
+                ${data.business_items && data.business_items.length > 0 ? `
+                <div class="ws-detail-row" style="flex-direction:column;">
+                    <span class="ws-detail-label" style="margin-bottom:4px;">營業項目</span>
+                    <div style="font-size:11px; color:#555; max-height:80px; overflow-y:auto; padding:4px; background:rgba(0,0,0,0.02); border-radius:4px;">
+                        ${data.business_items.map(item => esc(typeof item === 'string' ? item : (item.code || '') + ' ' + (item.name || ''))).join('<br>')}
+                    </div>
+                </div>` : ''}
                 ` : `
                 <div class="ws-detail-row">
                     <span class="ws-detail-label">職稱</span>
@@ -2630,6 +2655,21 @@
                 ${flagsHtml}
             </div>
             ` : ''}
+
+            ${isCompany ? `
+            <div class="ws-detail-section">
+                <div class="ws-detail-section-title" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;" onclick="window.__bedrockToggleTimeline('${esc(data.entity_id)}')">
+                    <span><i class="fas fa-history" style="margin-right:4px;"></i>歷史變動紀錄</span>
+                    <i id="timeline-toggle-icon" class="fas fa-chevron-down" style="font-size:10px; transition:transform 0.3s;"></i>
+                </div>
+                <div id="changelog-filter-bar" style="display:none; margin-bottom:8px; flex-wrap:wrap; gap:4px;"></div>
+                <div id="changelog-timeline" style="display:none;">
+                    <div style="text-align:center; padding:20px; color:#999;">
+                        <i class="fas fa-spinner fa-spin"></i> 載入中...
+                    </div>
+                </div>
+            </div>
+            ` : ''}
         `;
 
         // 暴露 cy 給 onclick 導航用
@@ -2646,6 +2686,193 @@
         }
     }
     window.closeDetail = closeDetail;
+
+    // ── 歷史變動時間軸 ────────────────────────────────────
+    let _timelineLoaded = {};  // 快取已載入的時間軸資料
+    let _timelineOpen = {};    // 記錄展開狀態
+    let _timelineFilter = {};  // 當前篩選
+
+    window.__bedrockToggleTimeline = async function(entityId) {
+        const container = document.getElementById('changelog-timeline');
+        const filterBar = document.getElementById('changelog-filter-bar');
+        const icon = document.getElementById('timeline-toggle-icon');
+        if (!container) return;
+
+        const isOpen = container.style.display !== 'none';
+        if (isOpen) {
+            container.style.display = 'none';
+            filterBar.style.display = 'none';
+            if (icon) icon.style.transform = 'rotate(0deg)';
+            _timelineOpen[entityId] = false;
+            return;
+        }
+
+        container.style.display = 'block';
+        filterBar.style.display = 'flex';
+        if (icon) icon.style.transform = 'rotate(180deg)';
+        _timelineOpen[entityId] = true;
+
+        // 已載入過就不重新拉
+        if (_timelineLoaded[entityId]) {
+            _renderTimeline(entityId, _timelineFilter[entityId] || null);
+            return;
+        }
+
+        // 從 API 拉資料
+        try {
+            const invId = state.currentInvestigation;
+            // 用 entity_id 找 node
+            const graphData = state.cy ? state.cy.nodes().filter(n => n.data('entity_id') === entityId) : [];
+            let nodeId = entityId;
+            if (graphData.length > 0) {
+                // 從 node id 提取數字 ID
+                const nid = graphData[0].data('id');
+                // node id 格式可能是 "company_12345678" 或數字
+                nodeId = nid;
+            }
+
+            const resp = await api.get(`/investigations/${invId}/nodes/${encodeURIComponent(entityId)}/changelog`);
+            _timelineLoaded[entityId] = resp;
+            _renderTimelineFilter(entityId, resp.change_types || []);
+            _renderTimeline(entityId, null);
+        } catch (err) {
+            console.error('載入變更紀錄失敗:', err);
+            container.innerHTML = `<div style="text-align:center; padding:15px; color:#C0392B; font-size:12px;">
+                <i class="fas fa-exclamation-triangle"></i> 載入失敗：${esc(err.message || '未知錯誤')}
+            </div>`;
+        }
+    };
+
+    function _renderTimelineFilter(entityId, changeTypes) {
+        const filterBar = document.getElementById('changelog-filter-bar');
+        if (!filterBar || !changeTypes.length) return;
+
+        let html = `<span style="font-size:10px; padding:3px 8px; border-radius:12px; cursor:pointer;
+            background:${!_timelineFilter[entityId] ? '#3A7CA5' : 'rgba(58,124,165,0.1)'};
+            color:${!_timelineFilter[entityId] ? '#fff' : '#3A7CA5'};"
+            onclick="window.__bedrockFilterTimeline('${entityId}', null)">
+            全部
+        </span>`;
+
+        changeTypes.forEach(ct => {
+            const isActive = _timelineFilter[entityId] === ct.type;
+            html += `<span style="font-size:10px; padding:3px 8px; border-radius:12px; cursor:pointer;
+                background:${isActive ? ct.color : ct.color + '18'};
+                color:${isActive ? '#fff' : ct.color}; white-space:nowrap;"
+                onclick="window.__bedrockFilterTimeline('${entityId}', '${ct.type}')">
+                <i class="fas ${ct.icon}" style="margin-right:2px; font-size:9px;"></i>${ct.label} (${ct.count})
+            </span>`;
+        });
+
+        filterBar.innerHTML = html;
+    }
+
+    window.__bedrockFilterTimeline = function(entityId, changeType) {
+        _timelineFilter[entityId] = changeType;
+        const data = _timelineLoaded[entityId];
+        if (data) {
+            _renderTimelineFilter(entityId, data.change_types || []);
+            _renderTimeline(entityId, changeType);
+        }
+    };
+
+    function _renderTimeline(entityId, filterType) {
+        const container = document.getElementById('changelog-timeline');
+        if (!container) return;
+
+        const data = _timelineLoaded[entityId];
+        if (!data || !data.changes || data.changes.length === 0) {
+            container.innerHTML = `<div style="text-align:center; padding:15px; color:#999; font-size:12px;">
+                <i class="fas fa-inbox"></i> 尚無變更紀錄
+            </div>`;
+            return;
+        }
+
+        let changes = data.changes;
+        if (filterType) {
+            changes = changes.filter(c => c.change_type === filterType);
+        }
+
+        if (changes.length === 0) {
+            container.innerHTML = `<div style="text-align:center; padding:10px; color:#999; font-size:12px;">
+                此類型無變更紀錄
+            </div>`;
+            return;
+        }
+
+        // 按年月分組
+        const groups = {};
+        changes.forEach(c => {
+            const key = c.change_date ? c.change_date.substring(0, 7) : '日期不明';
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(c);
+        });
+
+        let html = '<div style="position:relative; padding-left:16px;">';
+        // 時間軸線
+        html += '<div style="position:absolute; left:6px; top:0; bottom:0; width:2px; background:linear-gradient(to bottom, #3A7CA5, #E8E8E8);"></div>';
+
+        Object.keys(groups).sort().reverse().forEach(monthKey => {
+            const items = groups[monthKey];
+            // 月份標頭
+            html += `<div style="position:relative; margin-bottom:4px; margin-top:10px;">
+                <div style="position:absolute; left:-14px; top:2px; width:10px; height:10px; border-radius:50%; background:#3A7CA5; border:2px solid #fff; box-shadow:0 0 0 2px #3A7CA5;"></div>
+                <div style="font-weight:600; font-size:12px; color:#2C3E50; padding-left:6px;">${esc(monthKey)}</div>
+            </div>`;
+
+            items.forEach(c => {
+                const beforeStr = _formatChangeValue(c.before_value, c.change_type);
+                const afterStr = _formatChangeValue(c.after_value, c.change_type);
+                const dateStr = c.change_date ? c.change_date.substring(5) : '';
+
+                html += `<div style="position:relative; margin-bottom:6px; margin-left:6px; padding:6px 8px; background:rgba(0,0,0,0.02); border-radius:6px; border-left:3px solid ${c.color};">
+                    <div style="position:absolute; left:-23px; top:10px; width:6px; height:6px; border-radius:50%; background:${c.color};"></div>
+                    <div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">
+                        <i class="fas ${c.icon}" style="font-size:10px; color:${c.color};"></i>
+                        <span style="font-size:11px; font-weight:600; color:${c.color};">${esc(c.change_type_label)}</span>
+                        ${dateStr ? `<span style="font-size:10px; color:#999; margin-left:auto;">${esc(dateStr)}</span>` : ''}
+                    </div>
+                    ${beforeStr || afterStr ? `<div style="font-size:10px; line-height:1.5;">
+                        ${beforeStr ? `<div style="color:#999;"><span style="text-decoration:line-through;">${beforeStr}</span></div>` : ''}
+                        ${afterStr ? `<div style="color:#2C3E50;">${afterStr}</div>` : ''}
+                    </div>` : ''}
+                </div>`;
+            });
+        });
+
+        html += '</div>';
+        html += `<div style="text-align:center; font-size:10px; color:#999; margin-top:8px; padding-top:6px; border-top:1px solid rgba(0,0,0,0.06);">
+            共 ${changes.length} 筆變更紀錄${data.total > changes.length ? `（總計 ${data.total} 筆）` : ''}
+        </div>`;
+
+        container.innerHTML = html;
+    }
+
+    function _formatChangeValue(val, changeType) {
+        if (val === null || val === undefined || val === '') return '';
+        if (typeof val === 'object') {
+            // 董監事變更：可能是陣列
+            if (Array.isArray(val)) {
+                if (val.length === 0) return '（空）';
+                // 若是董監事名單，取名字
+                return val.map(item => {
+                    if (typeof item === 'string') return esc(item);
+                    if (item.name) return esc(item.name + (item.title ? '(' + item.title + ')' : ''));
+                    return esc(JSON.stringify(item).substring(0, 60));
+                }).join('、');
+            }
+            // JSONB 物件
+            const entries = Object.entries(val);
+            if (entries.length === 0) return '（空）';
+            if (entries.length === 1) return esc(String(entries[0][1]));
+            return entries.map(([k, v]) => esc(k + ': ' + String(v))).join('；');
+        }
+        // 資本額格式化
+        if (changeType === 'capital_change' && !isNaN(val)) {
+            return 'NT$ ' + Number(val).toLocaleString();
+        }
+        return esc(String(val));
+    }
 
     // 風險評分顯示
     async function loadNodeRiskScore(taxId) {
