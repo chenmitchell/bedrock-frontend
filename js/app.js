@@ -1750,11 +1750,12 @@
             console.warn('[BEDROCK] 載入圖資料失敗:', e.message);
         }
 
-        // 載入集群、紅旗、負面新聞、UBO 穿透
+        // 載入集群、紅旗、負面新聞、UBO 穿透、消歧義
         loadClusters(id);
         loadRedFlags(id);
         loadMedia(id);
         loadUBOChains(id);
+        loadDisambiguation(id);
 
         // 延遲更新 stepper (等紅旗等資料載完)
         setTimeout(() => updateWorkflowStepper(), 500);
@@ -3323,6 +3324,125 @@
             if (countEl) countEl.textContent = '0';
         }
     }
+
+    // ================================================================
+    // 人名消歧義
+    // ================================================================
+    async function loadDisambiguation(invId) {
+        const listEl = document.getElementById('disambig-list');
+        const countEl = document.getElementById('disambig-count');
+        if (!listEl) return;
+
+        listEl.innerHTML = '<div class="ws-list-empty">分析中…</div>';
+        if (countEl) countEl.textContent = '0';
+
+        try {
+            const data = await api.get(`/investigations/${invId}/disambiguation`);
+            const candidates = data.candidates || [];
+            const needsReview = data.needs_review || 0;
+            if (countEl) countEl.textContent = needsReview || candidates.length;
+
+            if (candidates.length === 0) {
+                listEl.innerHTML = '<div class="ws-list-empty">無同名人物需審查</div>';
+                return;
+            }
+
+            listEl.innerHTML = candidates.slice(0, 20).map((c, idx) => {
+                // 信心分數顏色
+                let scoreColor, scoreBg, suggLabel;
+                if (c.confidence >= 75) {
+                    scoreColor = '#27AE60'; scoreBg = 'rgba(39,174,96,0.1)'; suggLabel = '同一人';
+                } else if (c.confidence >= 40) {
+                    scoreColor = '#F39C12'; scoreBg = 'rgba(243,156,18,0.1)'; suggLabel = '需審查';
+                } else {
+                    scoreColor = '#E74C3C'; scoreBg = 'rgba(231,76,60,0.1)'; suggLabel = '疑不同人';
+                }
+
+                const citiesStr = c.cities.filter(x => x !== '未知').join('、') || '未知';
+                const factorsHtml = c.factors.map(f =>
+                    `<div style="font-size:9px; display:flex; gap:4px; padding:1px 0;">
+                        <span style="color:${f[1].startsWith('+') ? '#27AE60' : '#E74C3C'}; min-width:30px;">${esc(f[1])}</span>
+                        <span style="color:#999;">${esc(f[0])}</span>
+                    </div>`
+                ).join('');
+
+                const companiesHtml = c.companies.slice(0, 5).map(comp =>
+                    `<div style="font-size:10px; padding:1px 0;">
+                        <span style="color:#3498DB;">●</span> ${esc(comp.name)}
+                        <span style="color:#999;">${esc(comp.title)} · ${esc(comp.city)}</span>
+                    </div>`
+                ).join('');
+
+                return `
+                    <div class="ws-list-item" style="cursor:pointer;" onclick="(function(){
+                        var d=document.getElementById('disambig-detail-${idx}');
+                        d.style.display=d.style.display==='none'?'block':'none';
+                    })()">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <div style="width:36px; height:36px; border-radius:50%; background:${scoreBg}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                                <span style="font-size:12px; font-weight:700; color:${scoreColor};">${c.confidence}</span>
+                            </div>
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-size:12px; font-weight:500;">${esc(c.name)}
+                                    <span style="font-size:9px; padding:1px 5px; border-radius:3px; background:${scoreBg}; color:${scoreColor};">${suggLabel}</span>
+                                </div>
+                                <div style="font-size:10px; color:#999;">${c.company_count} 家公司 · ${citiesStr}</div>
+                            </div>
+                            <i class="fas fa-chevron-down" style="font-size:9px; color:#ccc;"></i>
+                        </div>
+                    </div>
+                    <div id="disambig-detail-${idx}" style="display:none; padding:6px 8px 8px 16px; border-left:2px solid ${scoreColor}30;">
+                        <div style="font-size:10px; font-weight:500; color:#F39C12; margin-bottom:4px;">信心分數因素</div>
+                        ${factorsHtml}
+                        <div style="font-size:10px; font-weight:500; color:#3498DB; margin:6px 0 4px;">關聯公司</div>
+                        ${companiesHtml}
+                        ${c.companies.length > 5 ? `<div style="font-size:9px; color:#999;">…還有 ${c.companies.length - 5} 家</div>` : ''}
+                        ${c.suggestion !== 'high' ? `
+                        <div style="margin-top:6px; display:flex; gap:6px;">
+                            <button onclick="window.__bedrockSplitPerson('${esc(c.entity_id)}', ${JSON.stringify(c.companies.map(x=>x.entity_id)).replace(/"/g,'&quot;')})"
+                                style="font-size:10px; padding:3px 8px; border:1px solid #E74C3C; color:#E74C3C; background:none; border-radius:4px; cursor:pointer;">
+                                ✂ 拆分
+                            </button>
+                        </div>` : ''}
+                    </div>`;
+            }).join('');
+
+            if (candidates.length > 20) {
+                listEl.innerHTML += `<div style="font-size:10px; color:#999; padding:6px; text-align:center;">…還有 ${candidates.length - 20} 位</div>`;
+            }
+
+        } catch (e) {
+            console.warn('[BEDROCK] 載入消歧義失敗:', e.message);
+            listEl.innerHTML = '<div class="ws-list-empty">載入失敗</div>';
+        }
+    }
+
+    // 拆分人物的互動處理
+    window.__bedrockSplitPerson = async function(personEid, companyEids) {
+        if (companyEids.length < 2) {
+            alert('至少需要 2 家公司才能拆分');
+            return;
+        }
+        // 簡易拆分：把後半公司分到新人物
+        const mid = Math.ceil(companyEids.length / 2);
+        const groupB = companyEids.slice(mid);
+
+        if (!confirm(`確定要將此人物拆分？\n將有 ${groupB.length} 家公司移到新人物節點。`)) return;
+
+        try {
+            const result = await api.post(`/investigations/${state.currentInvId}/disambiguation/split`, {
+                person_entity_id: personEid,
+                group_b: groupB,
+            });
+            if (result.success) {
+                alert(`拆分成功！新人物：${result.new_name}（移動 ${result.edges_moved} 條關聯）`);
+                // 重新載入圖和消歧義
+                loadInvestigationData(state.currentInvId);
+            }
+        } catch (e) {
+            alert('拆分失敗: ' + e.message);
+        }
+    };
 
     // ================================================================
     // UBO 穿透分析

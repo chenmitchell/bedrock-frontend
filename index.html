@@ -852,6 +852,14 @@
                 </div>
                 <div class="ws-section">
                     <h4 class="ws-section-title">
+                        人名消歧義
+                        <span id="disambig-count" class="ws-count" style="background:rgba(243,156,18,0.1); color:#F39C12;">0</span>
+                        <span class="help-icon" data-tooltip="偵測可能為不同人的同名人物。信心分數越低，越可能是不同人（需拆分）。可手動拆分或合併人物節點。">?</span>
+                    </h4>
+                    <div id="disambig-list" class="ws-list"></div>
+                </div>
+                <div class="ws-section">
+                    <h4 class="ws-section-title">
                         紅旗警示
                         <span id="flag-count" class="ws-count" style="background: rgba(255, 59, 48, 0.1); color: var(--color-danger);">0</span>
                         <span class="help-icon" data-tooltip="紅旗是系統自動偵測的可疑模式，例如：殼公司、循環持股、頻繁變更負責人、資本異常等 AML 警訊。">?</span>
