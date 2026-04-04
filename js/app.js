@@ -239,29 +239,6 @@
     // 登入邏輯（Google OAuth）
     // ================================================================
     function setupLogin() {
-        const toggleRequireLogin = document.getElementById('toggle-require-login');
-        const toggleSwitch = document.querySelector('.toggle-switch');
-
-        // 從 localStorage 恢復開關狀態
-        const savedDevMode = localStorage.getItem('bedrock_dev_mode') === 'true';
-        if (toggleRequireLogin) {
-            toggleRequireLogin.checked = savedDevMode;
-            if (toggleSwitch) {
-                toggleSwitch.setAttribute('aria-checked', savedDevMode.toString());
-            }
-        }
-
-        // 開關變更事件
-        if (toggleRequireLogin) {
-            toggleRequireLogin.addEventListener('change', (e) => {
-                const checked = e.target.checked;
-                localStorage.setItem('bedrock_dev_mode', checked.toString());
-                if (toggleSwitch) {
-                    toggleSwitch.setAttribute('aria-checked', checked.toString());
-                }
-            });
-        }
-
         // 檢查 URL 是否有 OAuth callback 參數
         checkOAuthCallback();
     }
@@ -382,14 +359,10 @@
         }
     }
 
-    // 檢查是否需要跳過登入（開發模式）
+    // 檢查是否有已存在的有效 token，自動恢復登入
     function checkAndSkipLogin() {
-        const devMode = localStorage.getItem('bedrock_dev_mode') === 'true';
-
-        // 先檢查是否有有效 token
         const savedToken = auth.getToken();
         if (savedToken) {
-            // 嘗試用已有 token 取得使用者資訊
             api.get('/auth/me').then(userInfo => {
                 auth.user = userInfo;
                 state.user = { email: userInfo.email, name: userInfo.full_name || userInfo.email.split('@')[0] };
@@ -399,24 +372,8 @@
                 checkShowOnboarding();
             }).catch(() => {
                 auth.clearAuth();
-                if (devMode) {
-                    doDevModeLogin();
-                }
             });
-            return;
         }
-
-        if (devMode) {
-            doDevModeLogin();
-        }
-    }
-
-    function doDevModeLogin() {
-        state.user = { email: 'dev@bedrock.local', name: 'Dev' };
-        showScene('welcome');
-        updateGreeting();
-        loadInvestigations();
-        checkShowOnboarding();
     }
 
     // ================================================================
@@ -1068,7 +1025,6 @@
             btnLogout.addEventListener('click', () => {
                 state.user = null;
                 auth.clearAuth();
-                localStorage.removeItem('bedrock_dev_mode');
                 showScene('login');
             });
         }
