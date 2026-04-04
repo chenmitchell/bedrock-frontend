@@ -271,7 +271,7 @@ label {
   border-right: 1px solid var(--color-border);
   padding: var(--space-md) var(--space-md) var(--space-md);
   overflow-y: auto;
-  display: flex;
+  display: none; /* 預設隱藏，由 JS showScene() 控制 */
   flex-direction: column;
   z-index: 100;
   transition: width 0.25s ease, padding 0.25s ease;
@@ -1163,7 +1163,7 @@ input:focus, select:focus, textarea:focus {
 
 /* --- Registration Scene --- */
 #register-scene {
-  display: flex;
+  display: none; /* 預設隱藏，由 JS showScene() 控制 */
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -1459,7 +1459,7 @@ input:focus, select:focus, textarea:focus {
 
 /* --- Welcome Scene --- */
 #welcome-scene {
-  display: flex;
+  display: none; /* 預設隱藏，由 JS showScene() 控制顯示 */
   flex-direction: column;
   background: var(--color-bg);
   height: 100%;
@@ -1799,7 +1799,7 @@ input:focus, select:focus, textarea:focus {
 
 /* --- Workspace Scene --- */
 #workspace-scene {
-  display: flex;
+  display: none; /* 預設隱藏，由 JS showScene() 控制顯示 */
   flex-direction: column;
   background: var(--color-bg);
   height: 100%;

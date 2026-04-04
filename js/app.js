@@ -89,7 +89,7 @@
         const scenes = ['login', 'register', 'welcome', 'workspace'];
         scenes.forEach(s => {
             const el = document.getElementById(s + '-scene');
-            if (el) el.style.display = (s === name) ? '' : 'none';
+            if (el) el.style.display = (s === name) ? 'flex' : 'none';
         });
         document.body.className = 'scene-' + name;
 
