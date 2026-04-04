@@ -295,8 +295,8 @@
             statusEl.textContent = '正在驗證登入...';
         }
 
-        // 帶重試的 POST（後端可能正在冷啟動）
-        const MAX_RETRIES = 3;
+        // 帶重試的 POST（後端可能正在冷啟動，503 也重試）
+        const MAX_RETRIES = 4;
         let lastError = null;
         let res = null;
 
@@ -312,18 +312,24 @@
                     credentials: 'include',
                     body: JSON.stringify({ code, state: oauthState }),
                 });
+                // 503/502 表示後端還在重啟，也需要重試
+                if (res.status >= 500 && attempt < MAX_RETRIES) {
+                    console.warn(`[BEDROCK] OAuth callback server error ${res.status} (attempt ${attempt}), retrying...`);
+                    await new Promise(r => setTimeout(r, 3000 * attempt)); // 3s, 6s, 9s
+                    continue;
+                }
                 lastError = null;
-                break; // 成功連線
+                break; // 成功（含 4xx 錯誤，由後續邏輯處理）
             } catch (fetchErr) {
                 lastError = fetchErr;
                 console.warn(`[BEDROCK] OAuth callback fetch failed (attempt ${attempt}):`, fetchErr.message);
                 if (attempt < MAX_RETRIES) {
-                    await new Promise(r => setTimeout(r, 2000 * attempt)); // 2s, 4s 遞增等待
+                    await new Promise(r => setTimeout(r, 3000 * attempt));
                 }
             }
         }
 
-        if (lastError) {
+        if (lastError || !res) {
             console.error('[BEDROCK] OAuth callback error after retries:', lastError);
             if (statusEl) {
                 statusEl.style.display = '';
@@ -371,9 +377,13 @@
                 }
             } else if (data.error) {
                 const errorCode = data.error.code;
+                console.error(`[BEDROCK] OAuth callback API error: ${errorCode} — ${data.error.message}`);
                 if (errorCode === 'PENDING_APPROVAL') {
                     showScene('register');
                     showRegStep('pending');
+                } else if (errorCode === 'TOKEN_EXCHANGE_FAILED' || errorCode === 'INVALID_STATE') {
+                    // Google code 失效或 state 不合，可能是部署期間的過渡問題，提示重新登入
+                    throw new Error('驗證過期，請重新點擊登入按鈕');
                 } else {
                     throw new Error(data.error.message || '登入失敗');
                 }
