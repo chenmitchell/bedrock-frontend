@@ -2509,6 +2509,88 @@ input:focus, select:focus, textarea:focus {
   border-color: #B22D20;
 }
 
+/* ===== 關鍵字 Chip 樣式（緊湊橫排） ===== */
+.keyword-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0;
+}
+.keyword-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: #f0f7fb;
+  border: 1px solid #d0e4ed;
+  border-radius: 16px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.keyword-chip:hover {
+  background: #e2eff6;
+  border-color: #9cc5d8;
+}
+.keyword-chip-text {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+.keyword-chip-cat {
+  font-size: 0.7rem;
+  color: #6a9db5;
+  padding: 0 4px;
+  border-left: 1px solid #c8dce6;
+  margin-left: 2px;
+}
+.keyword-chip-x {
+  background: none;
+  border: none;
+  color: #b0b0b0;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.keyword-chip-x:hover {
+  color: #B22D20;
+}
+
+/* 刪除確認 overlay */
+.kw-confirm-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+.kw-confirm-dialog {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  min-width: 260px;
+}
+
+/* ===== 集群遮罩 ===== */
+.cluster-member-panel {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 320px;
+  max-height: 380px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  z-index: 10;
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+}
+
 .text-muted {
   color: var(--color-text-muted);
 }

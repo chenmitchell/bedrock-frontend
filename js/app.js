@@ -1217,12 +1217,29 @@
             if (keywordsList) {
                 try {
                     const keywordsData = await api.get('/keywords');
-                    const keywords = keywordsData.items || keywordsData || [];
+                    const kwDataObj = keywordsData.data || keywordsData || {};
+                    // 統計總數
+                    const allKws = [].concat(
+                        Array.isArray(kwDataObj.L1_keywords) ? kwDataObj.L1_keywords : [],
+                        Array.isArray(kwDataObj.L2_keywords) ? kwDataObj.L2_keywords : [],
+                        Array.isArray(kwDataObj.L3_keywords) ? kwDataObj.L3_keywords : [],
+                        Array.isArray(kwDataObj.items) ? kwDataObj.items : [],
+                        Array.isArray(kwDataObj) ? kwDataObj : []
+                    );
+                    const keywords = allKws;
                     if (keywords.length > 0) {
+                        const getKwLabel = (kw) => {
+                            if (typeof kw === 'string') return kw;
+                            if (typeof kw.keyword === 'string') return kw.keyword;
+                            if (typeof kw.text === 'string') return kw.text;
+                            if (typeof kw.name === 'string') return kw.name;
+                            if (kw.keyword && typeof kw.keyword === 'object') return kw.keyword.text || JSON.stringify(kw.keyword);
+                            return JSON.stringify(kw);
+                        };
                         keywordsList.innerHTML = `
                             <div class="admin-list">
                                 ${keywords.slice(0, 5).map(kw => `
-                                    <div class="admin-list-item">${esc(kw.keyword || kw)}</div>
+                                    <div class="admin-list-item">${esc(getKwLabel(kw))}</div>
                                 `).join('')}
                                 ${keywords.length > 5 ? `<div class="admin-list-item" style="color:#999;">… 及其他 ${keywords.length - 5} 個</div>` : ''}
                             </div>`;
@@ -1368,20 +1385,81 @@
         btnSync.disabled = true;
         btnSync.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 同步中…';
 
+        // 顯示進度區塊
+        const progressSection = document.getElementById('sync-progress-section');
+        if (progressSection) progressSection.style.display = 'block';
+
         try {
             const result = await api.post('/sync/start', {});
             Toast.success(result.message || '同步任務已提交，背景執行中');
-            // 背景任務需要時間，延遲後重新載入狀態
-            setTimeout(() => loadDataSyncStatus(), 3000);
+            // 開始輪詢同步進度
+            pollSyncProgress();
         } catch (e) {
             console.warn('[BEDROCK] 同步失敗:', e.message);
             Toast.error('資料同步失敗: ' + e.message);
+            if (progressSection) progressSection.style.display = 'none';
         } finally {
             btnSync.disabled = false;
             btnSync.innerHTML = originalHtml;
         }
     }
     window.triggerDataSync = triggerDataSync;
+
+    // 輪詢同步進度
+    let _syncPollTimer = null;
+    async function pollSyncProgress() {
+        if (_syncPollTimer) clearInterval(_syncPollTimer);
+        let pollCount = 0;
+        const maxPolls = 120; // 最多輪詢 120 次（約 4 分鐘）
+
+        _syncPollTimer = setInterval(async () => {
+            pollCount++;
+            try {
+                const status = await api.get('/sync/status');
+                const pctEl = document.getElementById('sync-progress-pct');
+                const barEl = document.getElementById('sync-progress-bar');
+                const detailEl = document.getElementById('sync-progress-detail');
+                const speedEl = document.getElementById('sync-progress-speed');
+                const errEl = document.getElementById('sync-progress-errors');
+
+                if (status && status.progress != null) {
+                    const pct = Math.round(status.progress * 100);
+                    if (pctEl) pctEl.textContent = pct + '%';
+                    if (barEl) barEl.style.width = pct + '%';
+                    if (detailEl) detailEl.textContent = status.detail || `已處理 ${status.processed || 0} / ${status.total || '?'} 筆`;
+                    if (speedEl) speedEl.textContent = status.speed ? `${status.speed} 筆/秒` : '';
+                    if (errEl && status.errors && status.errors.length > 0) {
+                        errEl.style.display = 'block';
+                        errEl.textContent = '錯誤：' + status.errors.slice(0, 3).join('、');
+                    }
+
+                    if (pct >= 100 || status.status === 'completed') {
+                        clearInterval(_syncPollTimer);
+                        _syncPollTimer = null;
+                        Toast.success('資料同步完成');
+                        setTimeout(() => {
+                            const progressSection = document.getElementById('sync-progress-section');
+                            if (progressSection) progressSection.style.display = 'none';
+                            loadDataSyncStatus();
+                        }, 1500);
+                    }
+                } else {
+                    // API 沒回傳進度，顯示預設
+                    if (detailEl) detailEl.textContent = '背景同步中，請稍候…';
+                }
+            } catch (e) {
+                // 靜默失敗
+            }
+
+            if (pollCount >= maxPolls) {
+                clearInterval(_syncPollTimer);
+                _syncPollTimer = null;
+                const progressSection = document.getElementById('sync-progress-section');
+                if (progressSection) progressSection.style.display = 'none';
+                loadDataSyncStatus();
+            }
+        }, 2000);
+    }
 
     // 關鍵字管理
     async function loadKeywords() {
@@ -1426,20 +1504,48 @@
         const categoryLabels = {
             'negative_media': '負面媒體',
             'risk_entity': '高風險實體',
+            'risk_term': '風險詞彙',
             'industry': '產業分類',
             'location': '地點',
-            'custom': '自訂'
+            'custom': '自訂',
+            'sanction': '制裁名單',
+            'pep': '政治敏感人物'
         };
 
+        // 安全取得關鍵字文字（防止 [object Object]）
+        function getKwText(kw) {
+            if (typeof kw === 'string') return kw;
+            if (typeof kw.keyword === 'string') return kw.keyword;
+            if (typeof kw.text === 'string') return kw.text;
+            if (typeof kw.word === 'string') return kw.word;
+            if (typeof kw.name === 'string') return kw.name;
+            if (typeof kw.value === 'string') return kw.value;
+            // 如果 keyword 是物件，嘗試取 keyword.text 或 keyword.keyword
+            if (kw.keyword && typeof kw.keyword === 'object') {
+                return kw.keyword.text || kw.keyword.keyword || kw.keyword.name || JSON.stringify(kw.keyword);
+            }
+            return JSON.stringify(kw);
+        }
+
+        function getKwId(kw) {
+            if (typeof kw === 'string') return kw;
+            return kw.id || kw.keyword_id || (typeof kw.keyword === 'string' ? kw.keyword : '') || '';
+        }
+
         return `
-            <div class="keyword-items">
-                ${keywords.map(kw => `
-                    <div class="keyword-item">
-                        <span class="keyword-text">${esc(kw.keyword || kw.text || kw)}</span>
-                        <span class="keyword-tag" style="background:rgba(74, 158, 191, 0.15); color:#3A7CA5;">${esc(categoryLabels[kw.category] || kw.category || '未分類')}</span>
-                        <button class="keyword-btn-delete" onclick="deleteKeyword('${esc(kw.id || kw.keyword)}', '${kw.level}')">刪除</button>
-                    </div>
-                `).join('')}
+            <div class="keyword-chips">
+                ${keywords.map(kw => {
+                    const text = getKwText(kw);
+                    const kwId = getKwId(kw);
+                    const cat = (typeof kw === 'object' ? kw.category : '') || '';
+                    const catLabel = categoryLabels[cat] || cat || '';
+                    return `
+                    <span class="keyword-chip" title="${esc(catLabel)}">
+                        <span class="keyword-chip-text">${esc(text)}</span>
+                        ${catLabel ? `<span class="keyword-chip-cat">${esc(catLabel)}</span>` : ''}
+                        <button class="keyword-chip-x" onclick="event.stopPropagation(); confirmDeleteKeyword('${esc(kwId)}', '${typeof kw === 'object' ? (kw.level || '') : ''}')" title="刪除此關鍵字">&times;</button>
+                    </span>`;
+                }).join('')}
             </div>
         `;
     }
@@ -1474,8 +1580,6 @@
     window.addKeyword = addKeyword;
 
     async function deleteKeyword(keywordId, level) {
-        if (!confirm('確定要刪除此關鍵字嗎？')) return;
-
         try {
             await api.del(`/keywords/${keywordId}`);
             Toast.success('關鍵字已刪除');
@@ -1485,6 +1589,25 @@
         }
     }
     window.deleteKeyword = deleteKeyword;
+
+    // 刪除前確認（帶有小對話框，而非原生 confirm）
+    function confirmDeleteKeyword(keywordId, level) {
+        if (!keywordId) return;
+        // 建立確認 overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'kw-confirm-overlay';
+        overlay.innerHTML = `
+            <div class="kw-confirm-dialog">
+                <div style="font-size:14px; font-weight:600; margin-bottom:12px;">確定刪除此關鍵字？</div>
+                <div style="display:flex; gap:8px; justify-content:flex-end;">
+                    <button class="btn btn-outline" onclick="this.closest('.kw-confirm-overlay').remove()">取消</button>
+                    <button class="btn" style="background:#B22D20; color:#fff;" onclick="deleteKeyword('${esc(keywordId)}', '${level}'); this.closest('.kw-confirm-overlay').remove();">刪除</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    }
+    window.confirmDeleteKeyword = confirmDeleteKeyword;
 
     async function verifyDataSync() {
         const btnVerify = document.getElementById('btn-sync-verify');
@@ -1837,6 +1960,18 @@
                     },
                 },
                 {
+                    selector: 'node.cluster-dimmed',
+                    style: {
+                        'opacity': 0.15,
+                    },
+                },
+                {
+                    selector: 'edge.cluster-dimmed',
+                    style: {
+                        'opacity': 0.08,
+                    },
+                },
+                {
                     selector: 'node:selected',
                     style: {
                         'border-color': '#3A7CA5',
@@ -2114,21 +2249,16 @@
             }
 
             // 預設展開到第二層
-            const slider = document.getElementById('depth-filter-slider');
-            const depthMap = getDepthMap();
-            const actualMax = Math.max(...[...depthMap.values()].filter(v => v < 999), 2);
-            if (slider && actualMax > 0 && actualMax < 100) {
-                slider.max = Math.max(actualMax, 2);
-            }
+            const depthSelect = document.getElementById('depth-filter-select');
             // 初始時顯示到第二層
-            if (slider && nodeCount > 10) {
-                slider.value = 2;
+            if (depthSelect && nodeCount > 10) {
+                depthSelect.value = '2';
                 filterByDepth(2);
             } else {
                 // 節點不多就全部顯示
                 const label = document.getElementById('depth-filter-label');
-                if (label) label.textContent = `全部，${nodeCount} 個節點`;
-                if (slider) slider.value = slider.max || 10;
+                if (label) label.textContent = `${nodeCount} 個節點`;
+                if (depthSelect) depthSelect.value = '99';
             }
         }, 600);
     }
@@ -2681,7 +2811,7 @@
                 const confidence = c.confidence ? Math.round(c.confidence * 100) : 0;
                 const confColor = confidence >= 70 ? '#C0392B' : confidence >= 40 ? '#E67E22' : '#95A5A6';
                 return `
-                    <div class="ws-list-item" onclick="highlightCluster(${JSON.stringify(c.member_tax_ids || []).replace(/"/g, '&quot;')})" style="cursor:pointer;">
+                    <div class="ws-list-item" onclick="highlightCluster(${JSON.stringify(c.member_tax_ids || []).replace(/"/g, '&quot;')}, '${esc(c.name || c.label || algo.label)}')" style="cursor:pointer;">
                         <div style="display:flex; align-items:center; gap:6px;">
                             <span style="font-size:14px;">${algo.icon}</span>
                             <div style="flex:1; min-width:0;">
@@ -4438,58 +4568,61 @@
         if (!state.cy) return;
         maxDepth = parseInt(maxDepth);
         const label = document.getElementById('depth-filter-label');
-        const slider = document.getElementById('depth-filter-slider');
+        const select = document.getElementById('depth-filter-select');
 
         const depthMap = getDepthMap();
-        const actualMax = Math.max(...[...depthMap.values()].filter(v => v < 999));
-
-        // 更新 slider max 為實際最大深度
-        if (slider && actualMax > 0 && actualMax < 100) {
-            slider.max = Math.max(actualMax, 2);
-        }
+        const actualMax = Math.max(...[...depthMap.values()].filter(v => v < 999), 2);
 
         if (maxDepth >= actualMax || maxDepth >= 10) {
             // 全部顯示
-            state.cy.nodes().style('display', 'element');
-            state.cy.edges().style('display', 'element');
+            state.cy.batch(() => {
+                state.cy.nodes().style('display', 'element');
+                state.cy.edges().style('display', 'element');
+            });
             const totalNodes = state.cy.nodes().length;
-            if (label) label.textContent = `全部，${totalNodes} 個節點`;
+            if (label) label.textContent = `${totalNodes} 個節點`;
+            // 不重新排版，只 fit
+            state.cy.fit(state.cy.nodes(), 40);
+            filterSidebarByVisibleNodes();
             return;
         }
 
         // 計算此深度的可見節點數
         let visibleCount = 0;
         depthMap.forEach((d) => { if (d <= maxDepth) visibleCount++; });
-        if (label) label.textContent = `第 ${maxDepth} 層，${visibleCount} 個節點`;
+        if (label) label.textContent = `${visibleCount} 個節點`;
 
-        // 隱藏超過深度的節點與其相連的邊
+        // 批量操作避免卡頓
         let shown = 0, hidden = 0;
-        state.cy.nodes().forEach(node => {
-            const depth = depthMap.get(node.id()) || 999;
-            if (depth <= maxDepth) {
-                node.style('display', 'element');
-                shown++;
-            } else {
-                node.style('display', 'none');
-                hidden++;
-            }
+        state.cy.batch(() => {
+            state.cy.nodes().forEach(node => {
+                const depth = depthMap.get(node.id()) || 999;
+                if (depth <= maxDepth) {
+                    node.style('display', 'element');
+                    shown++;
+                } else {
+                    node.style('display', 'none');
+                    hidden++;
+                }
+            });
+            state.cy.edges().forEach(edge => {
+                const srcDepth = depthMap.get(edge.source().id()) || 999;
+                const tgtDepth = depthMap.get(edge.target().id()) || 999;
+                if (srcDepth <= maxDepth && tgtDepth <= maxDepth) {
+                    edge.style('display', 'element');
+                } else {
+                    edge.style('display', 'none');
+                }
+            });
         });
 
-        // 邊：兩端都可見才顯示
-        state.cy.edges().forEach(edge => {
-            const srcDepth = depthMap.get(edge.source().id()) || 999;
-            const tgtDepth = depthMap.get(edge.target().id()) || 999;
-            if (srcDepth <= maxDepth && tgtDepth <= maxDepth) {
-                edge.style('display', 'element');
-            } else {
-                edge.style('display', 'none');
-            }
-        });
+        Toast.show(`顯示第 ${maxDepth} 層：${shown} 個節點`, 'info');
 
-        Toast.show(`顯示 ${maxDepth} 層內 ${shown} 個節點（隱藏 ${hidden} 個）`, 'info');
-
-        // 動態調整節點大小 + 重新排版 + 自動適配
-        autoResizeAndRelayout();
+        // 只 fit，不重新排版（避免卡頓凍結）
+        const visible = state.cy.nodes().filter(n => n.style('display') !== 'none');
+        if (visible.length > 0) {
+            state.cy.fit(visible, 40);
+        }
 
         // 深度連動：過濾側邊欄的集群、紅旗、負面新聞
         filterSidebarByVisibleNodes();
@@ -4497,21 +4630,22 @@
     window.filterByDepth = filterByDepth;
 
     function resetDepthFilter() {
-        const slider = document.getElementById('depth-filter-slider');
+        const select = document.getElementById('depth-filter-select');
         const label = document.getElementById('depth-filter-label');
-        if (slider) slider.value = slider.max || 10;
+        if (select) select.value = '99';
         invalidateDepthCache();
         if (state.cy) {
-            state.cy.nodes().style('display', 'element');
-            state.cy.edges().style('display', 'element');
+            state.cy.batch(() => {
+                state.cy.nodes().style('display', 'element');
+                state.cy.edges().style('display', 'element');
+            });
             const totalNodes = state.cy.nodes().length;
-            if (label) label.textContent = `全部，${totalNodes} 個節點`;
+            if (label) label.textContent = `${totalNodes} 個節點`;
+            state.cy.fit(state.cy.nodes(), 40);
         } else {
             if (label) label.textContent = '全部';
         }
         Toast.show('已重設為顯示全部層', 'info');
-        // 動態調整節點大小 + 重新排版
-        autoResizeAndRelayout();
         // 恢復側邊欄到全量顯示
         filterSidebarByVisibleNodes();
     }
@@ -4613,7 +4747,7 @@
             const confidence = c.confidence ? Math.round(c.confidence * 100) : 0;
             const confColor = confidence >= 70 ? '#C0392B' : confidence >= 40 ? '#E67E22' : '#95A5A6';
             return `
-                <div class="ws-list-item" onclick="highlightCluster(${JSON.stringify(c.member_tax_ids || []).replace(/"/g, '&quot;')})" style="cursor:pointer;">
+                <div class="ws-list-item" onclick="highlightCluster(${JSON.stringify(c.member_tax_ids || []).replace(/"/g, '&quot;')}, '${esc(c.name || c.label || algo.label)}')" style="cursor:pointer;">
                     <div style="display:flex; align-items:center; gap:6px;">
                         <span style="font-size:14px;">${algo.icon}</span>
                         <div style="flex:1; min-width:0;">
@@ -4659,21 +4793,34 @@
     }
 
     // 高亮集群內的節點（點擊集群列表時觸發）
-    function highlightCluster(memberTaxIds) {
+    // 遮罩非成員，凸顯成員
+    function highlightCluster(memberTaxIds, clusterLabel) {
         if (!state.cy || !memberTaxIds || memberTaxIds.length === 0) return;
 
-        // 先清除之前的高亮
-        state.cy.nodes().removeClass('marked');
+        // 先清除之前的遮罩
+        state.cy.nodes().removeClass('marked cluster-dimmed');
+        state.cy.edges().removeClass('cluster-dimmed');
 
-        // 高亮集群成員
         const memberSet = new Set(memberTaxIds);
         let matched = 0;
-        state.cy.nodes().forEach(node => {
-            const entityId = node.data('entity_id') || node.data('id');
-            if (memberSet.has(entityId)) {
-                node.addClass('marked');
-                matched++;
-            }
+        state.cy.batch(() => {
+            state.cy.nodes().forEach(node => {
+                const entityId = node.data('entity_id') || node.data('id');
+                if (memberSet.has(entityId)) {
+                    node.addClass('marked');
+                    matched++;
+                } else {
+                    node.addClass('cluster-dimmed');
+                }
+            });
+            // 邊：兩端都是成員才保持亮色
+            state.cy.edges().forEach(edge => {
+                const srcId = edge.source().data('entity_id') || edge.source().data('id');
+                const tgtId = edge.target().data('entity_id') || edge.target().data('id');
+                if (!memberSet.has(srcId) || !memberSet.has(tgtId)) {
+                    edge.addClass('cluster-dimmed');
+                }
+            });
         });
 
         // 自動聚焦到這些節點
@@ -4684,9 +4831,82 @@
                 duration: 500,
             });
         }
-        Toast.show(`已標記 ${matched} 個集群成員`, 'info');
+        Toast.show(`${clusterLabel || '集群'}：${matched} 個成員已凸顯`, 'info');
+
+        // 同時在報表側邊欄顯示成員清單
+        showClusterMemberPanel(memberTaxIds, clusterLabel || '集群成員');
     }
     window.highlightCluster = highlightCluster;
+
+    // 清除集群遮罩
+    function clearClusterHighlight() {
+        if (!state.cy) return;
+        state.cy.batch(() => {
+            state.cy.nodes().removeClass('marked cluster-dimmed');
+            state.cy.edges().removeClass('cluster-dimmed');
+        });
+        // 隱藏成員面板
+        const panel = document.getElementById('cluster-member-panel');
+        if (panel) panel.style.display = 'none';
+    }
+    window.clearClusterHighlight = clearClusterHighlight;
+
+    // 顯示集群成員清單面板
+    function showClusterMemberPanel(memberTaxIds, title) {
+        if (!state.cy) return;
+        const memberSet = new Set(memberTaxIds);
+        const members = [];
+        state.cy.nodes().forEach(node => {
+            const entityId = node.data('entity_id') || node.data('id');
+            if (memberSet.has(entityId)) {
+                members.push({
+                    id: node.data('id'),
+                    label: node.data('label') || entityId,
+                    type: node.data('type'),
+                    entity_id: entityId,
+                    address: node.data('address') || '',
+                    risk_level: node.data('risk_level') || 'NONE'
+                });
+            }
+        });
+
+        // 找到或建立面板
+        let panel = document.getElementById('cluster-member-panel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'cluster-member-panel';
+            panel.className = 'cluster-member-panel';
+            const cyContainer = document.getElementById('cy');
+            if (cyContainer && cyContainer.parentElement) {
+                cyContainer.parentElement.appendChild(panel);
+            } else {
+                document.body.appendChild(panel);
+            }
+        }
+        panel.style.display = 'block';
+
+        const riskColors = { CRITICAL: '#C0392B', WARNING: '#E67E22', INFO: '#3498DB', NONE: '#95A5A6' };
+        const riskLabels = { CRITICAL: '高風險', WARNING: '中風險', INFO: '資訊', NONE: '正常' };
+
+        panel.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid #e0e0e0; background:#f5f7fa;">
+                <span style="font-size:13px; font-weight:600;">${esc(title)}（${members.length}）</span>
+                <button onclick="clearClusterHighlight()" style="background:none; border:none; cursor:pointer; font-size:16px; color:#999;" title="關閉">&times;</button>
+            </div>
+            <div style="overflow-y:auto; max-height:300px;">
+                ${members.map((m, i) => `
+                    <div style="padding:8px 14px; border-bottom:1px solid #f0f0f0; background:${i % 2 === 0 ? '#fff' : '#fafbfc'}; cursor:pointer; font-size:13px;" onclick="reportClickNode('${esc(m.id)}')">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-weight:500;">${esc(m.label)}</span>
+                            <span style="padding:1px 6px; border-radius:8px; font-size:10px; color:#fff; background:${riskColors[m.risk_level] || '#95A5A6'};">${riskLabels[m.risk_level] || '正常'}</span>
+                        </div>
+                        ${m.address ? `<div style="font-size:11px; color:#888; margin-top:2px;">${esc(m.address)}</div>` : ''}
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+    window.showClusterMemberPanel = showClusterMemberPanel;
 
     /** 點擊紅旗 → 高亮主體 + 相關公司（UBO 等） */
     function highlightRedFlagTarget(targetId, targetType, evidence) {
@@ -5728,67 +5948,165 @@
 
     let _currentReportDetail = null;
 
+    // 取得所有報表中的節點清單（供上一筆/下一筆用）
+    function _getReportNodeList() {
+        if (!state.cy) return [];
+        const nodes = [];
+        state.cy.nodes().forEach(n => {
+            const d = n.data();
+            nodes.push({ id: d.id, type: d.type, label: d.label });
+        });
+        // 公司排前，人物排後
+        const riskOrder = { CRITICAL: 0, WARNING: 1, INFO: 2, NONE: 3 };
+        nodes.sort((a, b) => {
+            if (a.type === 'company' && b.type !== 'company') return -1;
+            if (a.type !== 'company' && b.type === 'company') return 1;
+            return 0;
+        });
+        return nodes;
+    }
+
     function renderReportDetail(nodeId, nodeData) {
-        // 在報表檢視中顯示節點詳情和麵包屑導覽
         const container = document.getElementById('report-view-content');
         if (!container) return;
 
-        // 建構麵包屑導覽
-        let breadcrumbHtml = '<div style="padding:12px 16px; background:#f5f7fa; border-bottom:1px solid #e0e0e0; display:flex; align-items:center; gap:8px;">';
-        breadcrumbHtml += '<button onclick="clearReportDetail()" style="background:none; border:none; color:#3A7CA5; cursor:pointer; font-size:12px; text-decoration:underline;">報表列表</button>';
-        breadcrumbHtml += '<span style="color:#999;">/</span>';
-        breadcrumbHtml += '<span style="font-size:12px; font-weight:600; color:#333;">' + (nodeData.label || nodeId) + '</span>';
-        breadcrumbHtml += '</div>';
+        // 上一筆/下一筆邏輯
+        const nodeList = _getReportNodeList();
+        const currentIdx = nodeList.findIndex(n => n.id === nodeId);
+        const prevNode = currentIdx > 0 ? nodeList[currentIdx - 1] : null;
+        const nextNode = currentIdx < nodeList.length - 1 ? nodeList[currentIdx + 1] : null;
 
-        let detailHtml = '<div style="padding:20px;">';
-        detailHtml += '<h3 style="margin:0 0 16px; font-size:16px; font-weight:600;">' + (nodeData.label || nodeId) + '</h3>';
+        // 導覽列：返回 + 上一筆/下一筆
+        let navHtml = `<div style="padding:12px 16px; background:#f5f7fa; border-bottom:1px solid #e0e0e0; display:flex; align-items:center; justify-content:space-between;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <button onclick="clearReportDetail()" style="background:none; border:none; color:#3A7CA5; cursor:pointer; font-size:13px; font-weight:500;"><i class="fas fa-arrow-left" style="margin-right:4px;"></i>返回列表</button>
+                <span style="color:#ccc;">/</span>
+                <span style="font-size:13px; font-weight:600; color:#333;">${esc(nodeData.label || nodeId)}</span>
+            </div>
+            <div style="display:flex; gap:6px;">
+                <button onclick="${prevNode ? "reportClickNode('" + prevNode.id + "')" : ''}" style="padding:4px 10px; border:1px solid #ddd; border-radius:4px; background:#fff; cursor:${prevNode ? 'pointer' : 'not-allowed'}; opacity:${prevNode ? 1 : 0.4}; font-size:12px;" ${prevNode ? '' : 'disabled'}>
+                    <i class="fas fa-chevron-left"></i> 上一筆
+                </button>
+                <span style="font-size:11px; color:#999; line-height:28px;">${currentIdx + 1} / ${nodeList.length}</span>
+                <button onclick="${nextNode ? "reportClickNode('" + nextNode.id + "')" : ''}" style="padding:4px 10px; border:1px solid #ddd; border-radius:4px; background:#fff; cursor:${nextNode ? 'pointer' : 'not-allowed'}; opacity:${nextNode ? 1 : 0.4}; font-size:12px;" ${nextNode ? '' : 'disabled'}>
+                    下一筆 <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>`;
+
+        let detailHtml = '<div style="padding:24px;">';
+
+        // 標題
+        const typeLabel = nodeData.type === 'company' ? '公司' : '自然人';
+        const typeIcon = nodeData.type === 'company' ? 'fa-building' : 'fa-user';
+        detailHtml += `<div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
+            <div style="width:44px; height:44px; border-radius:50%; background:${nodeData.type === 'company' ? '#e8f4f8' : '#f0e8f8'}; display:flex; align-items:center; justify-content:center;">
+                <i class="fas ${typeIcon}" style="font-size:18px; color:${nodeData.type === 'company' ? '#3A7CA5' : '#7B5EA7'};"></i>
+            </div>
+            <div>
+                <h3 style="margin:0; font-size:20px; font-weight:700;">${esc(nodeData.label || nodeId)}</h3>
+                <span style="font-size:13px; color:#888;">${typeLabel}</span>
+            </div>
+        </div>`;
 
         if (nodeData.type === 'company') {
-            detailHtml += '<div style="background:#f9f9f9; padding:12px; border-radius:4px; margin-bottom:16px;">';
-            detailHtml += '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:13px;">';
-            detailHtml += '<div><strong>統一編號:</strong> ' + (nodeData.entity_id || 'N/A') + '</div>';
-            detailHtml += '<div><strong>類型:</strong> 公司</div>';
-            if (nodeData.capitalDisplay) detailHtml += '<div><strong>資本額:</strong> ' + nodeData.capitalDisplay + '</div>';
-            detailHtml += '<div><strong>狀態:</strong> ' + (nodeData.status === 'dissolved' ? '已解散' : '營運中') + '</div>';
-            if (nodeData.address) detailHtml += '<div style="grid-column:1/3;"><strong>地址:</strong> ' + nodeData.address + '</div>';
-            detailHtml += '</div>';
-            detailHtml += '</div>';
+            // 風險標籤
+            const riskColors = { CRITICAL: '#C0392B', WARNING: '#E67E22', INFO: '#3498DB', NONE: '#95A5A6' };
+            const riskLabels = { CRITICAL: '高風險', WARNING: '中風險', INFO: '資訊', NONE: '正常' };
+            const rl = nodeData.risk_level || 'NONE';
+
+            detailHtml += `<div style="display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap;">
+                <span style="padding:4px 12px; border-radius:16px; font-size:12px; font-weight:600; color:#fff; background:${riskColors[rl] || '#95A5A6'};">${riskLabels[rl] || '正常'}</span>
+                ${nodeData.flag_count ? `<span style="padding:4px 12px; border-radius:16px; font-size:12px; font-weight:600; color:#C0392B; background:#fdeaea;">${nodeData.flag_count} 個紅旗</span>` : ''}
+                ${nodeData.is_seed ? `<span style="padding:4px 12px; border-radius:16px; font-size:12px; font-weight:600; color:#1ABC9C; border:1px solid #1ABC9C;">調查主體</span>` : ''}
+            </div>`;
+
+            // 基本資料卡片
+            detailHtml += `<div style="background:#f9f9f9; padding:16px; border-radius:8px; margin-bottom:20px; border:1px solid #eee;">
+                <h4 style="margin:0 0 12px 0; font-size:15px; font-weight:600; color:#333;">基本資料</h4>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; font-size:14px; line-height:1.6;">
+                    <div><span style="color:#888;">統一編號</span><br><strong style="font-family:monospace; font-size:15px;">${esc(nodeData.entity_id || 'N/A')}</strong></div>
+                    <div><span style="color:#888;">公司狀態</span><br><strong>${nodeData.status === 'dissolved' ? '<span style="color:#C0392B;">已解散</span>' : '<span style="color:#27AE60;">營運中</span>'}</strong></div>
+                    ${nodeData.capitalDisplay ? `<div><span style="color:#888;">資本額</span><br><strong>${esc(nodeData.capitalDisplay)}</strong></div>` : ''}
+                    ${nodeData.capital ? `<div><span style="color:#888;">資本額（原始）</span><br><strong>${Number(nodeData.capital).toLocaleString()} 元</strong></div>` : ''}
+                    ${nodeData.address ? `<div style="grid-column:1/3;"><span style="color:#888;">登記地址</span><br><strong>${esc(nodeData.address)}</strong></div>` : ''}
+                    ${nodeData.setup_date ? `<div><span style="color:#888;">設立日期</span><br><strong>${esc(nodeData.setup_date)}</strong></div>` : ''}
+                    ${nodeData.industry ? `<div><span style="color:#888;">產業別</span><br><strong>${esc(nodeData.industry)}</strong></div>` : ''}
+                    ${nodeData.company_type ? `<div><span style="color:#888;">組織類型</span><br><strong>${esc(nodeData.company_type)}</strong></div>` : ''}
+                </div>
+            </div>`;
         } else if (nodeData.type === 'person') {
-            detailHtml += '<div style="background:#f9f9f9; padding:12px; border-radius:4px; margin-bottom:16px;">';
-            detailHtml += '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:13px;">';
-            detailHtml += '<div><strong>姓名:</strong> ' + (nodeData.label || 'N/A') + '</div>';
-            detailHtml += '<div><strong>類型:</strong> 自然人</div>';
-            detailHtml += '</div>';
-            detailHtml += '</div>';
+            const rl = nodeData.risk_level || 'NONE';
+            const riskColors = { CRITICAL: '#C0392B', WARNING: '#E67E22', INFO: '#3498DB', NONE: '#95A5A6' };
+            const riskLabels = { CRITICAL: '高風險', WARNING: '中風險', INFO: '資訊', NONE: '正常' };
+
+            detailHtml += `<div style="display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap;">
+                <span style="padding:4px 12px; border-radius:16px; font-size:12px; font-weight:600; color:#fff; background:${riskColors[rl] || '#95A5A6'};">${riskLabels[rl] || '正常'}</span>
+                ${nodeData.flag_count ? `<span style="padding:4px 12px; border-radius:16px; font-size:12px; font-weight:600; color:#C0392B; background:#fdeaea;">${nodeData.flag_count} 個紅旗</span>` : ''}
+            </div>`;
+
+            detailHtml += `<div style="background:#f9f9f9; padding:16px; border-radius:8px; margin-bottom:20px; border:1px solid #eee;">
+                <h4 style="margin:0 0 12px 0; font-size:15px; font-weight:600; color:#333;">基本資料</h4>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; font-size:14px; line-height:1.6;">
+                    <div><span style="color:#888;">姓名</span><br><strong style="font-size:15px;">${esc(nodeData.label || 'N/A')}</strong></div>
+                    <div><span style="color:#888;">類型</span><br><strong>自然人</strong></div>
+                    ${nodeData.nationality ? `<div><span style="color:#888;">國籍</span><br><strong>${esc(nodeData.nationality)}</strong></div>` : ''}
+                </div>
+            </div>`;
         }
 
-        // 顯示關聯節點清單（留在報表模式中瀏覽）
+        // 關聯列表（更大字體、清楚呈現）
         const node = state.cy.getElementById(nodeId);
         if (node.length > 0) {
             const connEdges = node.connectedEdges();
             if (connEdges.length > 0) {
-                detailHtml += '<h4 style="font-size:13px; font-weight:600; margin:16px 0 8px;">關聯列表</h4>';
-                detailHtml += '<div style="border:1px solid #e0e0e0; border-radius:4px; overflow:hidden;">';
-                connEdges.forEach((e, i) => {
+                // 分類：現任 vs 歷史
+                const currentRels = [];
+                const histRels = [];
+                connEdges.forEach(e => {
                     const d = e.data();
                     const otherId = d.source === nodeId ? d.target : d.source;
                     const otherNode = state.cy.getElementById(otherId);
-                    const otherLabel = otherNode.length ? otherNode.data('label') : otherId;
-                    const rel = d.label || d.relationship || '關聯';
-                    const isHist = d.status === 'historical' || d.is_historical;
-                    const bg = i % 2 === 0 ? '#fff' : '#fafbfc';
-                    detailHtml += '<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid #eee; background:' + bg + '; font-size:12px;' + (isHist ? ' opacity:0.6;' : '') + '">';
-                    detailHtml += '<span style="cursor:pointer; color:#3A7CA5; text-decoration:underline;" onclick="reportClickNode(\'' + otherId + '\')">' + otherLabel + '</span>';
-                    detailHtml += '<span style="padding:2px 8px; border-radius:4px; font-size:10px; background:' + (isHist ? '#f5f5f5; color:#888;' : '#e8f5e9; color:#2e7d32;') + '">' + rel + (isHist ? '（歷史）' : '') + '</span>';
-                    detailHtml += '</div>';
+                    const entry = {
+                        otherId,
+                        otherLabel: otherNode.length ? otherNode.data('label') : otherId,
+                        otherType: otherNode.length ? otherNode.data('type') : '',
+                        rel: d.label || d.relationship || '關聯',
+                        isHist: d.status === 'historical' || d.is_historical,
+                        date: d.date || d.change_date || ''
+                    };
+                    if (entry.isHist) histRels.push(entry);
+                    else currentRels.push(entry);
                 });
-                detailHtml += '</div>';
+
+                function renderRelSection(title, rels, dimmed) {
+                    let h = `<h4 style="font-size:15px; font-weight:600; margin:20px 0 10px; color:${dimmed ? '#999' : '#333'};">${title}（${rels.length}）</h4>`;
+                    h += '<div style="border:1px solid #e0e0e0; border-radius:8px; overflow:hidden;">';
+                    rels.forEach((r, i) => {
+                        const bg = i % 2 === 0 ? '#fff' : '#fafbfc';
+                        const icon = r.otherType === 'company' ? 'fa-building' : 'fa-user';
+                        h += `<div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid #f0f0f0; background:${bg}; font-size:14px;${dimmed ? ' opacity:0.6;' : ''}">
+                            <div style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="reportClickNode('${r.otherId}')">
+                                <i class="fas ${icon}" style="color:${r.otherType === 'company' ? '#3A7CA5' : '#7B5EA7'}; font-size:12px;"></i>
+                                <span style="color:#3A7CA5; font-weight:500;">${esc(r.otherLabel)}</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <span style="padding:3px 10px; border-radius:12px; font-size:11px; font-weight:500; background:${r.isHist ? '#f5f5f5; color:#888;' : '#e8f5e9; color:#2e7d32;'}">${esc(r.rel)}</span>
+                                ${r.date ? `<span style="font-size:10px; color:#bbb;">${esc(r.date)}</span>` : ''}
+                            </div>
+                        </div>`;
+                    });
+                    h += '</div>';
+                    return h;
+                }
+
+                if (currentRels.length > 0) detailHtml += renderRelSection('現任關聯', currentRels, false);
+                if (histRels.length > 0) detailHtml += renderRelSection('歷史關聯', histRels, true);
             }
         }
 
         detailHtml += '</div>';
-
-        container.innerHTML = breadcrumbHtml + detailHtml;
+        container.innerHTML = navHtml + detailHtml;
     }
     window.renderReportDetail = renderReportDetail;
 

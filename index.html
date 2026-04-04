@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;1,400&family=Inter:wght@400;500;600&family=Noto+Serif+TC:wght@400&family=Noto+Sans+TC:wght@400;500;600&family=Playfair+Display:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="/css/main.css?v=20260404c">
+    <link rel="stylesheet" href="/css/main.css?v=20260404d">
 </head>
 <body class="scene-login">
     <!-- WCAG: 跳至主要內容連結 -->
@@ -570,16 +570,31 @@
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                                     <div style="background: #fff; border-radius: 6px; padding: 10px; font-size: 0.83rem;">
                                         <div style="font-weight: 600; color: #333; margin-bottom: 2px;">經濟部公司登記資料</div>
-                                        <div style="color: #888;">透過 g0v 公開資料 API 取得公司基本資料、董監事、股東等資訊</div>
+                                        <div style="color: #888;">公司基本資料、董監事、股東等登記資訊</div>
                                     </div>
                                     <div style="background: #fff; border-radius: 6px; padding: 10px; font-size: 0.83rem;">
                                         <div style="font-weight: 600; color: #333; margin-bottom: 2px;">經濟部商業登記資料</div>
                                         <div style="color: #888;">商號（獨資、合夥）登記資料，包含負責人及營業地址</div>
                                     </div>
                                 </div>
-                                <p style="margin: 8px 0 0 0; font-size: 0.8rem; color: #999;">
-                                    同步作業會在背景執行，完成後自動更新下方狀態。點選「立即同步」將重新從資料來源取得最新資料。
-                                </p>
+                            </div>
+
+                            <!-- 同步進度指示 -->
+                            <div id="sync-progress-section" style="display:none; background:#f0f7ff; border:1px solid #c8dce6; border-radius:8px; padding:16px; margin-bottom:24px;">
+                                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                                    <h4 style="margin:0; font-size:0.92rem; color:#2d6a8f;">
+                                        <i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>同步進行中
+                                    </h4>
+                                    <span id="sync-progress-pct" style="font-size:13px; font-weight:600; color:#3A7CA5;">0%</span>
+                                </div>
+                                <div style="background:#e0e0e0; border-radius:4px; height:8px; overflow:hidden; margin-bottom:8px;">
+                                    <div id="sync-progress-bar" style="background:#3A7CA5; height:100%; width:0%; border-radius:4px; transition:width 0.3s;"></div>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#888;">
+                                    <span id="sync-progress-detail">準備中…</span>
+                                    <span id="sync-progress-speed"></span>
+                                </div>
+                                <div id="sync-progress-errors" style="display:none; margin-top:8px; font-size:0.8rem; color:#B22D20;"></div>
                             </div>
                             <div class="admin-list">
                                 <div style="margin-bottom: 24px;">
@@ -895,10 +910,16 @@
                     <span class="ws-tool-divider" aria-hidden="true"></span>
                     <div style="display:inline-flex; align-items:center; gap:6px;" title="檢視深度：控制圖形上顯示到第幾層，可隨時調整，不影響已搜尋的資料">
                         <i class="fas fa-layer-group" style="font-size:12px; color:#999;" aria-hidden="true"></i>
-                        <span style="font-size:10px; color:#888; white-space:nowrap;">深度</span>
-                        <input type="range" id="depth-filter-slider" min="1" max="10" value="2" style="width:120px; height:4px; accent-color:#3A7CA5; cursor:pointer;" oninput="filterByDepth(this.value)" />
-                        <span id="depth-filter-label" style="font-size:11px; font-weight:600; color:#3A7CA5; min-width:110px; white-space:nowrap;">第 2 層，0 個節點</span>
-                        <button class="ws-tool-btn" style="padding:2px 6px; font-size:10px;" onclick="resetDepthFilter()" title="重設為全部">↻</button>
+                        <span style="font-size:10px; color:#888; white-space:nowrap;">檢視深度</span>
+                        <select id="depth-filter-select" class="ws-input" style="padding:3px 8px; font-size:12px; min-width:80px;" onchange="filterByDepth(this.value)">
+                            <option value="1">第 1 層</option>
+                            <option value="2" selected>第 2 層</option>
+                            <option value="3">第 3 層</option>
+                            <option value="4">第 4 層</option>
+                            <option value="5">第 5 層</option>
+                            <option value="99">全部</option>
+                        </select>
+                        <span id="depth-filter-label" style="font-size:11px; font-weight:600; color:#3A7CA5; min-width:70px; white-space:nowrap;">0 個節點</span>
                     </div>
                 </div>
                 <div style="position:relative; flex:1; min-height:0;">
