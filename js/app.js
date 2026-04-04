@@ -1750,10 +1750,11 @@
             console.warn('[BEDROCK] 載入圖資料失敗:', e.message);
         }
 
-        // 載入集群、紅旗、負面新聞
+        // 載入集群、紅旗、負面新聞、UBO 穿透
         loadClusters(id);
         loadRedFlags(id);
         loadMedia(id);
+        loadUBOChains(id);
 
         // 延遲更新 stepper (等紅旗等資料載完)
         setTimeout(() => updateWorkflowStepper(), 500);
@@ -3320,6 +3321,116 @@
             console.warn('[BEDROCK] 載入紅旗失敗:', e.message);
             listEl.innerHTML = '<div class="ws-list-empty">載入失敗</div>';
             if (countEl) countEl.textContent = '0';
+        }
+    }
+
+    // ================================================================
+    // UBO 穿透分析
+    // ================================================================
+    async function loadUBOChains(invId) {
+        const listEl = document.getElementById('ubo-chains-list');
+        const countEl = document.getElementById('ubo-count');
+        if (!listEl) return;
+
+        listEl.innerHTML = '<div class="ws-list-empty">載入中…</div>';
+        if (countEl) countEl.textContent = '0';
+
+        try {
+            const data = await api.get(`/investigations/${invId}/ubo-chains`);
+            const persons = data.persons || [];
+            if (countEl) countEl.textContent = persons.length;
+
+            if (persons.length === 0) {
+                listEl.innerHTML = '<div class="ws-list-empty">尚無穿透路徑</div>';
+                return;
+            }
+
+            listEl.innerHTML = persons.map((p, idx) => {
+                const hasChains = p.chains && p.chains.length > 0;
+                const maxDepth = p.total_depth || 0;
+                const depthBadge = maxDepth >= 3
+                    ? `<span style="background:#E74C3C; color:#fff; border-radius:3px; padding:1px 5px; font-size:9px; margin-left:4px;">${maxDepth}層</span>`
+                    : maxDepth > 0
+                        ? `<span style="background:#F39C12; color:#fff; border-radius:3px; padding:1px 5px; font-size:9px; margin-left:4px;">${maxDepth}層</span>`
+                        : '';
+
+                // 直接控制的公司數
+                const directLabel = `直接 ${p.direct_count} 家`;
+                const chainLabel = hasChains ? `，間接 ${p.chains.length} 條路徑` : '';
+
+                // 展開後的詳細內容
+                let detailHTML = '';
+                if (hasChains) {
+                    detailHTML = p.chains.slice(0, 10).map((chain, ci) => {
+                        const pathNames = chain.path.map(n => n.name).join(' → ');
+                        const pctDisplay = chain.effective_pct != null
+                            ? `<span style="color:#27AE60; font-weight:600;">${chain.effective_pct}%</span>`
+                            : '<span style="color:#999;">持股未知</span>';
+                        const repNote = chain.via_rep ? `<span style="color:#8E44AD; font-size:9px;">via ${esc(chain.via_rep)}</span>` : '';
+
+                        // 各層持股顯示
+                        const layerPcts = chain.percentages.map((pct, li) => {
+                            if (li === 0) return '';  // 第一層是直接持股，已顯示
+                            const from = chain.path[li - 1]?.name || '?';
+                            const to = chain.path[li]?.name || '?';
+                            const val = pct != null ? `${pct}%` : '?';
+                            return `<div style="font-size:9px; color:#666; padding-left:10px;">↳ ${esc(from)} → ${esc(to)}: ${val}</div>`;
+                        }).join('');
+
+                        return `
+                            <div style="padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+                                <div style="font-size:10px; color:#aaa; display:flex; align-items:center; gap:4px;">
+                                    <span style="color:#8E44AD;">⛓</span>
+                                    <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(pathNames)}</span>
+                                    ${pctDisplay}
+                                </div>
+                                ${layerPcts}
+                                ${repNote ? `<div style="padding-left:10px;">${repNote}</div>` : ''}
+                            </div>`;
+                    }).join('');
+
+                    if (p.chains.length > 10) {
+                        detailHTML += `<div style="font-size:10px; color:#999; padding:3px 0;">…還有 ${p.chains.length - 10} 條路徑</div>`;
+                    }
+                }
+
+                // 直接公司列表
+                const directHTML = p.direct_companies.map(c => {
+                    const pctStr = c.shares_pct != null ? ` (${c.shares_pct}%)` : '';
+                    return `<div style="font-size:10px; color:#ccc; padding:2px 0 2px 10px;">
+                        <span style="color:#3498DB;">●</span> ${esc(c.name)}
+                        <span style="color:#999;">${esc(c.title)}${pctStr}</span>
+                    </div>`;
+                }).join('');
+
+                return `
+                    <div class="ws-list-item" style="cursor:pointer;" onclick="(function(){
+                        var d=document.getElementById('ubo-detail-${idx}');
+                        d.style.display=d.style.display==='none'?'block':'none';
+                        if(window.__bedrockCy){
+                            var n=window.__bedrockCy.getElementById('${esc(p.entity_id)}');
+                            if(n.length){window.__bedrockCy.center(n);n.select();}
+                        }
+                    })()">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="color:#8E44AD; font-size:14px;">👤</span>
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-size:12px; font-weight:500;">${esc(p.name)} ${depthBadge}</div>
+                                <div style="font-size:10px; color:#999;">${directLabel}${chainLabel}</div>
+                            </div>
+                            <i class="fas fa-chevron-down" style="font-size:9px; color:#ccc;"></i>
+                        </div>
+                    </div>
+                    <div id="ubo-detail-${idx}" style="display:none; padding:4px 8px 8px 20px; border-left:2px solid rgba(142,68,173,0.3);">
+                        <div style="font-size:10px; font-weight:500; color:#8E44AD; margin-bottom:4px;">直接控制</div>
+                        ${directHTML}
+                        ${hasChains ? `<div style="font-size:10px; font-weight:500; color:#8E44AD; margin:6px 0 4px;">間接控制鏈</div>${detailHTML}` : ''}
+                    </div>`;
+            }).join('');
+
+        } catch (e) {
+            console.warn('[BEDROCK] 載入 UBO 穿透失敗:', e.message);
+            listEl.innerHTML = '<div class="ws-list-empty">載入失敗</div>';
         }
     }
 
