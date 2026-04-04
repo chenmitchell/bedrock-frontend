@@ -1741,7 +1741,25 @@
                     selector: 'node[type="company"]',
                     style: {
                         'shape': 'roundrectangle',
-                        'background-color': '#3A7CA5',
+                        'background-color': function(ele) {
+                            // 色階依資本額：小資本淺藍 → 大資本深藍
+                            const cap = ele.data('capital') || 0;
+                            if (cap <= 0) return '#8BB8CC'; // 未知/零資本：淺灰藍
+                            const logCap = Math.log10(Math.max(cap, 1));
+                            const t = Math.min(logCap / 10, 1); // log10(10B)=10
+                            // 色階：淺藍 #8BB8CC → 中藍 #3A7CA5 → 深藍 #1B4965
+                            if (t < 0.5) {
+                                const r = Math.round(139 + (58 - 139) * (t * 2));
+                                const g = Math.round(184 + (124 - 184) * (t * 2));
+                                const b = Math.round(204 + (165 - 204) * (t * 2));
+                                return `rgb(${r},${g},${b})`;
+                            } else {
+                                const r = Math.round(58 + (27 - 58) * ((t - 0.5) * 2));
+                                const g = Math.round(124 + (73 - 124) * ((t - 0.5) * 2));
+                                const b = Math.round(165 + (101 - 165) * ((t - 0.5) * 2));
+                                return `rgb(${r},${g},${b})`;
+                            }
+                        },
                         'border-color': '#2D6485',
                         'color': '#2C2C2A',
                     },
@@ -1945,6 +1963,79 @@
         // 節點點擊 → 顯示詳情
         state.cy.on('tap', 'node', function (e) {
             showNodeDetail(e.target.data());
+            currentSelectedNode = e.target.id();
+        });
+
+        // 節點雙擊 → 展開/收合下一層
+        state.cy.on('dbltap', 'node', function (e) {
+            const node = e.target;
+            const nodeData = node.data();
+
+            // 只對公司節點做展開/收合
+            if (nodeData.type === 'company' && nodeData.tax_id && state.currentInvId) {
+                const isCollapsed = node.data('_collapsed');
+                if (isCollapsed) {
+                    // 恢復被收合的子節點
+                    const hiddenChildren = node.data('_hiddenChildren') || [];
+                    hiddenChildren.forEach(childId => {
+                        const child = state.cy.getElementById(childId);
+                        if (child && child.length) {
+                            child.style('display', 'element');
+                            child.connectedEdges().forEach(edge => {
+                                const src = edge.source();
+                                const tgt = edge.target();
+                                if (src.style('display') !== 'none' && tgt.style('display') !== 'none') {
+                                    edge.style('display', 'element');
+                                }
+                            });
+                        }
+                    });
+                    node.data('_collapsed', false);
+                    node.data('_hiddenChildren', []);
+                    // 移除收合標記
+                    node.style('border-style', nodeData.is_seed ? 'double' : 'solid');
+                    Toast.show(`已展開「${nodeData.label}」的關聯`, 'info', 1500);
+                    runLayout('cola');
+                } else {
+                    // 收合：隱藏從此節點展開的子節點（depth > 此節點 depth 且只透過此節點連接的）
+                    const depthMap = getDepthMap();
+                    const nodeDepth = depthMap.get(node.id()) || 0;
+                    const hiddenChildren = [];
+
+                    // 找出比此節點深一層且直接相連的節點
+                    node.neighborhood('node').forEach(neighbor => {
+                        const neighborDepth = depthMap.get(neighbor.id()) || 0;
+                        if (neighborDepth > nodeDepth) {
+                            // 檢查此子節點是否只透過此節點可達（簡化判斷）
+                            neighbor.style('display', 'none');
+                            neighbor.connectedEdges().style('display', 'none');
+                            hiddenChildren.push(neighbor.id());
+                        }
+                    });
+
+                    if (hiddenChildren.length > 0) {
+                        node.data('_collapsed', true);
+                        node.data('_hiddenChildren', hiddenChildren);
+                        // 顯示收合狀態 + 收合數量
+                        node.style('border-style', 'dashed');
+                        Toast.show(`已收合「${nodeData.label}」（${hiddenChildren.length} 個關聯節點）`, 'info', 1500);
+                        runLayout('cola');
+                    } else {
+                        // 嘗試深入追蹤此節點
+                        Toast.show(`正在從「${nodeData.label}」深入追蹤…`, 'info');
+                        api.post(`/investigations/${state.currentInvId}/crawl/start`, {
+                            seed_name: nodeData.tax_id || nodeData.label
+                        }).then(() => {
+                            Toast.success('深入追蹤已啟動');
+                            state.crawling = true;
+                            updateCrawlUI();
+                            pollCrawlProgress();
+                        }).catch(err => {
+                            Toast.error('深入追蹤失敗: ' + err.message);
+                        });
+                    }
+                }
+            }
         });
 
         // 點擊空白 → 關閉詳情
@@ -1957,6 +2048,12 @@
 
     function renderGraph(elements) {
         if (!state.cy) return;
+
+        // 記錄現有節點 ID（用於動畫判斷新節點）
+        const existingNodeIds = new Set();
+        state.cy.nodes().forEach(n => existingNodeIds.add(n.id()));
+        const isUpdate = existingNodeIds.size > 0;
+
         state.cy.elements().remove();
         state.cy.add(elements);
 
@@ -1998,6 +2095,40 @@
                     state.cy.zoom(1.2);
                     state.cy.center(seedNodes);
                 }
+            }
+
+            // 新節點出現動畫效果
+            if (isUpdate) {
+                state.cy.nodes().forEach(node => {
+                    if (!existingNodeIds.has(node.id())) {
+                        // 新節點：從透明漸入
+                        node.style('opacity', 0);
+                        node.animate({
+                            style: { opacity: 1 },
+                        }, {
+                            duration: 500,
+                            easing: 'ease-in-out-cubic',
+                        });
+                    }
+                });
+            }
+
+            // 預設展開到第二層
+            const slider = document.getElementById('depth-filter-slider');
+            const depthMap = getDepthMap();
+            const actualMax = Math.max(...[...depthMap.values()].filter(v => v < 999), 2);
+            if (slider && actualMax > 0 && actualMax < 100) {
+                slider.max = Math.max(actualMax, 2);
+            }
+            // 初始時顯示到第二層
+            if (slider && nodeCount > 10) {
+                slider.value = 2;
+                filterByDepth(2);
+            } else {
+                // 節點不多就全部顯示
+                const label = document.getElementById('depth-filter-label');
+                if (label) label.textContent = `全部，${nodeCount} 個節點`;
+                if (slider) slider.value = slider.max || 10;
             }
         }, 600);
     }
@@ -3117,8 +3248,12 @@
 
         try {
             Toast.show(`正在產生 ${format.toUpperCase()} 報告…`, 'info');
+            const headers = {};
+            const token = localStorage.getItem('bedrock_token') || state.token;
+            if (token) headers['Authorization'] = `Bearer ${token}`;
             const res = await fetch(API_BASE + `/investigations/${state.currentInvId}/export/${format}`, {
                 method: 'GET',
+                headers,
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -4318,14 +4453,14 @@
             state.cy.nodes().style('display', 'element');
             state.cy.edges().style('display', 'element');
             const totalNodes = state.cy.nodes().length;
-            if (label) label.textContent = `全部（${totalNodes} 個節點）`;
+            if (label) label.textContent = `全部，${totalNodes} 個節點`;
             return;
         }
 
         // 計算此深度的可見節點數
         let visibleCount = 0;
         depthMap.forEach((d) => { if (d <= maxDepth) visibleCount++; });
-        if (label) label.textContent = `第 ${maxDepth} 層（${visibleCount} 個節點）`;
+        if (label) label.textContent = `第 ${maxDepth} 層，${visibleCount} 個節點`;
 
         // 隱藏超過深度的節點與其相連的邊
         let shown = 0, hidden = 0;
@@ -4365,11 +4500,14 @@
         const slider = document.getElementById('depth-filter-slider');
         const label = document.getElementById('depth-filter-label');
         if (slider) slider.value = slider.max || 10;
-        if (label) label.textContent = '全部';
         invalidateDepthCache();
         if (state.cy) {
             state.cy.nodes().style('display', 'element');
             state.cy.edges().style('display', 'element');
+            const totalNodes = state.cy.nodes().length;
+            if (label) label.textContent = `全部，${totalNodes} 個節點`;
+        } else {
+            if (label) label.textContent = '全部';
         }
         Toast.show('已重設為顯示全部層', 'info');
         // 動態調整節點大小 + 重新排版

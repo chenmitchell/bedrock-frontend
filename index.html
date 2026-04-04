@@ -457,6 +457,35 @@
                     <div id="admin-keywords-panel" class="admin-panel" role="tabpanel" style="display:none;">
                         <h3 class="admin-panel-title">關鍵字管理</h3>
 
+                        <!-- 關鍵字說明區 -->
+                        <div style="background: #f8f7f5; border: 1px solid #e8e6e1; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
+                            <h4 style="margin: 0 0 12px 0; font-size: 0.95rem; color: #2d6a8f;">
+                                <i class="fas fa-info-circle" style="margin-right: 6px;"></i>關鍵字系統說明
+                            </h4>
+                            <p style="margin: 0 0 12px 0; font-size: 0.88rem; color: #555; line-height: 1.7;">
+                                關鍵字用於<strong>負面新聞搜尋</strong>和<strong>風險標記</strong>。系統會在爬取調查對象資料時，
+                                自動比對關鍵字以偵測潛在風險訊號。關鍵字分為三個層級：
+                            </p>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                                <div style="background: #fff; border-radius: 6px; padding: 12px; border-left: 3px solid #C0392B;">
+                                    <div style="font-weight: 600; font-size: 0.85rem; color: #C0392B; margin-bottom: 4px;">L1 · 系統關鍵字</div>
+                                    <div style="font-size: 0.8rem; color: #666; line-height: 1.5;">全域生效，所有使用者共用。由系統管理員維護，如：洗錢、詐欺、掏空、背信等核心風險詞。</div>
+                                </div>
+                                <div style="background: #fff; border-radius: 6px; padding: 12px; border-left: 3px solid #E67E22;">
+                                    <div style="font-weight: 600; font-size: 0.85rem; color: #E67E22; margin-bottom: 4px;">L2 · 組織關鍵字</div>
+                                    <div style="font-size: 0.8rem; color: #666; line-height: 1.5;">由管理員設定，適用於特定機構類型。如金融業可設「地下匯兌」，不動產業可設「預售屋糾紛」。</div>
+                                </div>
+                                <div style="background: #fff; border-radius: 6px; padding: 12px; border-left: 3px solid #3A7CA5;">
+                                    <div style="font-weight: 600; font-size: 0.85rem; color: #3A7CA5; margin-bottom: 4px;">L3 · 個人關鍵字</div>
+                                    <div style="font-size: 0.8rem; color: #666; line-height: 1.5;">使用者自行新增，僅個人生效。可根據調查案件需求自訂。高頻使用的 L3 關鍵字可由管理員提升為 L2。</div>
+                                </div>
+                            </div>
+                            <p style="margin: 0; font-size: 0.82rem; color: #888; line-height: 1.5;">
+                                <strong>分類說明：</strong>
+                                「負面媒體」用於網路新聞搜尋比對；「高風險實體」標記特定人物或組織；「產業分類」依特定行業風險設定；「地點」標記高風險地區；「自訂」為其他自定義用途。
+                            </p>
+                        </div>
+
                         <div style="margin-bottom: 24px;">
                             <h4 style="margin: 0 0 12px 0; font-size: 0.95rem;">新增關鍵字</h4>
                             <div class="keyword-form">
@@ -530,6 +559,28 @@
                     <div id="admin-sync-panel" class="admin-panel" role="tabpanel" style="display:none;">
                         <h3 class="admin-panel-title">資料同步</h3>
                         <div style="padding: 20px;">
+                            <!-- 同步來源說明 -->
+                            <div style="background: #f8f7f5; border: 1px solid #e8e6e1; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                                <h4 style="margin: 0 0 8px 0; font-size: 0.92rem; color: #2d6a8f;">
+                                    <i class="fas fa-database" style="margin-right: 6px;"></i>同步資料來源
+                                </h4>
+                                <p style="margin: 0 0 8px 0; font-size: 0.85rem; color: #555; line-height: 1.6;">
+                                    系統從以下公開資料來源同步企業登記資訊：
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                    <div style="background: #fff; border-radius: 6px; padding: 10px; font-size: 0.83rem;">
+                                        <div style="font-weight: 600; color: #333; margin-bottom: 2px;">經濟部公司登記資料</div>
+                                        <div style="color: #888;">透過 g0v 公開資料 API 取得公司基本資料、董監事、股東等資訊</div>
+                                    </div>
+                                    <div style="background: #fff; border-radius: 6px; padding: 10px; font-size: 0.83rem;">
+                                        <div style="font-weight: 600; color: #333; margin-bottom: 2px;">經濟部商業登記資料</div>
+                                        <div style="color: #888;">商號（獨資、合夥）登記資料，包含負責人及營業地址</div>
+                                    </div>
+                                </div>
+                                <p style="margin: 8px 0 0 0; font-size: 0.8rem; color: #999;">
+                                    同步作業會在背景執行，完成後自動更新下方狀態。點選「立即同步」將重新從資料來源取得最新資料。
+                                </p>
+                            </div>
                             <div class="admin-list">
                                 <div style="margin-bottom: 24px;">
                                     <h4 style="margin: 0 0 12px 0; color: #333;">最後同步時間</h4>
@@ -842,11 +893,11 @@
                         </select>
                     </div>
                     <span class="ws-tool-divider" aria-hidden="true"></span>
-                    <div style="display:inline-flex; align-items:center; gap:4px;" title="檢視深度：控制圖形上顯示到第幾層，可隨時調整，不影響已搜尋的資料">
+                    <div style="display:inline-flex; align-items:center; gap:6px;" title="檢視深度：控制圖形上顯示到第幾層，可隨時調整，不影響已搜尋的資料">
                         <i class="fas fa-layer-group" style="font-size:12px; color:#999;" aria-hidden="true"></i>
-                        <span style="font-size:10px; color:#888; white-space:nowrap;">檢視</span>
-                        <input type="range" id="depth-filter-slider" min="1" max="10" value="10" style="width:70px; height:4px; accent-color:#3A7CA5; cursor:pointer;" oninput="filterByDepth(this.value)" />
-                        <span id="depth-filter-label" style="font-size:11px; font-weight:600; color:#3A7CA5; min-width:32px;">全部</span>
+                        <span style="font-size:10px; color:#888; white-space:nowrap;">深度</span>
+                        <input type="range" id="depth-filter-slider" min="1" max="10" value="2" style="width:120px; height:4px; accent-color:#3A7CA5; cursor:pointer;" oninput="filterByDepth(this.value)" />
+                        <span id="depth-filter-label" style="font-size:11px; font-weight:600; color:#3A7CA5; min-width:110px; white-space:nowrap;">第 2 層，0 個節點</span>
                         <button class="ws-tool-btn" style="padding:2px 6px; font-size:10px;" onclick="resetDepthFilter()" title="重設為全部">↻</button>
                     </div>
                 </div>
