@@ -599,16 +599,27 @@
                 return;
             }
 
+            const roleOptions = ['admin', 'analyst', 'viewer', 'auditor'];
+            const statusOptions = ['active', 'pending_approval', 'approved', 'suspended', 'rejected'];
+            const roleLabels = { admin: '管理員', analyst: '分析師', viewer: '檢視者', auditor: '稽核員' };
+            const statusLabels = { active: '啟用', pending_approval: '待審核', approved: '已核准', suspended: '停用', rejected: '拒絕' };
+
             tbody.innerHTML = users.map(u => `
                 <tr>
-                    <td>${esc(u.name || u.username || 'N/A')}</td>
+                    <td><strong>${esc(u.full_name || u.name || 'N/A')}</strong><br><small style="color:#666;">${esc(u.organization || '')}</small></td>
                     <td>${esc(u.email)}</td>
-                    <td>${esc(u.role || '使用者')}</td>
-                    <td>${formatDate(u.created_at)}</td>
                     <td>
-                        <button class="admin-action-btn" style="margin-right:8px;">編輯</button>
-                        <button class="admin-action-btn" style="color:#B22D20;">刪除</button>
+                        <select onchange="updateUserRole(${u.id}, this.value)" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px;">
+                            ${roleOptions.map(r => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${roleLabels[r] || r}</option>`).join('')}
+                        </select>
                     </td>
+                    <td>
+                        <select onchange="updateUserStatus(${u.id}, this.value)" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px;">
+                            ${statusOptions.map(s => `<option value="${s}" ${u.status === s ? 'selected' : ''}>${statusLabels[s] || s}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td>${esc(u.investigation_count || 0)} 件</td>
+                    <td>${formatDate(u.created_at)}</td>
                 </tr>
             `).join('');
         } catch (e) {
@@ -653,12 +664,20 @@
                     if (settings.length > 0) {
                         configList.innerHTML = `
                             <table class="admin-table" style="width:100%; margin-top:10px;">
-                                <tr><th>設定項</th><th>值</th><th>操作</th></tr>
-                                ${settings.slice(0, 5).map(s => `
-                                    <tr>
-                                        <td>${esc(s.key || s)}</td>
-                                        <td><code style="background:#f5f5f3; padding:2px 6px; border-radius:3px;">${esc(s.value || '')}</code></td>
-                                        <td><button class="admin-action-btn">編輯</button></td>
+                                <tr><th>設定項</th><th>值</th><th>說明</th><th>操作</th></tr>
+                                ${settings.map(s => `
+                                    <tr id="config-row-${esc(s.key)}">
+                                        <td><strong>${esc(s.key || '')}</strong></td>
+                                        <td>
+                                            <span class="config-display-${esc(s.key)}"><code style="background:#f5f5f3; padding:2px 6px; border-radius:3px;">${esc(s.value || '')}</code></span>
+                                            <input class="config-input-${esc(s.key)}" type="text" value="${esc(s.value || '')}" style="display:none; width:90%; padding:4px 8px; border:1px solid #ccc; border-radius:4px;" />
+                                        </td>
+                                        <td style="color:#666; font-size:0.85em;">${esc(s.description || '')}</td>
+                                        <td>
+                                            <button class="admin-action-btn config-edit-btn" data-key="${esc(s.key)}" onclick="editConfigStart('${esc(s.key)}')">編輯</button>
+                                            <button class="admin-action-btn config-save-btn" data-key="${esc(s.key)}" onclick="editConfigSave('${esc(s.key)}')" style="display:none; background:#2A7F3B; color:#fff;">儲存</button>
+                                            <button class="admin-action-btn config-cancel-btn" data-key="${esc(s.key)}" onclick="editConfigCancel('${esc(s.key)}')" style="display:none;">取消</button>
+                                        </td>
                                     </tr>
                                 `).join('')}
                             </table>`;
@@ -3251,6 +3270,57 @@
         }
     }
     window.switchAdminTab = switchAdminTab;
+
+    // ========== 系統設定編輯功能 ==========
+    window.editConfigStart = function(key) {
+        document.querySelector('.config-display-' + key).style.display = 'none';
+        document.querySelector('.config-input-' + key).style.display = '';
+        document.querySelector('.config-edit-btn[data-key="' + key + '"]').style.display = 'none';
+        document.querySelector('.config-save-btn[data-key="' + key + '"]').style.display = '';
+        document.querySelector('.config-cancel-btn[data-key="' + key + '"]').style.display = '';
+        document.querySelector('.config-input-' + key).focus();
+    };
+    window.editConfigCancel = function(key) {
+        document.querySelector('.config-display-' + key).style.display = '';
+        document.querySelector('.config-input-' + key).style.display = 'none';
+        document.querySelector('.config-edit-btn[data-key="' + key + '"]').style.display = '';
+        document.querySelector('.config-save-btn[data-key="' + key + '"]').style.display = 'none';
+        document.querySelector('.config-cancel-btn[data-key="' + key + '"]').style.display = 'none';
+    };
+    window.editConfigSave = async function(key) {
+        const input = document.querySelector('.config-input-' + key);
+        const newValue = input.value;
+        try {
+            await api.put('/settings/' + encodeURIComponent(key) + '?value=' + encodeURIComponent(newValue));
+            // 更新顯示
+            document.querySelector('.config-display-' + key).innerHTML =
+                '<code style="background:#f5f5f3; padding:2px 6px; border-radius:3px;">' + esc(newValue) + '</code>';
+            editConfigCancel(key);
+            showToast('設定已更新', 'success');
+        } catch (e) {
+            showToast('更新失敗: ' + e.message, 'error');
+        }
+    };
+
+    // ========== 使用者管理 CRUD ==========
+    window.updateUserRole = async function(userId, newRole) {
+        try {
+            await api.patch('/admin/users/' + userId, { role: newRole });
+            showToast('角色已更新', 'success');
+            loadAdminUsers();
+        } catch (e) {
+            showToast('更新失敗: ' + e.message, 'error');
+        }
+    };
+    window.updateUserStatus = async function(userId, newStatus) {
+        try {
+            await api.patch('/admin/users/' + userId, { status: newStatus });
+            showToast('狀態已更新', 'success');
+            loadAdminUsers();
+        } catch (e) {
+            showToast('更新失敗: ' + e.message, 'error');
+        }
+    };
 
     function filterInvestigations(filter) {
         state.investigationsFilter = filter;
