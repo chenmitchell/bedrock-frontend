@@ -6665,6 +6665,8 @@
 
         // ── 連動儀表板：如果儀表板正在顯示，也重新過濾 ──
         refreshDashboardIfOpen();
+        // ── 連動報表視圖：如果報表正在顯示，也重新建表 ──
+        refreshReportViewIfOpen();
     }
 
     /** 如果分析儀表板正在顯示，重新 render 以反映可見節點的變化 */
@@ -6672,6 +6674,14 @@
         const overlay = document.getElementById('analysis-dashboard-overlay');
         if (overlay && overlay.style.display !== 'none' && _dashboardData) {
             renderAnalysisDashboard(_dashboardData);
+        }
+    }
+
+    /** 如果報表檢視正在顯示，重新建表以反映深度/可見節點的變化 */
+    function refreshReportViewIfOpen() {
+        if (_reportViewActive) {
+            // 重建前清掉詳情檢視狀態，確保列表重繪
+            buildReportView();
         }
     }
 
