@@ -2522,12 +2522,29 @@
                 const c = sevColors[f.severity] || '#999';
                 const sl = sevLabels[f.severity] || f.severity;
                 const rn = ruleNames[f.rule_id] || f.rule_id;
+                // 解析 description（可能包含 JSON/dict 字串）
+                let descText = '';
+                const descRaw = f.description || '';
+                if (typeof descRaw === 'object') {
+                    descText = descRaw.description || descRaw.message || '';
+                } else {
+                    descText = String(descRaw);
+                }
+                if (descText.includes("'evidence'") || descText.includes('"evidence"')) {
+                    try {
+                        const parsed = JSON.parse(descText.replace(/'/g, '"'));
+                        if (parsed.description) descText = parsed.description;
+                    } catch(e) {
+                        const m = descText.match(/'description':\s*'([^']+)'/);
+                        if (m) descText = m[1];
+                    }
+                }
                 return `
                     <div style="padding:6px 0; border-left:3px solid ${c}; padding-left:8px; margin-bottom:4px;">
                         <div style="font-weight:600; font-size:12px;">
                             <span style="color:${c};">[${sl}]</span> ${esc(rn)}
                         </div>
-                        <div style="font-size:11px; color:#666; margin-top:2px;">${esc(f.description || '')}</div>
+                        <div style="font-size:11px; color:#666; margin-top:2px;">${esc(descText)}</div>
                     </div>`;
             }).join('');
         }
@@ -4743,6 +4760,60 @@
         return div.innerHTML;
     }
 
+    /**
+     * 將紅旗 evidence 物件格式化為人類可讀的 HTML
+     * 不再直接顯示 JSON，而是提取關鍵欄位以易讀方式呈現
+     */
+    function _formatEvidenceReadable(ev) {
+        if (!ev || typeof ev !== 'object') return '';
+        const parts = [];
+        // 資本額異常
+        if (ev.capital !== undefined) {
+            parts.push('資本額: NT$ ' + Number(ev.capital).toLocaleString());
+        }
+        // 休眠天數
+        if (ev.dormant_days) {
+            const yrs = Math.round(ev.dormant_days / 365 * 10) / 10;
+            parts.push('休眠 ' + ev.dormant_days + ' 天（約 ' + yrs + ' 年）');
+        }
+        if (ev.dormant_from && ev.dormant_until) {
+            parts.push(ev.dormant_from + ' ~ ' + ev.dormant_until);
+        }
+        // 資本劇烈變動
+        if (ev.volatility_events && Array.isArray(ev.volatility_events)) {
+            const evts = ev.volatility_events.slice(0, 3);
+            evts.forEach(e => {
+                const before = e.before != null ? 'NT$ ' + Number(e.before).toLocaleString() : '?';
+                const after = e.after != null ? 'NT$ ' + Number(e.after).toLocaleString() : '?';
+                const ratio = e.ratio ? '(' + (e.ratio > 1 ? '+' : '') + Math.round((e.ratio - 1) * 100) + '%)' : '';
+                parts.push((e.date || '') + ': ' + before + ' → ' + after + ' ' + ratio);
+            });
+            if (ev.volatility_events.length > 3) parts.push('…等共 ' + ev.volatility_events.length + ' 次');
+        }
+        // 地址
+        if (ev.address) parts.push('地址: ' + esc(String(ev.address).substring(0, 40)));
+        if (ev.tax_ids && Array.isArray(ev.tax_ids)) parts.push(ev.tax_ids.length + ' 家公司');
+        // 控制公司
+        if (ev.controlled_count) parts.push('控制 ' + ev.controlled_count + ' 家公司');
+        if (ev.direct_count) parts.push('直接持股 ' + ev.direct_count + ' 家');
+        if (ev.rep_count) parts.push('法人代表 ' + ev.rep_count + ' 家');
+        if (ev.total_capital) parts.push('合計資本 NT$ ' + Number(ev.total_capital).toLocaleString());
+        // 變更次數
+        if (ev.event_count) parts.push(ev.event_count + ' 次變更');
+        if (ev.threshold_days) parts.push('於 ' + ev.threshold_days + ' 天內');
+        // 循環持股
+        if (ev.cycle && Array.isArray(ev.cycle)) parts.push('路徑: ' + ev.cycle.join(' → '));
+        // 連接公司數
+        if (ev.connected_companies) parts.push('連接 ' + ev.connected_companies + ' 家公司');
+        // 批量登記
+        if (ev.batch_count) parts.push('同日登記 ' + ev.batch_count + ' 家');
+        // 跨調查
+        if (ev.investigation_count) parts.push('出現在 ' + ev.investigation_count + ' 個調查中');
+
+        if (parts.length === 0) return '';
+        return parts.map(p => '<div style="line-height:1.5;">' + esc(p) + '</div>').join('');
+    }
+
     function formatDate(d) {
         if (!d) return '';
         try {
@@ -6699,22 +6770,51 @@
         if (allFlags.length === 0) {
             html += '<div style="text-align:center; color:#999; padding:40px;">尚無紅旗警示</div>';
         } else {
-            html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+            html += '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
             html += '<thead><tr style="background:#f5f7fa; text-align:left;">';
-            html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">對象</th>';
-            html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">類型</th>';
-            html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">嚴重度</th>';
-            html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">說明</th>';
+            html += '<th style="padding:10px 12px; border-bottom:2px solid #ddd; font-weight:600;">對象</th>';
+            html += '<th style="padding:10px 12px; border-bottom:2px solid #ddd; font-weight:600;">類型</th>';
+            html += '<th style="padding:10px 12px; border-bottom:2px solid #ddd; font-weight:600;">嚴重度</th>';
+            html += '<th style="padding:10px 12px; border-bottom:2px solid #ddd; font-weight:600;">說明</th>';
+            html += '<th style="padding:10px 12px; border-bottom:2px solid #ddd; font-weight:600;">佐證</th>';
             html += '</tr></thead><tbody>';
             allFlags.forEach((f, i) => {
                 const bg = i % 2 === 0 ? '#fff' : '#fafbfc';
                 const sevColors = { CRITICAL: '#C0392B', WARNING: '#E67E22', INFO: '#3498DB' };
                 const sevLabels = { CRITICAL: '嚴重', WARNING: '警告', INFO: '資訊' };
+                // 解析 description：可能是字串，也可能是物件
+                const descRaw = f.description || f.message || '';
+                let descText = '';
+                if (typeof descRaw === 'object') {
+                    descText = descRaw.description || descRaw.message || JSON.stringify(descRaw);
+                } else {
+                    descText = String(descRaw);
+                }
+                // 如果 description 包含 {'evidence': 格式，嘗試提取純文字描述
+                if (descText.includes("'evidence'") || descText.includes('"evidence"')) {
+                    try {
+                        const parsed = JSON.parse(descText.replace(/'/g, '"'));
+                        if (parsed.description) descText = parsed.description;
+                    } catch(e) {
+                        // 嘗試正則提取
+                        const m = descText.match(/'description':\s*'([^']+)'/);
+                        if (m) descText = m[1];
+                    }
+                }
+                // 解析 evidence 為人類可讀
+                const evidence = f.evidence || {};
+                let evidenceHtml = '';
+                if (evidence && typeof evidence === 'object' && Object.keys(evidence).length > 0) {
+                    evidenceHtml = _formatEvidenceReadable(evidence);
+                }
+                const ruleNames = { 'SHELL_COMPANY':'殼公司','RAPID_DISSOLVE':'快速註銷','PHOENIX_COMPANY':'鳳凰公司','CIRCULAR_OWNERSHIP':'循環持股','NOMINEE_DIRECTOR':'代理董事','CAPITAL_ANOMALY':'資本異常','ADDRESS_CLUSTER':'地址聚集','FREQUENT_CHANGE':'頻繁變更','DORMANT_REVIVAL':'休眠復甦','CROSS_HOLDING':'交叉持股','AGE_ANOMALY':'年齡異常','MASS_DIRECTOR':'大量董事','REGISTRATION_BURST':'註冊激增','STAR_STRUCTURE':'星形結構','BRIDGE_NODE':'橋接節點','UBO_DEEP_PATH':'UBO 深層路徑','CAPITAL_VOLATILITY':'資本劇烈跳動','BATCH_REGISTRATION':'批量登記','DIRECTOR_MUSICAL_CHAIRS':'董事走馬燈','UBO_CONCENTRATION':'UBO 資本集中','HIDDEN_UBO':'隱藏實質受益人','SUSPICIOUS_INDUSTRY_MIX':'異常產業組合','CROSS_INVESTIGATION':'跨調查關聯' };
+                const ruleDisplay = ruleNames[f.rule_id] || f.rule_id || f.rule || f.type || '';
                 html += '<tr style="background:' + bg + '; cursor:pointer;" onclick="reportClickNode(\'' + f.nodeId + '\')">';
-                html += '<td style="padding:8px 12px; border-bottom:1px solid #eee;">' + f.entity + '</td>';
-                html += '<td style="padding:8px 12px; border-bottom:1px solid #eee;">' + (f.rule || f.type || '') + '</td>';
-                html += '<td style="padding:8px 12px; border-bottom:1px solid #eee;"><span style="color:' + (sevColors[f.severity] || '#888') + '; font-weight:600;">' + (sevLabels[f.severity] || f.severity || '') + '</span></td>';
-                html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; font-size:11px; color:#666;">' + (f.description || f.message || '') + '</td>';
+                html += '<td style="padding:10px 12px; border-bottom:1px solid #eee;"><span style="color:#3A7CA5; text-decoration:underline;">' + esc(f.entity) + '</span></td>';
+                html += '<td style="padding:10px 12px; border-bottom:1px solid #eee;">' + esc(ruleDisplay) + '</td>';
+                html += '<td style="padding:10px 12px; border-bottom:1px solid #eee;"><span style="color:' + (sevColors[f.severity] || '#888') + '; font-weight:600;">' + (sevLabels[f.severity] || f.severity || '') + '</span></td>';
+                html += '<td style="padding:10px 12px; border-bottom:1px solid #eee; color:#555;">' + esc(descText) + '</td>';
+                html += '<td style="padding:10px 12px; border-bottom:1px solid #eee; font-size:12px; color:#888;">' + evidenceHtml + '</td>';
                 html += '</tr>';
             });
             html += '</tbody></table>';
@@ -6978,9 +7078,36 @@
                     const c = sevColors[f.severity] || '#999';
                     const sl = sevLabels[f.severity] || f.severity;
                     const rn = ruleNames[f.rule_id] || f.rule_id;
-                    return `<div style="padding:10px 12px; border-left:4px solid ${c}; margin-bottom:8px; background:#fff; border-radius:0 6px 6px 0;">
-                        <div style="font-weight:600; font-size:14px;"><span style="color:${c};">[${sl}]</span> ${esc(rn)}</div>
-                        ${f.description ? `<div style="font-size:13px; color:#666; margin-top:4px;">${esc(f.description)}</div>` : ''}
+                    // 解析 description
+                    let descText = '';
+                    const descRaw = f.description || '';
+                    if (typeof descRaw === 'object') {
+                        descText = descRaw.description || descRaw.message || '';
+                    } else {
+                        descText = String(descRaw);
+                    }
+                    if (descText.includes("'evidence'") || descText.includes('"evidence"')) {
+                        try {
+                            const parsed = JSON.parse(descText.replace(/'/g, '"'));
+                            if (parsed.description) descText = parsed.description;
+                        } catch(e) {
+                            const m = descText.match(/'description':\s*'([^']+)'/);
+                            if (m) descText = m[1];
+                        }
+                    }
+                    // 解析 evidence 為人類可讀
+                    const evidence = f.evidence || {};
+                    const evidenceHtml = _formatEvidenceReadable(evidence);
+                    return `<div style="padding:14px 16px; border-left:4px solid ${c}; margin-bottom:10px; background:#fff; border-radius:0 8px 8px 0; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                            <span style="padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; color:#fff; background:${c};">${sl}</span>
+                            <span style="font-weight:700; font-size:15px; color:#333;">${esc(rn)}</span>
+                        </div>
+                        ${descText ? `<div style="font-size:14px; color:#555; margin-bottom:6px; line-height:1.6;">${esc(descText)}</div>` : ''}
+                        ${evidenceHtml ? `<div style="background:#f9f5f5; padding:10px 12px; border-radius:6px; font-size:13px; color:#777; margin-top:6px;">
+                            <div style="font-size:11px; color:#999; margin-bottom:4px; font-weight:600;">佐證資料</div>
+                            ${evidenceHtml}
+                        </div>` : ''}
                     </div>`;
                 }).join('')}
             </div>`;
