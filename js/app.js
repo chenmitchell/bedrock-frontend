@@ -1418,6 +1418,7 @@
                 headers,
                 body: JSON.stringify({ investigation_ids: ids }),
                 signal: controller.signal,
+                credentials: 'include',
             });
             clearTimeout(timer);
             if (!res.ok) {
@@ -5100,6 +5101,7 @@
             const res = await fetch(API_BASE + `/investigations/${state.currentInvId}/export/${format}`, {
                 method: 'GET',
                 headers,
+                credentials: 'include',
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
