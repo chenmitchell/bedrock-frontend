@@ -8169,6 +8169,16 @@
                     ${nodeData.paid_in_capital ? `<div><span style="color:#888; font-size:13px;">實收資本額(元)</span><br><strong>NT$ ${Number(String(nodeData.paid_in_capital).replace(/,/g, '')).toLocaleString()}</strong></div>` : ''}
                     ${nodeData.issued_shares ? `<div><span style="color:#888; font-size:13px;">已發行股份總數(股)</span><br><strong>${parseInt(nodeData.issued_shares).toLocaleString()} 股</strong></div>` : ''}
                     ${nodeData.share_amount ? `<div><span style="color:#888; font-size:13px;">每股金額(元)</span><br><strong>NT$ ${parseInt(nodeData.share_amount).toLocaleString()}</strong></div>` : ''}
+                    ${(() => {
+                        const inv = (nodeData.uses_invoice || '').toString().trim().toUpperCase();
+                        if (inv !== 'Y' && inv !== 'N') return '';
+                        const isY = inv === 'Y';
+                        const label = isY ? '有' : '沒有';
+                        const color = isY ? '#27AE60' : '#C0392B';
+                        const started = nodeData.invoice_started_at;
+                        const extra = (isY && started) ? `<br><span style="color:#888; font-size:12px;">${esc(String(started))} 年起使用統一發票</span>` : '';
+                        return `<div><span style="color:#888; font-size:13px;">有無使用發票</span><br><strong style="color:${color};">${label}（${inv}）</strong>${extra}</div>`;
+                    })()}
                     ${nodeData.representative ? `<div><span style="color:#888; font-size:13px;">代表人/負責人</span><br><strong>${esc(nodeData.representative)}</strong></div>` : ''}
                     ${nodeData.established_date ? `<div><span style="color:#888; font-size:13px;">核准設立日期</span><br><strong>${esc(nodeData.established_date)}</strong></div>` : ''}
                     ${nodeData.last_change_date ? `<div><span style="color:#888; font-size:13px;">最後核准變更日期</span><br><strong>${esc(nodeData.last_change_date)}</strong></div>` : ''}
