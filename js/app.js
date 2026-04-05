@@ -81,14 +81,29 @@
             const el = document.createElement('div');
             el.className = `toast toast-${type}`;
             el.textContent = message;
-            this._getContainer().appendChild(el);
-            setTimeout(() => {
+            el.style.cursor = 'pointer';
+            el.title = '點擊關閉';
+            // 點擊立即關閉
+            const dismiss = () => {
+                if (el._dismissed) return;
+                el._dismissed = true;
                 el.style.opacity = '0';
                 el.style.transform = 'translateY(12px)';
                 el.style.transition = 'all 0.3s';
                 setTimeout(() => el.remove(), 300);
-            }, duration);
+            };
+            el.addEventListener('click', dismiss);
+            this._getContainer().appendChild(el);
+            // 自動關閉
+            setTimeout(dismiss, duration);
         },
+        // 清除所有 toast（切換場景時呼叫）
+        clear() {
+            if (this._container) {
+                this._container.innerHTML = '';
+            }
+        },
+        info(msg, duration) { this.show(msg, 'info', duration); },
         success(msg) { this.show(msg, 'success'); },
         error(msg) { this.show(msg, 'error'); },
         warning(msg) { this.show(msg, 'warning'); },
