@@ -419,6 +419,64 @@
     };
 
     // ================================================================
+    // 效能探針 Performance Profiler (window.__bedrockPerf)
+    // ================================================================
+    const Perf = {
+        _records: {},
+        _stack: [],
+        _warnThreshold: 300, // ms — 超過這個值會在 console 印警告
+
+        start(name) {
+            this._stack.push({ name, t0: performance.now() });
+        },
+        end(name) {
+            const entry = this._stack.pop();
+            if (!entry) return;
+            const dur = performance.now() - entry.t0;
+            if (!this._records[entry.name]) {
+                this._records[entry.name] = { calls: 0, totalMs: 0, maxMs: 0 };
+            }
+            const r = this._records[entry.name];
+            r.calls++;
+            r.totalMs += dur;
+            if (dur > r.maxMs) r.maxMs = dur;
+            if (dur > this._warnThreshold) {
+                console.warn(`[PERF] ${entry.name} 耗時 ${dur.toFixed(0)}ms`);
+            }
+        },
+        mark(name, fn) {
+            this.start(name);
+            try { return fn(); }
+            finally { this.end(name); }
+        },
+        report() {
+            const rows = Object.entries(this._records).map(([name, r]) => ({
+                name, calls: r.calls,
+                totalMs: Math.round(r.totalMs),
+                avgMs: Math.round(r.totalMs / r.calls),
+                maxMs: Math.round(r.maxMs),
+            })).sort((a, b) => b.totalMs - a.totalMs);
+            console.table(rows);
+            return rows;
+        },
+        reset() { this._records = {}; this._stack = []; },
+    };
+    window.__bedrockPerf = Perf;
+
+    // 自動監聽 long tasks (>50ms 就記錄)
+    if ('PerformanceObserver' in window) {
+        try {
+            new PerformanceObserver((list) => {
+                for (const e of list.getEntries()) {
+                    if (e.duration > 100) {
+                        console.warn(`[LONGTASK] ${e.duration.toFixed(0)}ms @ t=${e.startTime.toFixed(0)}`);
+                    }
+                }
+            }).observe({ entryTypes: ['longtask'] });
+        } catch (e) { /* 不支援就算了 */ }
+    }
+
+    // ================================================================
     // 認證狀態管理
     // ================================================================
     const auth = {
@@ -2242,16 +2300,22 @@
     window.openInvestigation = openInvestigation;
 
     async function loadInvestigationData(id) {
+        Perf.start('loadInvestigationData');
         // 先載入種子列表
         loadSeeds(id);
 
         // 載入圖資料
         try {
+            Perf.start('api.graph');
             const data = await api.get(`/investigations/${id}/graph`);
+            Perf.end('api.graph');
             if (data && data.elements && data.elements.length > 0) {
-                renderGraph(data.elements);
+                const nodeCount = data.elements.filter(e => e.group === 'nodes').length;
+                const edgeCount = data.elements.filter(e => e.group === 'edges').length;
+                console.log(`[BEDROCK] 圖資料: ${nodeCount} 節點, ${edgeCount} 邊`);
+                Perf.mark('renderGraph', () => renderGraph(data.elements));
                 // 圖渲染完成後建立縣市分群
-                buildCityGroups();
+                Perf.mark('buildCityGroups', () => buildCityGroups());
             }
         } catch (e) {
             console.warn('[BEDROCK] 載入圖資料失敗:', e.message);
@@ -2266,6 +2330,7 @@
 
         // 延遲更新 stepper (等紅旗等資料載完)
         setTimeout(() => updateWorkflowStepper(), 500);
+        Perf.end('loadInvestigationData');
     }
 
     // ================================================================
@@ -2877,37 +2942,50 @@
         state.cy.nodes().forEach(n => existingNodeIds.add(n.id()));
         const isUpdate = existingNodeIds.size > 0;
 
-        state.cy.elements().remove();
-        state.cy.add(elements);
+        Perf.mark('cy.add', () => {
+            state.cy.elements().remove();
+            state.cy.add(elements);
+        });
 
         const nodeCount = elements.filter(e => e.group === 'nodes').length;
         const seedNodes = state.cy.nodes('[?is_seed]');
 
         if (nodeCount > 300) {
             // 超大圖：用 grid 佈局（最快，O(n)）
-            state.cy.layout({
-                name: 'grid',
-                animate: false,
-                rows: Math.ceil(Math.sqrt(nodeCount)),
-                fit: true,
-                padding: 30,
-            }).run();
+            Perf.mark('layout.grid', () => {
+                state.cy.layout({
+                    name: 'grid',
+                    animate: false,
+                    rows: Math.ceil(Math.sqrt(nodeCount)),
+                    fit: true,
+                    padding: 30,
+                }).run();
+            });
             Toast.show(`${nodeCount} 個節點，使用快速網格排版`, 'info', 2000);
         } else if (nodeCount > 100) {
             // 大圖用 concentric（較快，不用力學模擬）
-            state.cy.layout({
-                name: 'concentric',
-                animate: false,
-                concentric: function(node) {
-                    if (node.data('is_seed')) return 100;
-                    if (node.data('flag_count')) return 50 + node.data('flag_count');
-                    return node.connectedEdges().length;
-                },
-                levelWidth: function() { return 3; },
-                minNodeSpacing: 15,
-                fit: true,
-                padding: 30,
-            }).run();
+            // ★ 預先計算每個 node 的 degree，避免 concentric callback 重複呼叫 connectedEdges()
+            const degreeMap = new Map();
+            Perf.mark('precompute.degrees', () => {
+                state.cy.nodes().forEach(n => {
+                    degreeMap.set(n.id(), n.connectedEdges().length);
+                });
+            });
+            Perf.mark('layout.concentric', () => {
+                state.cy.layout({
+                    name: 'concentric',
+                    animate: false,
+                    concentric: function(node) {
+                        if (node.data('is_seed')) return 100;
+                        if (node.data('flag_count')) return 50 + node.data('flag_count');
+                        return degreeMap.get(node.id()) || 0;
+                    },
+                    levelWidth: function() { return 3; },
+                    minNodeSpacing: 15,
+                    fit: true,
+                    padding: 30,
+                }).run();
+            });
             Toast.show(`${nodeCount} 個節點，使用同心圓排版`, 'info', 2000);
         } else {
             runLayout('cola');
@@ -2953,7 +3031,8 @@
             // 初始時顯示到第二層
             if (depthSelect && nodeCount > 10) {
                 depthSelect.value = '2';
-                filterByDepth(2);
+                // ★ 初次開圖時：不要再跑 cola（已經跑過 concentric 了），也不要動畫
+                filterByDepth(2, { skipRelayout: true, skipAnimation: true });
             } else {
                 // 節點不多就全部顯示
                 const label = document.getElementById('depth-filter-label');
@@ -2968,22 +3047,26 @@
     function runLayout(name) {
         if (!state.cy) return;
 
+        // ★ 大圖時自動降低 cola 迭代次數，避免卡頓
+        const visibleCount = state.cy.nodes().filter(n => n.style('display') !== 'none').length;
+        const isLarge = visibleCount > 80;
+
         const layouts = {
             cola: {
                 name: 'cola',
-                animate: true,
-                animationDuration: 800,
+                animate: !isLarge,            // 大圖不動畫
+                animationDuration: isLarge ? 0 : 800,
                 nodeSpacing: 50,
                 edgeLength: 150,
-                convergenceThreshold: 0.001,
+                convergenceThreshold: isLarge ? 0.01 : 0.001,  // 大圖降低精度
                 randomize: false,
                 avoidOverlap: true,
                 handleDisconnected: true,
-                flow: { axis: 'y', minSeparation: 60 },  // 上→下層次流向，減少交叉
-                edgeSymDiffLength: 15,     // 對稱差長度：推開平行邊
-                unconstrIter: 20,          // 無約束迭代：改善初始佈局
-                userConstIter: 30,         // 使用者約束迭代
-                allConstIter: 30,          // 所有約束迭代
+                flow: { axis: 'y', minSeparation: 60 },
+                edgeSymDiffLength: 15,
+                unconstrIter: isLarge ? 10 : 20,
+                userConstIter: isLarge ? 15 : 30,
+                allConstIter: isLarge ? 15 : 30,
                 fit: true,
                 padding: 50,
             },
@@ -2997,7 +3080,9 @@
         };
 
         const layoutOpts = layouts[name] || layouts.cola;
-        state.cy.layout(layoutOpts).run();
+        Perf.mark(`runLayout.${name}(n=${visibleCount})`, () => {
+            state.cy.layout(layoutOpts).run();
+        });
     }
 
     // ================================================================
@@ -3949,7 +4034,9 @@
                 'union_find': { icon: '🔗', label: '關聯群' },
             };
 
-            listEl.innerHTML = renderClusterAccordion(clusters, algorithmLabels);
+            Perf.mark('renderClusterAccordion', () => {
+                listEl.innerHTML = renderClusterAccordion(clusters, algorithmLabels);
+            });
         } catch (e) {
             console.warn('[BEDROCK] 載入集群失敗:', e.message);
             if (countEl) countEl.textContent = '0';
@@ -3959,6 +4046,17 @@
 
     // ── 集群手風琴渲染：直接列出成員公司 ──────────────
     function renderClusterAccordion(clusters, algorithmLabels) {
+        // ★ 預先建立 entity_id → data map，避免每個 cluster 都掃全圖（原本 O(clusters × nodes)）
+        const nodeDataMap = new Map();
+        if (state.cy) {
+            Perf.mark('buildNodeDataMap', () => {
+                state.cy.nodes().forEach(node => {
+                    const d = node.data();
+                    const eid = d.entity_id || d.id;
+                    if (eid) nodeDataMap.set(eid, d);
+                });
+            });
+        }
         return clusters.map((c, idx) => {
             const algo = algorithmLabels[c.algorithm] || { icon: '📋', label: c.algorithm || '自訂' };
             const memberTaxIds = c.member_tax_ids || [];
@@ -3966,22 +4064,16 @@
             const confidence = c.confidence ? Math.round(c.confidence * 100) : 0;
             const confColor = confidence >= 70 ? '#C0392B' : confidence >= 40 ? '#E67E22' : '#95A5A6';
 
-            // 從 Cytoscape 解析成員名稱
+            // 從 nodeDataMap 查找成員（O(members_per_cluster)）
             const members = [];
-            if (state.cy) {
-                const idSet = new Set(memberTaxIds);
-                state.cy.nodes().forEach(node => {
-                    const d = node.data();
-                    const eid = d.entity_id || d.id;
-                    if (idSet.has(eid)) {
-                        members.push({ id: d.id, label: d.label || eid, entity_id: eid, address: d.address || '', type: d.type || '', status: d.status || '', capital: d.capital || 0, representative: d.representative || '' });
-                    }
-                });
-            }
-            // 補上圖中找不到的
-            const foundIds = new Set(members.map(m => m.entity_id));
             memberTaxIds.forEach(tid => {
-                if (!foundIds.has(tid)) members.push({ id: tid, label: tid, entity_id: tid, address: '', type: '' });
+                const d = nodeDataMap.get(tid);
+                if (d) {
+                    members.push({ id: d.id, label: d.label || tid, entity_id: tid, address: d.address || '', type: d.type || '', status: d.status || '', capital: d.capital || 0, representative: d.representative || '' });
+                } else {
+                    // 圖中找不到的，補 placeholder
+                    members.push({ id: tid, label: tid, entity_id: tid, address: '', type: '' });
+                }
             });
 
             const membersJson = JSON.stringify(memberTaxIds).replace(/"/g, '&quot;');
@@ -6419,8 +6511,12 @@
         }
     }
 
-    function filterByDepth(maxDepth) {
+    function filterByDepth(maxDepth, opts) {
         if (!state.cy) return;
+        Perf.start('filterByDepth');
+        opts = opts || {};
+        const skipRelayout = !!opts.skipRelayout;
+        const skipAnimation = !!opts.skipAnimation;
         maxDepth = parseInt(maxDepth);
         const label = document.getElementById('depth-filter-label');
 
@@ -6441,19 +6537,20 @@
                 });
             });
             // 新出現的節點做淡入動畫
-            if (hiddenNodes.length > 0) {
+            if (hiddenNodes.length > 0 && !skipAnimation) {
                 hiddenNodes.style('opacity', 0);
                 hiddenNodes.animate({ style: { opacity: 1 } }, { duration: 400 });
             }
             const totalNodes = state.cy.nodes().length;
             if (label) label.textContent = `${totalNodes} 個節點`;
             // 重新排版讓圖形自然展開
-            if (hiddenNodes.length > 5) {
+            if (!skipRelayout && hiddenNodes.length > 5) {
                 runLayout('cola');
             } else {
                 state.cy.fit(state.cy.nodes(), 40);
             }
             filterSidebarByVisibleNodes();
+            Perf.end('filterByDepth');
             return;
         }
 
@@ -6481,43 +6578,56 @@
                 const n = state.cy.getElementById(id);
                 if (n.length) fadingNodes.merge(n);
             });
-            fadingNodes.animate(
-                { style: { opacity: 0 } },
-                {
-                    duration: 300,
-                    complete: () => {
-                        state.cy.batch(() => {
-                            fadingNodes.style('display', 'none').style('opacity', 1);
-                            // 隱藏相關邊
-                            state.cy.edges().forEach(edge => {
-                                const srcD = depthMap.get(edge.source().id()) || 999;
-                                const tgtD = depthMap.get(edge.target().id()) || 999;
-                                edge.style('display', (srcD <= maxDepth && tgtD <= maxDepth) ? 'element' : 'none');
-                            });
-                            // 標記邊界節點為收合狀態（dashed border）
-                            toShow.forEach(id => {
-                                const n = state.cy.getElementById(id);
-                                const nd = depthMap.get(id) || 0;
-                                if (nd === maxDepth) {
-                                    const hasHiddenNeighbor = n.neighborhood('node').some(
-                                        nb => (depthMap.get(nb.id()) || 999) > maxDepth
-                                    );
-                                    if (hasHiddenNeighbor) {
-                                        n.style('border-style', 'dashed');
-                                        n.data('_collapsed', true);
-                                    }
-                                }
-                            });
+            // ★ 將「隱藏邊 + 標記邊界 + 重排」抽成一個函式，動畫或同步都用它
+            const applyHide = () => {
+                Perf.mark('filterByDepth.applyHide', () => {
+                    state.cy.batch(() => {
+                        fadingNodes.style('display', 'none').style('opacity', 1);
+                        // 隱藏相關邊
+                        state.cy.edges().forEach(edge => {
+                            const srcD = depthMap.get(edge.source().id()) || 999;
+                            const tgtD = depthMap.get(edge.target().id()) || 999;
+                            edge.style('display', (srcD <= maxDepth && tgtD <= maxDepth) ? 'element' : 'none');
                         });
-                        // 重新排版
-                        const visible = state.cy.nodes().filter(n => n.style('display') !== 'none');
-                        if (visible.length > 0) {
-                            runLayout('cola');
-                        }
-                        filterSidebarByVisibleNodes();
+                        // 標記邊界節點為收合狀態（dashed border）
+                        toShow.forEach(id => {
+                            const n = state.cy.getElementById(id);
+                            const nd = depthMap.get(id) || 0;
+                            if (nd === maxDepth) {
+                                const hasHiddenNeighbor = n.neighborhood('node').some(
+                                    nb => (depthMap.get(nb.id()) || 999) > maxDepth
+                                );
+                                if (hasHiddenNeighbor) {
+                                    n.style('border-style', 'dashed');
+                                    n.data('_collapsed', true);
+                                }
+                            }
+                        });
+                    });
+                });
+                // 重新排版
+                if (!skipRelayout) {
+                    const visible = state.cy.nodes().filter(n => n.style('display') !== 'none');
+                    if (visible.length > 0) {
+                        runLayout('cola');
                     }
+                } else {
+                    // 不重排就直接 fit 到可見節點
+                    const visible = state.cy.nodes().filter(n => n.style('display') !== 'none');
+                    if (visible.length > 0) state.cy.fit(visible, 40);
                 }
-            );
+                filterSidebarByVisibleNodes();
+            };
+
+            if (skipAnimation) {
+                // 同步執行（初次開圖）
+                applyHide();
+            } else {
+                fadingNodes.animate(
+                    { style: { opacity: 0 } },
+                    { duration: 300, complete: applyHide }
+                );
+            }
         }
 
         // 展開動畫：顯示新出現的節點
@@ -6563,6 +6673,7 @@
         }
 
         Toast.show(`顯示第 ${maxDepth} 層：${toShow.length} 個節點`, 'info');
+        Perf.end('filterByDepth');
     }
     window.filterByDepth = filterByDepth;
 
@@ -6589,7 +6700,16 @@
     window.resetDepthFilter = resetDepthFilter;
 
     // ==================== 深度連動：側邊欄同步過濾 ====================
+    let _sidebarFilterTimer = null;
     function filterSidebarByVisibleNodes() {
+        // Debounce：200ms 內多次呼叫只執行最後一次
+        if (_sidebarFilterTimer) clearTimeout(_sidebarFilterTimer);
+        _sidebarFilterTimer = setTimeout(() => {
+            _sidebarFilterTimer = null;
+            Perf.mark('filterSidebarByVisibleNodes', _filterSidebarByVisibleNodesImpl);
+        }, 200);
+    }
+    function _filterSidebarByVisibleNodesImpl() {
         if (!state.cy) return;
 
         // 收集當前可見節點的 entity_id 和 label
