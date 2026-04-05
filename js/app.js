@@ -852,6 +852,23 @@
             if (s < step) el.classList.add('done');
             if (s === step) el.classList.add('active');
         });
+
+        // Google 預填：進入 step 2 時自動帶入姓名（來自 Google display_name）
+        if (step === 2 && state.googlePrefill) {
+            const nameInput = document.getElementById('reg-fullname');
+            if (nameInput && !nameInput.value && state.googlePrefill.display_name) {
+                nameInput.value = state.googlePrefill.display_name;
+            }
+            // 顯示 Google 登入提示橫幅
+            const container = document.querySelector('#reg-step-2');
+            if (container && !document.getElementById('reg-google-banner')) {
+                const banner = document.createElement('div');
+                banner.id = 'reg-google-banner';
+                banner.style.cssText = 'background:#e8f4fd; border:1px solid #4A9EBF; border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:14px; color:#2d5a7f;';
+                banner.innerHTML = `<i class="fas fa-check-circle" style="color:#27AE60; margin-right:6px;"></i>已使用 Google 帳號驗證：<strong>${esc(state.googlePrefill.email || '')}</strong>，請補齊其餘註冊資料。`;
+                container.insertBefore(banner, container.firstChild);
+            }
+        }
     }
 
     function regNextStep(step) {
