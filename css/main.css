@@ -2119,17 +2119,17 @@ input:focus, select:focus, textarea:focus {
 /* Graph legend */
 .graph-legend {
   position: absolute;
-  bottom: var(--space-sm);
-  right: var(--space-sm);
-  background: rgba(255, 255, 255, 0.88);
+  bottom: var(--space-md);
+  right: var(--space-md);
+  background: rgba(255, 255, 255, 0.94);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  padding: var(--space-sm) var(--space-md);
+  padding: 10px 14px;
   z-index: 10;
-  font-size: 0.7rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  backdrop-filter: blur(4px);
-  max-width: 150px;
+  font-size: 0.82rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  backdrop-filter: blur(6px);
+  max-width: 200px;
   cursor: move;
   user-select: none;
 }
@@ -2143,15 +2143,16 @@ input:focus, select:focus, textarea:focus {
 .graph-legend-item {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
-  margin-bottom: var(--space-sm);
+  gap: 8px;
+  margin-bottom: 5px;
   color: var(--color-text-secondary);
+  font-size: 0.82rem;
 }
 
 .graph-legend-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
   flex-shrink: 0;
 }
 

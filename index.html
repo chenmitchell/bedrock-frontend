@@ -933,21 +933,22 @@
 
             <!-- 中央 Cytoscape -->
             <main class="ws-canvas-area" id="main-content">
-                <div class="ws-canvas-toolbar" role="toolbar" aria-label="圖譜工具列">
-                    <button class="ws-tool-btn" id="btn-zoom-in" title="放大圖譜" aria-label="放大圖譜"><i class="fas fa-search-plus" aria-hidden="true"></i></button>
-                    <button class="ws-tool-btn" id="btn-zoom-out" title="縮小圖譜" aria-label="縮小圖譜"><i class="fas fa-search-minus" aria-hidden="true"></i></button>
-                    <button class="ws-tool-btn" id="btn-fit" title="適合畫面（自動縮放至全圖）" aria-label="適合畫面"><i class="fas fa-expand" aria-hidden="true"></i></button>
+                <div class="ws-canvas-toolbar" role="toolbar" aria-label="圖譜工具列" style="display:flex; flex-wrap:wrap; align-items:center; gap:3px; padding:4px 8px;">
+                    <button class="ws-tool-btn" id="btn-zoom-in" title="放大"><i class="fas fa-search-plus" aria-hidden="true"></i></button>
+                    <button class="ws-tool-btn" id="btn-zoom-out" title="縮小"><i class="fas fa-search-minus" aria-hidden="true"></i></button>
+                    <button class="ws-tool-btn" id="btn-fit" title="適合畫面"><i class="fas fa-expand" aria-hidden="true"></i></button>
                     <div class="ws-tool-sep" aria-hidden="true"></div>
-                    <button class="ws-tool-btn" id="btn-layout-cola" title="力導向排版（自動排列節點）" aria-label="力導向排版"><i class="fas fa-project-diagram" aria-hidden="true"></i></button>
-                    <button class="ws-tool-btn" id="btn-layout-grid" title="網格排版（整齊排列節點）" aria-label="網格排版"><i class="fas fa-th" aria-hidden="true"></i></button>
-                    <button class="ws-tool-btn" id="btn-export-png" title="匯出圖片（下載 PNG）" aria-label="匯出圖片"><i class="fas fa-image" aria-hidden="true"></i></button>
-                    <span class="ws-tool-divider" aria-hidden="true"></span>
+                    <button class="ws-tool-btn" id="btn-layout-cola" title="力導向排版"><i class="fas fa-project-diagram" aria-hidden="true"></i></button>
+                    <button class="ws-tool-btn" id="btn-layout-grid" title="網格排版"><i class="fas fa-th" aria-hidden="true"></i></button>
+                    <button class="ws-tool-btn" id="btn-export-png" title="匯出圖片"><i class="fas fa-image" aria-hidden="true"></i></button>
+                    <div class="ws-tool-sep" aria-hidden="true"></div>
+                    <!-- 歷史 -->
                     <div style="display:inline-flex; align-items:center; gap:2px;">
-                        <button class="ws-tool-btn" id="btn-toggle-historical" title="顯示/隱藏歷史關聯" onclick="toggleHistoricalEdges()" aria-label="切換歷史關聯顯示">
+                        <button class="ws-tool-btn" id="btn-toggle-historical" title="顯示/隱藏歷史關聯" onclick="toggleHistoricalEdges()" aria-label="歷史">
                             <i class="fas fa-history" aria-hidden="true"></i>
-                            <span>歷史</span>
+                            <span style="font-size:11px;">歷史</span>
                         </button>
-                        <select id="historical-range" class="ws-input" style="width:80px; padding:2px 4px; font-size:10px; height:28px; border-radius:4px;" title="歷史關聯時間範圍" onchange="filterHistoricalByRange()">
+                        <select id="historical-range" class="ws-input" style="width:72px; padding:2px 4px; font-size:11px; height:26px; border-radius:4px;" title="歷史時間範圍" onchange="filterHistoricalByRange()">
                             <option value="all">全部</option>
                             <option value="1">1 年內</option>
                             <option value="3">3 年內</option>
@@ -955,50 +956,42 @@
                             <option value="10">10 年內</option>
                         </select>
                     </div>
-                    <button class="ws-tool-btn" id="btn-toggle-legend" title="顯示/隱藏圖例" onclick="toggleLegend()" aria-label="切換圖例顯示">
+                    <button class="ws-tool-btn" id="btn-toggle-legend" title="圖例" onclick="toggleLegend()">
                         <i class="fas fa-info-circle" aria-hidden="true"></i>
-                        <span>圖例</span>
+                        <span style="font-size:11px;">圖例</span>
                     </button>
-                    <button class="ws-tool-btn" id="btn-toggle-filter" title="節點篩選：顯示/隱藏特定類型" onclick="toggleFilterPanel()" aria-label="節點篩選">
+                    <button class="ws-tool-btn" id="btn-toggle-filter" title="篩選" onclick="toggleFilterPanel()">
                         <i class="fas fa-filter" aria-hidden="true"></i>
-                        <span>篩選</span>
+                        <span style="font-size:11px;">篩選</span>
                     </button>
-                    <button class="ws-tool-btn" id="btn-reanalyze" title="重新執行風險分析（偵測紅旗、集群、UBO）" onclick="window.__bedrockReanalyze && window.__bedrockReanalyze()" aria-label="重新分析" style="background:rgba(192,57,43,0.08); color:#C0392B; font-weight:600;">
-                        <i class="fas fa-microscope" aria-hidden="true"></i>
-                        <span>重新分析</span>
+                    <button class="ws-tool-btn" id="btn-reanalyze" title="重新分析" onclick="window.__bedrockReanalyze && window.__bedrockReanalyze()" style="background:#C0392B; color:#fff; font-weight:600; border-radius:6px; padding:4px 10px;">
+                        <i class="fas fa-sync-alt" aria-hidden="true"></i>
+                        <span style="font-size:11px;">重新分析</span>
                     </button>
-                    <button class="ws-tool-btn" id="btn-toggle-report-view" title="切換報表/圖形檢視" onclick="toggleReportView()" aria-label="切換報表檢視">
+                    <button class="ws-tool-btn" id="btn-toggle-report-view" title="報表" onclick="toggleReportView()">
                         <i class="fas fa-table" aria-hidden="true"></i>
-                        <span>報表</span>
+                        <span style="font-size:11px;">報表</span>
                     </button>
-                    <span class="ws-tool-divider" aria-hidden="true"></span>
-                    <div style="display:inline-flex; align-items:center; gap:4px;" title="依分群排列並上色節點">
-                        <i class="fas fa-project-diagram" style="font-size:12px; color:#999;" aria-hidden="true"></i>
-                        <select id="cluster-color-mode" class="ws-input" style="width:100px; padding:2px 4px; font-size:10px; height:28px; border-radius:4px;" onchange="applyClusterColorMode(this.value)">
-                            <option value="none">預設排列</option>
-                            <option value="city">依縣市分群</option>
-                            <option value="address">依地址分群</option>
-                            <option value="cluster">依集群分群</option>
-                        </select>
-                    </div>
-                    <span class="ws-tool-divider" aria-hidden="true"></span>
-                    <div style="display:inline-flex; align-items:center; gap:8px;" title="檢視深度：控制圖形上顯示到第幾層，可隨時調整，不影響已搜尋的資料">
-                        <i class="fas fa-layer-group" style="font-size:13px; color:#3A7CA5;" aria-hidden="true"></i>
-                        <span style="font-size:13px; color:#555; white-space:nowrap; font-weight:500;">檢視深度</span>
-                        <select id="depth-filter-select" class="ws-input" style="padding:5px 12px; font-size:14px; min-width:100px; border-radius:6px; border:1px solid #ccc; font-weight:600;" onchange="filterByDepth(this.value)">
+                    <select id="cluster-color-mode" class="ws-input" style="width:90px; padding:2px 4px; font-size:11px; height:26px; border-radius:4px;" onchange="applyClusterColorMode(this.value)" title="分群上色">
+                        <option value="none">預設排列</option>
+                        <option value="city">依縣市</option>
+                        <option value="address">依地址</option>
+                        <option value="cluster">依集群</option>
+                    </select>
+                    <div class="ws-tool-sep" aria-hidden="true"></div>
+                    <!-- 檢視深度 -->
+                    <div style="display:inline-flex; align-items:center; gap:6px;" title="檢視深度">
+                        <i class="fas fa-layer-group" style="font-size:12px; color:#3A7CA5;" aria-hidden="true"></i>
+                        <span style="font-size:12px; color:#555; white-space:nowrap; font-weight:500;">檢視深度</span>
+                        <select id="depth-filter-select" class="ws-input" style="padding:4px 10px; font-size:13px; min-width:80px; border-radius:5px; border:1px solid #ccc; font-weight:600;" onchange="filterByDepth(this.value)">
                             <option value="1">1 層</option>
                             <option value="2" selected>2 層</option>
                             <option value="3">3 層</option>
                             <option value="4">4 層</option>
                             <option value="5">5 層</option>
-                            <option value="6">6 層</option>
-                            <option value="7">7 層</option>
-                            <option value="8">8 層</option>
-                            <option value="9">9 層</option>
-                            <option value="10">10 層</option>
-                            <option value="99">全部展開</option>
+                            <option value="99">全部</option>
                         </select>
-                        <span id="depth-filter-label" style="font-size:13px; font-weight:600; color:#3A7CA5; min-width:80px; white-space:nowrap;">0 個節點</span>
+                        <span id="depth-filter-label" style="font-size:12px; font-weight:600; color:#3A7CA5; white-space:nowrap;">0 個節點</span>
                     </div>
                 </div>
                 <div style="position:relative; flex:1; min-height:0;">

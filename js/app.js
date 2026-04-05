@@ -2239,17 +2239,26 @@
             currentSelectedNode = e.target.id();
         });
 
-        // 節點雙擊 → 展開/收合下一層
+        // 節點雙擊 → 展開/收合下一層（適用所有節點類型）
         state.cy.on('dbltap', 'node', function (e) {
             const node = e.target;
             const nodeData = node.data();
+            _toggleNodeExpand(node, nodeData);
+        });
 
-            // 只對公司節點做展開/收合
-            if (nodeData.type === 'company' && nodeData.tax_id && state.currentInvId) {
-                const isCollapsed = node.data('_collapsed');
-                if (isCollapsed) {
-                    // 恢復被收合的子節點
-                    const hiddenChildren = node.data('_hiddenChildren') || [];
+        // 暴露給全域使用（如果需要從 UI 按鈕觸發）
+        window.__bedrockToggleNodeExpand = function(nodeId) {
+            if (!state.cy) return;
+            const node = state.cy.getElementById(nodeId);
+            if (node.length) _toggleNodeExpand(node, node.data());
+        };
+
+        function _toggleNodeExpand(node, nodeData) {
+            const isCollapsed = node.data('_collapsed');
+            if (isCollapsed) {
+                // 恢復被收合的子節點
+                const hiddenChildren = node.data('_hiddenChildren') || [];
+                state.cy.batch(() => {
                     hiddenChildren.forEach(childId => {
                         const child = state.cy.getElementById(childId);
                         if (child && child.length) {
@@ -2263,53 +2272,56 @@
                             });
                         }
                     });
-                    node.data('_collapsed', false);
-                    node.data('_hiddenChildren', []);
-                    // 移除收合標記
-                    node.style('border-style', nodeData.is_seed ? 'double' : 'solid');
-                    Toast.show(`已展開「${nodeData.label}」的關聯`, 'info', 1500);
-                    runLayout('cola');
-                } else {
-                    // 收合：隱藏從此節點展開的子節點（depth > 此節點 depth 且只透過此節點連接的）
-                    const depthMap = getDepthMap();
-                    const nodeDepth = depthMap.get(node.id()) || 0;
-                    const hiddenChildren = [];
+                });
+                node.data('_collapsed', false);
+                node.data('_hiddenChildren', []);
+                node.style('border-style', nodeData.is_seed ? 'double' : 'solid');
+                Toast.show(`已展開「${nodeData.label}」的關聯（${hiddenChildren.length} 個節點）`, 'info', 1500);
+                const visible = state.cy.nodes().filter(n => n.style('display') !== 'none');
+                if (visible.length > 0) state.cy.fit(visible, 40);
+                filterSidebarByVisibleNodes();
+            } else {
+                // 收合：隱藏此節點的下一層（深度更深且直接相連的）
+                const depthMap = getDepthMap();
+                const nodeDepth = depthMap.get(node.id()) || 0;
+                const hiddenChildren = [];
 
-                    // 找出比此節點深一層且直接相連的節點
+                state.cy.batch(() => {
                     node.neighborhood('node').forEach(neighbor => {
+                        if (neighbor.style('display') === 'none') return;
                         const neighborDepth = depthMap.get(neighbor.id()) || 0;
                         if (neighborDepth > nodeDepth) {
-                            // 檢查此子節點是否只透過此節點可達（簡化判斷）
                             neighbor.style('display', 'none');
                             neighbor.connectedEdges().style('display', 'none');
                             hiddenChildren.push(neighbor.id());
                         }
                     });
+                });
 
-                    if (hiddenChildren.length > 0) {
-                        node.data('_collapsed', true);
-                        node.data('_hiddenChildren', hiddenChildren);
-                        // 顯示收合狀態 + 收合數量
-                        node.style('border-style', 'dashed');
-                        Toast.show(`已收合「${nodeData.label}」（${hiddenChildren.length} 個關聯節點）`, 'info', 1500);
-                        runLayout('cola');
-                    } else {
-                        // 嘗試深入追蹤此節點
-                        Toast.show(`正在從「${nodeData.label}」深入追蹤…`, 'info');
-                        api.post(`/investigations/${state.currentInvId}/crawl/start`, {
-                            seed_name: nodeData.tax_id || nodeData.label
-                        }).then(() => {
-                            Toast.success('深入追蹤已啟動');
-                            state.crawling = true;
-                            updateCrawlUI();
-                            pollCrawlProgress();
-                        }).catch(err => {
-                            Toast.error('深入追蹤失敗: ' + err.message);
-                        });
-                    }
+                if (hiddenChildren.length > 0) {
+                    node.data('_collapsed', true);
+                    node.data('_hiddenChildren', hiddenChildren);
+                    node.style('border-style', 'dashed');
+                    Toast.show(`已收合「${nodeData.label}」（${hiddenChildren.length} 個關聯節點）`, 'info', 1500);
+                    const visible = state.cy.nodes().filter(n => n.style('display') !== 'none');
+                    if (visible.length > 0) state.cy.fit(visible, 40);
+                    filterSidebarByVisibleNodes();
+                } else if (nodeData.type === 'company' && nodeData.tax_id && state.currentInvId) {
+                    // 邊界節點且是公司：嘗試深入追蹤
+                    Toast.show(`正在從「${nodeData.label}」深入追蹤…`, 'info');
+                    api.post(`/investigations/${state.currentInvId}/crawl/start`, {
+                        seed_name: nodeData.tax_id || nodeData.label
+                    }).then(() => {
+                        Toast.success('深入追蹤已啟動');
+                        state.crawling = true;
+                        updateCrawlUI();
+                        pollCrawlProgress();
+                    }).catch(err => {
+                        Toast.error('深入追蹤失敗: ' + err.message);
+                    });
                 }
             }
-        });
+        }
 
         // 點擊空白 → 關閉詳情
         state.cy.on('tap', function (e) {
@@ -2966,22 +2978,35 @@
                             }
                         });
                         if (companies.length > 0) {
-                            personCompaniesHtml = companies.map(c => `
-                                <div class="bedrock-historical-item" data-historical="${c.isHistorical}" style="padding:8px; border-bottom:1px solid rgba(0,0,0,0.05); cursor:pointer; ${c.isHistorical ? 'opacity:0.5;' : ''}" onclick="(function(){ if(window.__bedrockCy) { var n = window.__bedrockCy.getElementById('${c.id}'); if(n.length){ window.__bedrockCy.center(n); n.select(); showNodeDetail(n.data()); } } })()">
-                                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                                        <span style="font-weight:600; font-size:12px;">${esc(c.label)}</span>
-                                        <span style="font-size:10px; padding:1px 6px; border-radius:8px; background:rgba(58,124,165,0.12); color:#3A7CA5;">${esc(c.role)}</span>
+                            // 分開現任與歷史
+                            const currentCos = companies.filter(c => !c.isHistorical);
+                            const histCos = companies.filter(c => c.isHistorical);
+                            const renderCoCard = (c) => `
+                                <div class="bedrock-historical-item" data-historical="${c.isHistorical}" style="padding:10px; border-bottom:1px solid rgba(0,0,0,0.06); cursor:pointer; ${c.isHistorical ? 'opacity:0.55;' : ''}" onclick="(function(){ if(window.__bedrockCy) { var n = window.__bedrockCy.getElementById('${c.id}'); if(n.length){ window.__bedrockCy.center(n); n.select(); showNodeDetail(n.data()); } } })()">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+                                        <span style="font-weight:600; font-size:14px; color:#333;">${esc(c.label)}</span>
+                                        <span style="font-size:11px; padding:2px 8px; border-radius:8px; font-weight:500; background:${c.isHistorical ? '#f5f5f5; color:#999;' : 'rgba(58,124,165,0.12); color:#3A7CA5;'}">${esc(c.role)}</span>
                                     </div>
-                                    <div style="font-family:monospace; font-size:10px; color:#888;">${esc(c.entity_id || '')}</div>
-                                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:2px; font-size:11px; color:#666;">
-                                        ${c.status ? `<span><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:${c.statusColor}; margin-right:2px;"></span>${esc(c.status)}</span>` : ''}
+                                    <div style="font-family:monospace; font-size:12px; color:#888;">${esc(c.entity_id || '')}</div>
+                                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; font-size:12px; color:#555;">
+                                        ${c.status ? `<span><span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:${c.statusColor}; margin-right:3px;"></span>${esc(c.status)}</span>` : ''}
                                         ${c.capital ? `<span>資本 ${c.capital}</span>` : ''}
                                         ${c.representative ? `<span>代表：${esc(c.representative)}</span>` : ''}
                                     </div>
-                                    ${c.address ? `<div style="font-size:10px; color:#999; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(c.address)}</div>` : ''}
-                                    ${c.isHistorical ? '<div style="font-size:9px; color:#E67E22; margin-top:2px;"><i class="fas fa-history" style="margin-right:2px;"></i>歷史關聯</div>' : ''}
-                                </div>
-                            `).join('');
+                                    ${c.address ? `<div style="font-size:11px; color:#888; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(c.address)}</div>` : ''}
+                                    ${c.isHistorical ? '<div style="font-size:10px; color:#E67E22; margin-top:3px;"><i class="fas fa-history" style="margin-right:2px;"></i>歷史關聯</div>' : ''}
+                                </div>`;
+                            personCompaniesHtml = '';
+                            if (currentCos.length > 0) {
+                                personCompaniesHtml += currentCos.map(renderCoCard).join('');
+                            }
+                            if (histCos.length > 0) {
+                                const showH = showHistorical;
+                                personCompaniesHtml += `<div class="bedrock-historical-section" data-historical="true" style="${showH ? '' : 'display:none;'}">
+                                    <div style="font-size:11px; color:#999; padding:8px 10px 4px; border-top:1px dashed #ddd; margin-top:4px;">歷史關聯 (${histCos.length})</div>
+                                    ${histCos.map(renderCoCard).join('')}
+                                </div>`;
+                            }
                         }
                     }
                     return `
@@ -3913,7 +3938,12 @@
 
         } catch (e) {
             console.warn('[BEDROCK] 載入消歧義失敗:', e.message);
-            listEl.innerHTML = '<div class="ws-list-empty">載入失敗</div>';
+            // 404 = 功能未啟用或尚無資料，不顯示錯誤
+            if (e.message && (e.message.includes('404') || e.message.includes('Not Found'))) {
+                listEl.innerHTML = '<div class="ws-list-empty">尚無同名人物</div>';
+            } else {
+                listEl.innerHTML = '<div class="ws-list-empty">載入失敗：' + esc(e.message || '未知錯誤') + '</div>';
+            }
         }
     }
 
@@ -5158,49 +5188,93 @@
      */
     function _formatEvidenceReadable(ev) {
         if (!ev || typeof ev !== 'object') return '';
-        const parts = [];
-        // 資本額異常
-        if (ev.capital !== undefined) {
-            parts.push('資本額: NT$ ' + Number(ev.capital).toLocaleString());
+        // 如果 evidence 是字串（Python dict repr），嘗試解析
+        if (typeof ev === 'string') {
+            try { ev = JSON.parse(ev.replace(/'/g, '"')); } catch(e) { return esc(ev); }
         }
-        // 休眠天數
+        const parts = [];
+        // ── 星形控制結構 / 多公司控制 ──
+        if (ev.director_name) parts.push('控制人：' + ev.director_name);
+        if (ev.company_count) parts.push('控制公司數：' + ev.company_count + ' 家');
+        if (ev.companies && Array.isArray(ev.companies)) {
+            const display = ev.companies.slice(0, 5).join('、');
+            const more = ev.companies.length > 5 ? '…等共 ' + ev.companies.length + ' 家' : '';
+            parts.push('公司統一編號：' + display + more);
+        }
+        // ── 資本額異常 ──
+        if (ev.capital !== undefined) parts.push('資本額：NT$ ' + Number(ev.capital).toLocaleString());
+        // ── 休眠復甦 ──
         if (ev.dormant_days) {
             const yrs = Math.round(ev.dormant_days / 365 * 10) / 10;
             parts.push('休眠 ' + ev.dormant_days + ' 天（約 ' + yrs + ' 年）');
         }
-        if (ev.dormant_from && ev.dormant_until) {
-            parts.push(ev.dormant_from + ' ~ ' + ev.dormant_until);
-        }
-        // 資本劇烈變動
+        if (ev.dormant_from && ev.dormant_until) parts.push('休眠期間：' + ev.dormant_from + ' ~ ' + ev.dormant_until);
+        if (ev.company_name) parts.push('公司：' + ev.company_name);
+        if (ev.valid_date_count) parts.push('有效變更紀錄：' + ev.valid_date_count + ' 筆');
+        if (ev.total_changelog_count) parts.push('總變更紀錄：' + ev.total_changelog_count + ' 筆');
+        // ── 資本劇烈變動 ──
         if (ev.volatility_events && Array.isArray(ev.volatility_events)) {
             const evts = ev.volatility_events.slice(0, 3);
             evts.forEach(e => {
                 const before = e.before != null ? 'NT$ ' + Number(e.before).toLocaleString() : '?';
                 const after = e.after != null ? 'NT$ ' + Number(e.after).toLocaleString() : '?';
                 const ratio = e.ratio ? '(' + (e.ratio > 1 ? '+' : '') + Math.round((e.ratio - 1) * 100) + '%)' : '';
-                parts.push((e.date || '') + ': ' + before + ' → ' + after + ' ' + ratio);
+                parts.push((e.date || '') + '：' + before + ' → ' + after + ' ' + ratio);
             });
             if (ev.volatility_events.length > 3) parts.push('…等共 ' + ev.volatility_events.length + ' 次');
         }
-        // 地址
-        if (ev.address) parts.push('地址: ' + esc(String(ev.address).substring(0, 40)));
-        if (ev.tax_ids && Array.isArray(ev.tax_ids)) parts.push(ev.tax_ids.length + ' 家公司');
-        // 控制公司
+        // ── 地址聚集 ──
+        if (ev.address) parts.push('地址：' + esc(String(ev.address).substring(0, 60)));
+        if (ev.tax_ids && Array.isArray(ev.tax_ids)) {
+            const display = ev.tax_ids.slice(0, 5).join('、');
+            const more = ev.tax_ids.length > 5 ? '…等共 ' + ev.tax_ids.length + ' 家' : '';
+            parts.push('相關公司：' + display + more);
+        }
+        // ── UBO 控制 ──
         if (ev.controlled_count) parts.push('控制 ' + ev.controlled_count + ' 家公司');
         if (ev.direct_count) parts.push('直接持股 ' + ev.direct_count + ' 家');
         if (ev.rep_count) parts.push('法人代表 ' + ev.rep_count + ' 家');
-        if (ev.total_capital) parts.push('合計資本 NT$ ' + Number(ev.total_capital).toLocaleString());
-        // 變更次數
+        if (ev.total_capital) parts.push('合計資本：NT$ ' + Number(ev.total_capital).toLocaleString());
+        // ── 變更頻率 ──
         if (ev.event_count) parts.push(ev.event_count + ' 次變更');
         if (ev.threshold_days) parts.push('於 ' + ev.threshold_days + ' 天內');
-        // 循環持股
-        if (ev.cycle && Array.isArray(ev.cycle)) parts.push('路徑: ' + ev.cycle.join(' → '));
-        // 連接公司數
+        // ── 循環持股 ──
+        if (ev.cycle && Array.isArray(ev.cycle)) parts.push('循環路徑：' + ev.cycle.join(' → '));
+        // ── 橋接節點 ──
         if (ev.connected_companies) parts.push('連接 ' + ev.connected_companies + ' 家公司');
-        // 批量登記
+        // ── 批量登記 ──
         if (ev.batch_count) parts.push('同日登記 ' + ev.batch_count + ' 家');
-        // 跨調查
+        if (ev.batch_date) parts.push('登記日期：' + ev.batch_date);
+        // ── 跨調查 ──
+        if (ev.overlap_count) parts.push('出現在其他 ' + ev.overlap_count + ' 個調查中');
         if (ev.investigation_count) parts.push('出現在 ' + ev.investigation_count + ' 個調查中');
+        // ── 異常產業組合 ──
+        if (ev.industries && Array.isArray(ev.industries)) parts.push('產業組合：' + ev.industries.join('、'));
+        // ── 董事走馬燈 ──
+        if (ev.changes && Array.isArray(ev.changes)) {
+            parts.push('異動次數：' + ev.changes.length + ' 次');
+            ev.changes.slice(0, 3).forEach(c => {
+                parts.push((c.date || '') + '：' + (c.before || '?') + ' → ' + (c.after || '?'));
+            });
+        }
+        // ── 年齡異常 ──
+        if (ev.age) parts.push('年齡：' + ev.age + ' 歲');
+        // ── 實體名稱、標籤 ──
+        if (ev.entity_label && !ev.director_name && !ev.company_name) parts.push('對象：' + ev.entity_label);
+
+        // ── Fallback：顯示未處理的欄位 ──
+        if (parts.length === 0) {
+            const keys = Object.keys(ev).filter(k => k !== 'entity_id');
+            if (keys.length > 0) {
+                keys.forEach(k => {
+                    const v = ev[k];
+                    if (v !== null && v !== undefined && v !== '') {
+                        const display = Array.isArray(v) ? v.slice(0, 5).join('、') + (v.length > 5 ? '…等' + v.length + '項' : '') : String(v);
+                        parts.push(k.replace(/_/g, ' ') + '：' + display);
+                    }
+                });
+            }
+        }
 
         if (parts.length === 0) return '';
         return parts.map(p => '<div style="line-height:1.5;">' + esc(p) + '</div>').join('');
@@ -6946,8 +7020,9 @@
             return;
         }
 
-        const nodes = state.cy.nodes();
-        const edges = state.cy.edges();
+        // ★ 只取可見節點（配合深度/篩選）
+        const nodes = state.cy.nodes().filter(n => n.style('display') !== 'none');
+        const edges = state.cy.edges().filter(e => e.style('display') !== 'none');
 
         // Separate companies and persons
         const companies = [];
@@ -7368,6 +7443,7 @@
                 ${nodeData.flag_count ? `<span style="padding:6px 16px; border-radius:20px; font-size:14px; font-weight:600; color:#C0392B; background:#fdeaea;">${nodeData.flag_count} 個紅旗</span>` : ''}
                 ${nodeData.is_seed ? `<span style="padding:6px 16px; border-radius:20px; font-size:14px; font-weight:600; color:#1ABC9C; border:1px solid #1ABC9C;">調查主體</span>` : ''}
                 <span style="padding:6px 16px; border-radius:20px; font-size:14px; font-weight:600; color:${statusColor}; border:1px solid ${statusColor};">${esc(statusText)}</span>
+                ${nodeData.obu_warning ? `<span style="padding:6px 16px; border-radius:20px; font-size:14px; font-weight:600; color:#fff; background:#E74C3C;">⚠ UBO 不明</span>` : `<span style="padding:6px 16px; border-radius:20px; font-size:14px; font-weight:600; color:#27AE60; border:1px solid #27AE60;">UBO 正常</span>`}
             </div>`;
 
             // ── 基本資料 ──
@@ -7555,8 +7631,8 @@
                         otherLabel: otherData.label || otherId,
                         otherType: otherData.type || '',
                         rel: d.label || d.relationship || '關聯',
-                        isHist: d.status === 'historical' || d.is_historical,
-                        date: d.date || d.change_date || '',
+                        isHist: d.type === 'historical' || d.status === 'historical' || d.is_historical,
+                        date: d.date || d.change_date || d.end_date || '',
                         shares: d.shares || d.shareholding || 0,
                         otherEntityId: otherData.entity_id || '',
                     };
@@ -7626,7 +7702,7 @@
         const container = document.getElementById('report-timeline-' + entityId);
         if (!container) return;
         try {
-            const data = await api.get('/companies/' + entityId + '/changelog');
+            const data = await api.get(`/investigations/${state.currentInvId}/nodes/${encodeURIComponent(entityId)}/changelog`);
             const changes = data.changes || data || [];
             if (changes.length === 0) {
                 container.innerHTML = '<div style="color:#999; font-size:14px; padding:8px 0;">暫無變動記錄</div>';
@@ -7634,10 +7710,10 @@
             }
             let html = '<div style="border-left:3px solid #E67E22; padding-left:16px;">';
             changes.forEach((c, i) => {
-                const dt = c.changed_at || c.date || c.updated_at || '';
-                const field = c.field || c.column_name || '';
-                const oldVal = c.old_value || '';
-                const newVal = c.new_value || '';
+                const dt = c.change_date || c.changed_at || c.date || c.updated_at || '';
+                const field = c.change_type || c.field || c.column_name || '';
+                const oldVal = c.before_value || c.old_value || '';
+                const newVal = c.after_value || c.new_value || '';
                 html += `<div style="padding:10px 0; border-bottom:1px solid rgba(0,0,0,0.05); font-size:14px;">
                     <div style="font-weight:600; color:#E67E22;">${esc(dt)}</div>
                     <div style="margin-top:4px;"><span style="color:#888;">${esc(field)}</span></div>
