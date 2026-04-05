@@ -1566,16 +1566,26 @@
                             <div><span style="color:#888;">TOTP</span><br><strong>${u.totp_enabled ? '已啟用' : '未啟用'}</strong></div>
                             <div><span style="color:#888;">註冊時間</span><br><strong>${formatDate(u.created_at)}</strong></div>
                             <div><span style="color:#888;">上次登入</span><br><strong>${formatDate(u.last_login_at) || '-'}</strong></div>
-                            <div><span style="color:#888;">最大爬取深度</span><br>
-                                <select onclick="event.stopPropagation();" onchange="updateUserDepth(${u.id}, this.value)" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px;">
-                                    ${[1,2,3,4,5,6,7,8,10].map(d => `<option value="${d}" ${(u.max_crawl_depth||3)==d?'selected':''}>${d} 層</option>`).join('')}
+                            <div><span style="color:#888;" title="新案件預設跑到的層數（起點）">預設深度</span><br>
+                                <select onclick="event.stopPropagation();" onchange="updateUserDepth(${u.id}, 'default_crawl_depth', this.value)" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px;">
+                                    ${[1,2,3,4,5,6,7,8,9,10].map(d => `<option value="${d}" ${(u.default_crawl_depth||3)==d?'selected':''}>${d} 層</option>`).join('')}
+                                </select>
+                            </div>
+                            <div><span style="color:#888;" title="使用者可以加深到的硬上限">最大深度</span><br>
+                                <select onclick="event.stopPropagation();" onchange="updateUserDepth(${u.id}, 'max_crawl_depth', this.value)" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px;">
+                                    ${[1,2,3,4,5,6,7,8,9,10].map(d => `<option value="${d}" ${(u.max_crawl_depth||5)==d?'selected':''}>${d} 層</option>`).join('')}
                                 </select>
                             </div>
                         </div>
-                        ${isPending ? `<div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
-                            <label style="font-size:12px; color:#888;">核准深度：
-                                <select id="approve-depth-${u.id}" onclick="event.stopPropagation();" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px; margin-left:4px;">
-                                    ${[1,2,3,4,5,6,7,8,10].map(d => `<option value="${d}" ${d===3?'selected':''}>${d} 層</option>`).join('')}
+                        ${isPending ? `<div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                            <label style="font-size:12px; color:#888;" title="新案件預設跑到的層數">預設：
+                                <select id="approve-default-${u.id}" onclick="event.stopPropagation();" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px; margin-left:4px;">
+                                    ${[1,2,3,4,5,6,7,8,9,10].map(d => `<option value="${d}" ${d===3?'selected':''}>${d} 層</option>`).join('')}
+                                </select>
+                            </label>
+                            <label style="font-size:12px; color:#888;" title="使用者可加深到的上限">上限：
+                                <select id="approve-max-${u.id}" onclick="event.stopPropagation();" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px; margin-left:4px;">
+                                    ${[1,2,3,4,5,6,7,8,9,10].map(d => `<option value="${d}" ${d===5?'selected':''}>${d} 層</option>`).join('')}
                                 </select>
                             </label>
                             <button onclick="event.stopPropagation(); approveUserWithDepth(${u.id});" style="padding:6px 16px; background:#27AE60; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600;">✓ 核准</button>
@@ -5778,20 +5788,32 @@
             showToast('更新失敗: ' + e.message, 'error');
         }
     };
-    window.updateUserDepth = async function(userId, depth) {
+    window.updateUserDepth = async function(userId, field, depth) {
         try {
-            await api.patch('/admin/users/' + userId, { max_crawl_depth: parseInt(depth, 10) });
-            showToast('深度權限已更新：' + depth + ' 層', 'success');
+            const body = {}; body[field] = parseInt(depth, 10);
+            await api.patch('/admin/users/' + userId, body);
+            const label = field === 'default_crawl_depth' ? '預設深度' : '最大深度';
+            showToast(label + '已更新：' + depth + ' 層', 'success');
         } catch (e) {
             showToast('更新失敗: ' + e.message, 'error');
         }
     };
     window.approveUserWithDepth = async function(userId) {
-        const sel = document.getElementById('approve-depth-' + userId);
-        const depth = sel ? parseInt(sel.value, 10) : 3;
+        const defSel = document.getElementById('approve-default-' + userId);
+        const maxSel = document.getElementById('approve-max-' + userId);
+        const d = defSel ? parseInt(defSel.value, 10) : 3;
+        const m = maxSel ? parseInt(maxSel.value, 10) : 5;
+        if (d > m) {
+            showToast('預設深度不可大於上限', 'error');
+            return;
+        }
         try {
-            await api.patch('/admin/users/' + userId, { status: 'active', max_crawl_depth: depth });
-            showToast('已核准（最大深度 ' + depth + ' 層）', 'success');
+            await api.patch('/admin/users/' + userId, {
+                status: 'active',
+                default_crawl_depth: d,
+                max_crawl_depth: m,
+            });
+            showToast('已核准（預設 ' + d + ' 層 / 上限 ' + m + ' 層）', 'success');
             loadAdminUsers();
         } catch (e) {
             showToast('核准失敗: ' + e.message, 'error');
