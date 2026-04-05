@@ -22,9 +22,18 @@
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+            const headers = {};
+            // GET / HEAD 不需要 Content-Type（避免觸發不必要的 CORS preflight）
+            if (body) headers['Content-Type'] = 'application/json';
+
+            // 帶上 JWT token（如有）
+            const token = auth.getToken();
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const opts = {
                 method,
-                headers: { 'Content-Type': 'application/json' },
+                headers,
+                credentials: 'include',  // 跨域帶 cookie（refresh token）
                 signal: controller.signal,
             };
             if (body) opts.body = JSON.stringify(body);
@@ -41,6 +50,10 @@
             } catch (e) {
                 clearTimeout(timer);
                 if (e.name === 'AbortError') throw new Error('請求逾時，請稍後再試');
+                // 提供更好的錯誤訊息（網路錯誤 vs CORS 錯誤）
+                if (e instanceof TypeError && e.message === 'Failed to fetch') {
+                    throw new Error('無法連線到伺服器，請檢查網路或稍後重試');
+                }
                 throw e;
             }
         },
@@ -199,41 +212,7 @@
         },
     };
 
-    // 覆寫 api.request 以注入 Authorization header
-    const _origRequest = api.request.bind(api);
-    api.request = async function(method, path, body, timeoutMs = 30000) {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-        const opts = {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            signal: controller.signal,
-            credentials: 'include', // 攜帶 cookie（refresh_token）
-        };
-
-        const token = auth.getToken();
-        if (token) {
-            opts.headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        if (body) opts.body = JSON.stringify(body);
-
-        try {
-            const res = await fetch(API_BASE + path, opts);
-            clearTimeout(timer);
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({ detail: res.statusText }));
-                throw new Error(err.detail || `HTTP ${res.status}`);
-            }
-            if (res.status === 204) return null;
-            return res.json();
-        } catch (e) {
-            clearTimeout(timer);
-            if (e.name === 'AbortError') throw new Error('請求逾時，請稍後再試');
-            throw e;
-        }
-    };
+    // api.request 已統一在定義時注入 auth token 與 credentials
 
     // ================================================================
     // 登入邏輯（Google OAuth）
@@ -318,21 +297,49 @@
         }
     }
 
-    // Google OAuth 登入
+    // Google OAuth 登入（含重試機制，應對 Zeabur 冷啟動）
     async function handleGoogleLogin() {
         const btn = document.getElementById('btn-google-login');
         const statusEl = document.getElementById('login-status');
+        const GOOGLE_BTN_HTML = '<svg class="google-icon" width="20" height="20" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> 以 Google 帳號登入';
 
         try {
             if (btn) {
                 btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 導向 Google 登入中...';
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 連線中...';
             }
 
-            const data = await api.get('/auth/google/login');
+            // 重試機制：後端可能在冷啟動（Zeabur free tier）
+            let data = null;
+            let lastErr = null;
+            const MAX = 3;
 
-            if (data && data.google_auth_url) {
-                // 重導向到 Google OAuth 頁面
+            for (let i = 1; i <= MAX; i++) {
+                try {
+                    if (i > 1) {
+                        if (btn) btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> 喚醒伺服器中...（${i}/${MAX}）`;
+                        if (statusEl) {
+                            statusEl.style.display = '';
+                            statusEl.className = 'login-status pending';
+                            statusEl.textContent = `伺服器啟動中，請稍候...（${i}/${MAX}）`;
+                        }
+                    }
+                    data = await api.get('/auth/google/login');
+                    lastErr = null;
+                    break;
+                } catch (err) {
+                    lastErr = err;
+                    console.warn(`[BEDROCK] Login init attempt ${i}/${MAX} failed:`, err.message);
+                    if (i < MAX) await new Promise(r => setTimeout(r, 2500 * i));
+                }
+            }
+
+            if (lastErr || !data) {
+                throw lastErr || new Error('無法連線到伺服器');
+            }
+
+            if (data.google_auth_url) {
+                if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 導向 Google 登入中...';
                 window.location.href = data.google_auth_url;
             } else {
                 throw new Error('無法取得 Google 登入連結');
@@ -346,7 +353,7 @@
             }
             if (btn) {
                 btn.disabled = false;
-                btn.innerHTML = '<svg class="google-icon" width="20" height="20" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> 以 Google 帳號登入';
+                btn.innerHTML = GOOGLE_BTN_HTML;
             }
         }
     }
