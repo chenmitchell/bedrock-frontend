@@ -3109,28 +3109,88 @@
                 'union_find': { icon: '🔗', label: '關聯群' },
             };
 
-            listEl.innerHTML = clusters.map(c => {
-                const algo = algorithmLabels[c.algorithm] || { icon: '📋', label: c.algorithm || '自訂' };
-                const memberCount = (c.member_tax_ids || []).length;
-                const confidence = c.confidence ? Math.round(c.confidence * 100) : 0;
-                const confColor = confidence >= 70 ? '#C0392B' : confidence >= 40 ? '#E67E22' : '#95A5A6';
-                return `
-                    <div class="ws-list-item" onclick="highlightCluster(${JSON.stringify(c.member_tax_ids || []).replace(/"/g, '&quot;')}, '${esc(c.name || c.label || algo.label)}')" style="cursor:pointer;">
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <span style="font-size:14px;">${algo.icon}</span>
-                            <div style="flex:1; min-width:0;">
-                                <div style="font-size:12px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.name || c.label || c.cluster_id}</div>
-                                <div style="font-size:10px; color:#999;">${algo.label} · ${memberCount} 家 · 信心 <span style="color:${confColor};">${confidence}%</span></div>
-                            </div>
-                        </div>
-                    </div>`;
-            }).join('');
+            listEl.innerHTML = renderClusterAccordion(clusters, algorithmLabels);
         } catch (e) {
             console.warn('[BEDROCK] 載入集群失敗:', e.message);
             if (countEl) countEl.textContent = '0';
             listEl.innerHTML = '<div class="ws-list-empty">尚無集群資料</div>';
         }
     }
+
+    // ── 集群手風琴渲染：直接列出成員公司 ──────────────
+    function renderClusterAccordion(clusters, algorithmLabels) {
+        return clusters.map((c, idx) => {
+            const algo = algorithmLabels[c.algorithm] || { icon: '📋', label: c.algorithm || '自訂' };
+            const memberTaxIds = c.member_tax_ids || [];
+            const memberCount = memberTaxIds.length;
+            const confidence = c.confidence ? Math.round(c.confidence * 100) : 0;
+            const confColor = confidence >= 70 ? '#C0392B' : confidence >= 40 ? '#E67E22' : '#95A5A6';
+
+            // 從 Cytoscape 解析成員名稱
+            const members = [];
+            if (state.cy) {
+                const idSet = new Set(memberTaxIds);
+                state.cy.nodes().forEach(node => {
+                    const d = node.data();
+                    const eid = d.entity_id || d.id;
+                    if (idSet.has(eid)) {
+                        members.push({ id: d.id, label: d.label || eid, entity_id: eid, address: d.address || '', type: d.type || '' });
+                    }
+                });
+            }
+            // 補上圖中找不到的
+            const foundIds = new Set(members.map(m => m.entity_id));
+            memberTaxIds.forEach(tid => {
+                if (!foundIds.has(tid)) members.push({ id: tid, label: tid, entity_id: tid, address: '', type: '' });
+            });
+
+            const membersJson = JSON.stringify(memberTaxIds).replace(/"/g, '&quot;');
+            const clusterName = esc(c.name || c.label || algo.label);
+
+            return `
+                <div class="ws-list-item" style="cursor:pointer; padding:8px 10px;" onclick="toggleClusterAccordion('cluster-members-${idx}', this); highlightCluster(${membersJson}, '${clusterName}')">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <i class="fas fa-chevron-right cluster-chevron" style="font-size:10px; color:#aaa; transition:transform 0.2s;"></i>
+                        <span style="font-size:14px;">${algo.icon}</span>
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${clusterName}</div>
+                            <div style="font-size:11px; color:#999;">${algo.label} · ${memberCount} 家 · 信心 <span style="color:${confColor};">${confidence}%</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="cluster-members-${idx}" class="cluster-member-detail" style="display:none; margin:0 0 4px 20px; border-left:2px solid var(--color-accent, #2a8fa8); border-radius:0 0 4px 4px; background:rgba(0,0,0,0.02);">
+                    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                        <thead>
+                            <tr style="background:rgba(0,0,0,0.04);">
+                                <th style="text-align:left; padding:5px 8px; font-weight:600; color:#666;">公司/關係人</th>
+                                <th style="text-align:left; padding:5px 8px; font-weight:600; color:#666;">統編</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${members.map(m => `
+                                <tr style="cursor:pointer; border-bottom:1px solid rgba(0,0,0,0.05);" onclick="event.stopPropagation(); reportClickNode('${esc(m.id)}');" onmouseover="this.style.background='rgba(42,143,168,0.08)'" onmouseout="this.style.background='transparent'">
+                                    <td style="padding:4px 8px; font-weight:500;">${esc(m.label)}</td>
+                                    <td style="padding:4px 8px; color:#888; font-family:monospace; font-size:11px;">${esc(m.entity_id)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+        }).join('');
+    }
+    window.toggleClusterAccordion = function(detailId, headerEl) {
+        const detail = document.getElementById(detailId);
+        if (!detail) return;
+        const isOpen = detail.style.display !== 'none';
+        // 收合所有其他
+        document.querySelectorAll('.cluster-member-detail').forEach(el => { el.style.display = 'none'; });
+        document.querySelectorAll('.cluster-chevron').forEach(el => { el.style.transform = 'rotate(0deg)'; });
+        if (!isOpen) {
+            detail.style.display = 'block';
+            const chevron = headerEl.querySelector('.cluster-chevron');
+            if (chevron) chevron.style.transform = 'rotate(90deg)';
+        }
+    };
 
     // ── 縣市分群（從關聯圖節點地址提取） ──────────────
     function buildCityGroups() {
@@ -3184,44 +3244,68 @@
         // 顏色列表
         const cityColors = ['#C0392B','#2980B9','#27AE60','#E67E22','#8E44AD','#16A085','#D35400','#2C3E50','#F39C12','#7F8C8D','#1ABC9C','#E74C3C','#3498DB','#9B59B6'];
 
-        listEl.innerHTML = cities.map((city, idx) => {
-            const companies = cityMap[city];
-            const color = cityColors[idx % cityColors.length];
-            const ids = JSON.stringify(companies.map(c => c.id)).replace(/"/g, '&quot;');
-            return `
-                <div class="ws-list-item" style="cursor:pointer;" onclick="window.__bedrockHighlightCity(${ids}, '${esc(city)}')">
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${color}; flex-shrink:0;"></span>
-                        <div style="flex:1; min-width:0;">
-                            <div style="font-size:12px; font-weight:500;">${esc(city)}</div>
-                            <div style="font-size:10px; color:#999;">${companies.length} 家公司</div>
-                        </div>
-                        <i class="fas fa-chevron-right" style="font-size:10px; color:#ccc;"></i>
-                    </div>
-                </div>
-                <div id="city-detail-${idx}" style="display:none; padding-left:20px; border-left:2px solid ${color}20;">
-                    ${companies.slice(0, 20).map(c => `
-                        <div class="ws-list-item" style="padding:3px 0; cursor:pointer; font-size:11px;" onclick="(function(){ if(window.__bedrockCy) { var n = window.__bedrockCy.getElementById('${c.id}'); if(n.length){ window.__bedrockCy.center(n); n.select(); } } })()">
-                            <span style="font-weight:500;">${esc(c.label)}</span>
-                            <span style="color:#999; font-size:10px; margin-left:4px;">${esc(c.entity_id)}</span>
-                        </div>
-                    `).join('')}
-                    ${companies.length > 20 ? `<div style="font-size:10px; color:#999; padding:3px 0;">...還有 ${companies.length - 20} 家</div>` : ''}
-                </div>`;
-        }).join('');
+        listEl.innerHTML = renderCityAccordion(cities, cityMap, cityColors);
 
         // 快取供外部使用
         state._cityGroups = cityMap;
     }
 
-    window.__bedrockHighlightCity = function(nodeIds, cityName) {
+    // ── 縣市手風琴渲染 ──────────────
+    function renderCityAccordion(cities, cityMap, cityColors) {
+        return cities.map((city, idx) => {
+            const companies = cityMap[city];
+            const color = cityColors[idx % cityColors.length];
+            const ids = JSON.stringify(companies.map(c => c.id)).replace(/"/g, '&quot;');
+            return `
+                <div class="ws-list-item" style="cursor:pointer; padding:8px 10px;" onclick="window.__bedrockHighlightCity(${ids}, '${esc(city)}', this)">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <i class="fas fa-chevron-right city-chevron" style="font-size:10px; color:#aaa; transition:transform 0.2s;"></i>
+                        <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${color}; flex-shrink:0;"></span>
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-size:13px; font-weight:500;">${esc(city)}</div>
+                            <div style="font-size:11px; color:#999;">${companies.length} 家公司</div>
+                        </div>
+                    </div>
+                </div>
+                <div id="city-detail-${idx}" class="city-member-detail" style="display:none; margin:0 0 4px 20px; border-left:2px solid ${color}30; border-radius:0 0 4px 4px; background:rgba(0,0,0,0.02);">
+                    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                        <thead>
+                            <tr style="background:rgba(0,0,0,0.04);">
+                                <th style="text-align:left; padding:5px 8px; font-weight:600; color:#666;">公司名稱</th>
+                                <th style="text-align:left; padding:5px 8px; font-weight:600; color:#666;">統編</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${companies.map(c => `
+                                <tr style="cursor:pointer; border-bottom:1px solid rgba(0,0,0,0.05);" onclick="event.stopPropagation(); reportClickNode('${esc(c.id)}');" onmouseover="this.style.background='rgba(42,143,168,0.08)'" onmouseout="this.style.background='transparent'">
+                                    <td style="padding:4px 8px; font-weight:500;">${esc(c.label)}</td>
+                                    <td style="padding:4px 8px; color:#888; font-family:monospace; font-size:11px;">${esc(c.entity_id)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+        }).join('');
+    }
+
+    window.__bedrockHighlightCity = function(nodeIds, cityName, headerEl) {
         // 切換該縣市的展開/收合
-        const items = document.querySelectorAll('[id^="city-detail-"]');
-        items.forEach(el => {
-            if (el.previousElementSibling && el.previousElementSibling.querySelector('div div')?.textContent.includes(cityName)) {
-                el.style.display = el.style.display === 'none' ? 'block' : 'none';
-            }
-        });
+        const detailEls = document.querySelectorAll('.city-member-detail');
+        const chevrons = document.querySelectorAll('.city-chevron');
+        let targetDetail = null;
+        if (headerEl) {
+            targetDetail = headerEl.nextElementSibling;
+        }
+        const isOpen = targetDetail && targetDetail.style.display !== 'none';
+        // 收合所有
+        detailEls.forEach(el => { el.style.display = 'none'; });
+        chevrons.forEach(el => { el.style.transform = 'rotate(0deg)'; });
+        // 展開點擊的
+        if (!isOpen && targetDetail) {
+            targetDetail.style.display = 'block';
+            const chevron = headerEl.querySelector('.city-chevron');
+            if (chevron) chevron.style.transform = 'rotate(90deg)';
+        }
 
         // 在關聯圖上高亮
         if (!state.cy) return;
@@ -5452,6 +5536,26 @@
             }
         }
 
+        // --- 過濾縣市分群 ---
+        const cityGroups = state._cityGroups || {};
+        const cgListEl = document.getElementById('city-groups-list');
+        const cgCountEl = document.getElementById('city-group-count');
+        if (cgListEl && Object.keys(cityGroups).length > 0) {
+            const filteredCityMap = {};
+            const cityColors = ['#C0392B','#2980B9','#27AE60','#E67E22','#8E44AD','#16A085','#D35400','#2C3E50','#F39C12','#7F8C8D','#1ABC9C','#E74C3C','#3498DB','#9B59B6'];
+            Object.keys(cityGroups).forEach(city => {
+                const filtered = allVisible ? cityGroups[city] : cityGroups[city].filter(c => visibleIds.has(c.id) || visibleIds.has(c.entity_id));
+                if (filtered.length > 0) filteredCityMap[city] = filtered;
+            });
+            const filteredCities = Object.keys(filteredCityMap).sort((a, b) => filteredCityMap[b].length - filteredCityMap[a].length);
+            if (cgCountEl) cgCountEl.textContent = filteredCities.length;
+            if (filteredCities.length === 0) {
+                cgListEl.innerHTML = '<div class="ws-list-empty">此層級無縣市分群</div>';
+            } else {
+                cgListEl.innerHTML = renderCityAccordion(filteredCities, filteredCityMap, cityColors);
+            }
+        }
+
         // ── 連動儀表板：如果儀表板正在顯示，也重新過濾 ──
         refreshDashboardIfOpen();
     }
@@ -5472,22 +5576,7 @@
             'shared_shareholder': { icon: '🔗', label: '共同股東' },
             'union_find': { icon: '🔗', label: '關聯群' },
         };
-        listEl.innerHTML = clusters.map(c => {
-            const algo = algorithmLabels[c.algorithm] || { icon: '📋', label: c.algorithm || '自訂' };
-            const memberCount = (c.member_tax_ids || []).length;
-            const confidence = c.confidence ? Math.round(c.confidence * 100) : 0;
-            const confColor = confidence >= 70 ? '#C0392B' : confidence >= 40 ? '#E67E22' : '#95A5A6';
-            return `
-                <div class="ws-list-item" onclick="highlightCluster(${JSON.stringify(c.member_tax_ids || []).replace(/"/g, '&quot;')}, '${esc(c.name || c.label || algo.label)}')" style="cursor:pointer;">
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <span style="font-size:14px;">${algo.icon}</span>
-                        <div style="flex:1; min-width:0;">
-                            <div style="font-size:12px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.name || c.label || c.cluster_id}</div>
-                            <div style="font-size:10px; color:#999;">${algo.label} · ${memberCount} 家 · 信心 <span style="color:${confColor};">${confidence}%</span></div>
-                        </div>
-                    </div>
-                </div>`;
-        }).join('');
+        listEl.innerHTML = renderClusterAccordion(clusters, algorithmLabels);
     }
 
     function renderFilteredRedFlags(listEl, flags) {
