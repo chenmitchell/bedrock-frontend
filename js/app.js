@@ -2249,6 +2249,135 @@
             if (e.target === state.cy) closeDetail();
         });
 
+        // ── Hover 浮動資訊面板 ──
+        let _hoverTip = null;
+        let _hoverTimeout = null;
+
+        function createHoverTooltip() {
+            if (_hoverTip) return _hoverTip;
+            _hoverTip = document.createElement('div');
+            _hoverTip.id = 'bedrock-hover-tip';
+            _hoverTip.style.cssText = 'position:fixed; z-index:9999; pointer-events:none; background:#fff; border:1px solid #ddd; border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.15); padding:12px 14px; max-width:380px; min-width:240px; font-size:12px; color:#333; display:none; line-height:1.5;';
+            document.body.appendChild(_hoverTip);
+            return _hoverTip;
+        }
+
+        state.cy.on('mouseover', 'node', function(e) {
+            if (_hoverTimeout) clearTimeout(_hoverTimeout);
+            _hoverTimeout = setTimeout(() => {
+                const node = e.target;
+                const d = node.data();
+                const tip = createHoverTooltip();
+                const isComp = d.type === 'company';
+
+                let html = '';
+                if (isComp) {
+                    const statusColor = d.status === '核准設立' ? '#27AE60' : (d.status === '解散' || d.status === '廢止') ? '#C0392B' : '#E67E22';
+                    const cap = d.capital ? `NT$ ${Number(d.capital).toLocaleString()}` : '未知';
+                    html = `<div style="font-weight:700; font-size:14px; margin-bottom:6px; color:#1B4965;">${esc(d.label)}</div>`;
+                    if (d.obu_warning) html += `<div style="background:#E74C3C; color:#fff; font-size:10px; padding:2px 6px; border-radius:4px; display:inline-block; margin-bottom:6px;">⚠ 三層內無法辨識 UBO</div>`;
+                    html += `<div style="display:grid; grid-template-columns:auto 1fr; gap:2px 8px; font-size:11px;">
+                        <span style="color:#888;">統編</span><span style="font-family:monospace;">${esc(d.entity_id)}</span>
+                        <span style="color:#888;">狀態</span><span><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${statusColor};margin-right:3px;"></span>${esc(d.status || '未知')}</span>
+                        ${d.company_type ? `<span style="color:#888;">類型</span><span>${esc(d.company_type)}</span>` : ''}
+                        <span style="color:#888;">資本額</span><span style="font-weight:600;">${cap}</span>
+                        <span style="color:#888;">代表人</span><span>${esc(d.representative || '未知')}</span>
+                        ${d.established_date ? `<span style="color:#888;">設立</span><span>${esc(d.established_date)}</span>` : ''}
+                        ${d.dissolved_date ? `<span style="color:#888;">解散</span><span style="color:#C0392B;">${esc(d.dissolved_date)}</span>` : ''}
+                        <span style="color:#888;">地址</span><span style="font-size:10px; word-break:break-all;">${esc(d.address || '未知')}</span>
+                        ${d.issued_shares ? `<span style="color:#888;">已發行股份</span><span>${parseInt(d.issued_shares).toLocaleString()} 股</span>` : ''}
+                        ${d.share_amount ? `<span style="color:#888;">每股金額</span><span>NT$ ${parseInt(d.share_amount).toLocaleString()}</span>` : ''}
+                    </div>`;
+                    // 股東架構（簡版）
+                    const dirs = d.directors_data || [];
+                    const base = d.issued_shares || d.capital || 0;
+                    if (dirs.length > 0 && base > 0) {
+                        const shs = [];
+                        dirs.forEach(dd => {
+                            const name = dd['姓名'] || dd.name || '';
+                            const shares = parseInt(String(dd['出資額'] || dd['持有股份數'] || dd.shares || 0).replace(/,/g, ''), 10) || 0;
+                            if (shares > 0 && name) shs.push({ name, pct: shares / base * 100 });
+                        });
+                        shs.sort((a, b) => b.pct - a.pct);
+                        if (shs.length > 0) {
+                            const colors = ['#2980B9','#E67E22','#27AE60','#C0392B','#8E44AD','#16A085','#D35400','#7F8C8D'];
+                            html += `<div style="margin-top:8px; border-top:1px solid #eee; padding-top:6px;">
+                                <div style="font-weight:600; font-size:11px; margin-bottom:4px;">股東架構</div>
+                                <div style="height:10px; display:flex; border-radius:5px; overflow:hidden; margin-bottom:4px;">
+                                    ${shs.slice(0, 8).map((s, i) => `<div style="width:${Math.max(s.pct, 1)}%;background:${colors[i % colors.length]};height:100%;min-width:2px;" title="${esc(s.name)} ${s.pct.toFixed(1)}%"></div>`).join('')}
+                                </div>
+                                ${shs.slice(0, 5).map((s, i) => `<div style="font-size:10px; display:flex; gap:3px; align-items:center;"><span style="width:6px;height:6px;border-radius:1px;background:${colors[i % colors.length]};flex-shrink:0;"></span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.name)}</span><span style="font-weight:600;color:${colors[i % colors.length]};">${s.pct.toFixed(1)}%</span></div>`).join('')}
+                                ${shs.length > 5 ? `<div style="font-size:9px;color:#999;">…及其他 ${shs.length - 5} 位</div>` : ''}
+                            </div>`;
+                        }
+                    }
+                    // 紅旗摘要
+                    if (d.flag_count > 0) {
+                        html += `<div style="margin-top:6px; background:rgba(192,57,43,0.08); padding:4px 6px; border-radius:4px; font-size:10px; color:#C0392B;">⚑ ${d.flag_count} 項異常</div>`;
+                    }
+                } else {
+                    // 個人節點
+                    html = `<div style="font-weight:700; font-size:14px; margin-bottom:6px; color:#8B6508;">${esc(d.label)}</div>`;
+                    html += `<div style="font-size:11px; color:#666; margin-bottom:4px;">職稱：${esc(d.title || '董監事')}</div>`;
+                    // 反查關聯公司
+                    const cyNode = state.cy.getElementById(d.id);
+                    if (cyNode.length) {
+                        const connEdges = cyNode.connectedEdges();
+                        const comps = [];
+                        connEdges.forEach(ce => {
+                            const ced = ce.data();
+                            const oid = ced.source === d.id ? ced.target : ced.source;
+                            const on = state.cy.getElementById(oid);
+                            if (on.length && on.data('type') === 'company') {
+                                comps.push({ label: on.data('label'), role: ced.label || ced.type, status: on.data('status'), capital: on.data('capital') });
+                            }
+                        });
+                        if (comps.length > 0) {
+                            html += `<div style="border-top:1px solid #eee; padding-top:4px; margin-top:4px;">`;
+                            html += `<div style="font-weight:600; font-size:11px; margin-bottom:3px;">關聯公司 (${comps.length})</div>`;
+                            comps.slice(0, 8).forEach(c => {
+                                const sc = c.status === '核准設立' ? '#27AE60' : '#E67E22';
+                                const cap = c.capital ? (c.capital >= 10000 ? Math.round(c.capital / 10000).toLocaleString() + '萬' : c.capital.toLocaleString()) : '';
+                                html += `<div style="font-size:10px; padding:2px 0; display:flex; gap:4px; align-items:center;">
+                                    <span style="width:5px;height:5px;border-radius:50%;background:${sc};flex-shrink:0;"></span>
+                                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(c.label)}</span>
+                                    <span style="color:#3A7CA5;">${esc(c.role)}</span>
+                                    ${cap ? `<span style="color:#888;">${cap}</span>` : ''}
+                                </div>`;
+                            });
+                            if (comps.length > 8) html += `<div style="font-size:9px;color:#999;">…及其他 ${comps.length - 8} 家</div>`;
+                            html += `</div>`;
+                        }
+                    }
+                }
+
+                tip.innerHTML = html;
+                tip.style.display = 'block';
+                // 定位在滑鼠附近
+                const rendPos = node.renderedPosition();
+                const cyContainer = state.cy.container().getBoundingClientRect();
+                let left = cyContainer.left + rendPos.x + 20;
+                let top = cyContainer.top + rendPos.y - 20;
+                // 防止超出螢幕
+                if (left + 390 > window.innerWidth) left = left - 420;
+                if (top + tip.offsetHeight > window.innerHeight) top = window.innerHeight - tip.offsetHeight - 10;
+                if (top < 10) top = 10;
+                tip.style.left = left + 'px';
+                tip.style.top = top + 'px';
+            }, 300);  // 300ms 延遲避免頻繁觸發
+        });
+
+        state.cy.on('mouseout', 'node', function() {
+            if (_hoverTimeout) { clearTimeout(_hoverTimeout); _hoverTimeout = null; }
+            if (_hoverTip) _hoverTip.style.display = 'none';
+        });
+
+        // 拖動或縮放時也隱藏 tooltip
+        state.cy.on('pan zoom drag', function() {
+            if (_hoverTip) _hoverTip.style.display = 'none';
+            if (_hoverTimeout) { clearTimeout(_hoverTimeout); _hoverTimeout = null; }
+        });
+
         setupCytoscapeToolbar();
     }
 
@@ -2489,7 +2618,8 @@
         // 記錄當前選定的節點
         currentSelectedNode = data.id;
 
-        title.textContent = data.label || data.id;
+        title.innerHTML = esc(data.label || data.id) +
+            (data.obu_warning ? ' <span style="display:inline-block; background:#E74C3C; color:#fff; font-size:10px; padding:2px 6px; border-radius:4px; margin-left:4px; vertical-align:middle;" title="三層內無法辨識實質受益人">⚠ UBO 不明</span>' : '');
 
         // 顯示浮動面板（不改變 grid）
         panel.classList.add('detail-visible');
@@ -2549,12 +2679,14 @@
                     }
                 }
                 const badgeColor = isRep ? 'background:rgba(213,94,0,0.15); color:#D55E00; font-weight:600;' : 'background:rgba(58,124,165,0.12); color:#3A7CA5;';
+                const isHistEdge = ed.type === 'historical';
                 return `
-                    <div class="ws-detail-connection" style="padding:5px 0; border-bottom:1px solid rgba(0,0,0,0.06); cursor:pointer;" onclick="(function(){ if(window.__bedrockCy) { var n = window.__bedrockCy.getElementById('${otherNodeId}'); if(n.length){ window.__bedrockCy.center(n); n.select(); } } })()">
+                    <div class="ws-detail-connection bedrock-historical-item" data-edge-type="${ed.type}" data-historical="${isHistEdge}" style="padding:5px 0; border-bottom:1px solid rgba(0,0,0,0.06); cursor:pointer; ${isHistEdge && !showHistorical ? 'display:none;' : ''}" onclick="(function(){ if(window.__bedrockCy) { var n = window.__bedrockCy.getElementById('${otherNodeId}'); if(n.length){ window.__bedrockCy.center(n); n.select(); } } })()">
                         <div>
                             <span style="color:#888; font-size:11px;">${direction}</span>
                             <span style="font-weight:500;">${esc(otherLabel)}</span>
                             <span style="${badgeColor} font-size:10px; padding:1px 6px; border-radius:8px; margin-left:4px;">${esc(ed.label || typeLabel)}</span>
+                            ${isHistEdge ? '<span style="font-size:9px; color:#999; margin-left:4px;"><i class="fas fa-history"></i></span>' : ''}
                         </div>
                         ${repBadge}
                     </div>`;
@@ -2732,12 +2864,62 @@
                         ${data.business_items.map(item => esc(typeof item === 'string' ? item : (item.code || '') + ' ' + (item.name || ''))).join('<br>')}
                     </div>
                 </div>` : ''}
-                ` : `
+                ` : (() => {
+                    // 個人節點：從圖的邊反查所有關聯公司
+                    let personCompaniesHtml = '';
+                    if (cyNode && edges.length > 0) {
+                        const companies = [];
+                        edges.forEach(e => {
+                            const ed = e.data();
+                            const otherNodeId = ed.source === data.id ? ed.target : ed.source;
+                            const otherNode = state.cy.getElementById(otherNodeId);
+                            if (otherNode.length && otherNode.data('type') === 'company') {
+                                const od = otherNode.data();
+                                const role = ed.label || ed.type || '';
+                                const isHistorical = ed.type === 'historical';
+                                const statusColor = od.status === '核准設立' ? '#27AE60' : (od.status === '解散' || od.status === '廢止') ? '#C0392B' : '#E67E22';
+                                const cap = od.capital ? (od.capital >= 10000 ? Math.round(od.capital / 10000).toLocaleString() + ' 萬' : od.capital.toLocaleString() + ' 元') : '';
+                                companies.push({
+                                    id: od.id, label: od.label || otherNodeId, role, isHistorical,
+                                    status: od.status, statusColor, capital: cap, representative: od.representative,
+                                    address: od.address, entity_id: od.entity_id,
+                                });
+                            }
+                        });
+                        if (companies.length > 0) {
+                            personCompaniesHtml = companies.map(c => `
+                                <div class="bedrock-historical-item" data-historical="${c.isHistorical}" style="padding:8px; border-bottom:1px solid rgba(0,0,0,0.05); cursor:pointer; ${c.isHistorical ? 'opacity:0.5;' : ''}" onclick="(function(){ if(window.__bedrockCy) { var n = window.__bedrockCy.getElementById('${c.id}'); if(n.length){ window.__bedrockCy.center(n); n.select(); showNodeDetail(n.data()); } } })()">
+                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                        <span style="font-weight:600; font-size:12px;">${esc(c.label)}</span>
+                                        <span style="font-size:10px; padding:1px 6px; border-radius:8px; background:rgba(58,124,165,0.12); color:#3A7CA5;">${esc(c.role)}</span>
+                                    </div>
+                                    <div style="font-family:monospace; font-size:10px; color:#888;">${esc(c.entity_id || '')}</div>
+                                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:2px; font-size:11px; color:#666;">
+                                        ${c.status ? `<span><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:${c.statusColor}; margin-right:2px;"></span>${esc(c.status)}</span>` : ''}
+                                        ${c.capital ? `<span>資本 ${c.capital}</span>` : ''}
+                                        ${c.representative ? `<span>代表：${esc(c.representative)}</span>` : ''}
+                                    </div>
+                                    ${c.address ? `<div style="font-size:10px; color:#999; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(c.address)}</div>` : ''}
+                                    ${c.isHistorical ? '<div style="font-size:9px; color:#E67E22; margin-top:2px;"><i class="fas fa-history" style="margin-right:2px;"></i>歷史關聯</div>' : ''}
+                                </div>
+                            `).join('');
+                        }
+                    }
+                    return `
                 <div class="ws-detail-row">
                     <span class="ws-detail-label">職稱</span>
                     <span class="ws-detail-value">${esc(data.title || '董監事')}</span>
                 </div>
-                `}
+                ${personCompaniesHtml ? `
+                </div>
+                <div class="ws-detail-section">
+                    <div class="ws-detail-section-title"><i class="fas fa-building" style="margin-right:4px;"></i>關聯公司 (${edges.filter(e => { const o = state.cy.getElementById(e.data().source === data.id ? e.data().target : e.data().source); return o.length && o.data('type') === 'company'; }).length})</div>
+                    <div style="max-height:400px; overflow-y:auto;">
+                        ${personCompaniesHtml}
+                    </div>
+                ` : ''}
+                `;
+                })()}
             </div>
 
             ${isCompany && data.directors_data && data.directors_data.length > 0 ? (() => {
@@ -2876,7 +3058,7 @@
             ` : ''}
 
             ${isCompany ? `
-            <div class="ws-detail-section">
+            <div class="ws-detail-section bedrock-historical-section" style="${!showHistorical ? 'display:none;' : ''}">
                 <div class="ws-detail-section-title" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;" onclick="window.__bedrockToggleTimeline('${esc(data.entity_id)}')">
                     <span><i class="fas fa-history" style="margin-right:4px;"></i>歷史變動紀錄</span>
                     <i id="timeline-toggle-icon" class="fas fa-chevron-down" style="font-size:10px; transition:transform 0.3s;"></i>
@@ -2893,6 +3075,9 @@
 
         // 暴露 cy 給 onclick 導航用
         window.__bedrockCy = state.cy;
+
+        // 同步歷史資料顯示狀態
+        syncHistoricalVisibility();
 
         // 加載風險評分
         loadNodeRiskScore(data.entity_id || data.id);
@@ -5220,6 +5405,8 @@
             btn.classList.toggle('ws-tool-btn-active', showHistorical);
             btn.title = showHistorical ? '隱藏歷史關聯與離任人員' : '顯示歷史關聯與離任人員';
         }
+        // ── 全面聯動：詳情面板、表格中的歷史項目 ──
+        syncHistoricalVisibility();
         // 重新適配圖形到螢幕
         if (typeof autoResizeAndRelayout === 'function') {
             autoResizeAndRelayout();
@@ -5228,6 +5415,25 @@
         }
     }
     window.toggleHistoricalEdges = toggleHistoricalEdges;
+
+    // 同步歷史資料顯示狀態到所有面板
+    function syncHistoricalVisibility() {
+        // 1. 詳情面板中帶有 data-historical="true" 的項目
+        document.querySelectorAll('.bedrock-historical-item[data-historical="true"]').forEach(el => {
+            el.style.display = showHistorical ? '' : 'none';
+        });
+        // 2. 歷史變動紀錄區塊
+        const timelineSection = document.getElementById('changelog-timeline');
+        const timelineTitle = timelineSection ? timelineSection.closest('.ws-detail-section') : null;
+        if (timelineTitle) {
+            timelineTitle.style.display = showHistorical ? '' : 'none';
+        }
+        // 3. 關聯架構中的歷史邊
+        document.querySelectorAll('.ws-detail-connection[data-edge-type="historical"]').forEach(el => {
+            el.style.display = showHistorical ? '' : 'none';
+        });
+    }
+    window.syncHistoricalVisibility = syncHistoricalVisibility;
 
     // 歷史關聯時間範圍篩選
     function filterHistoricalByRange() {
