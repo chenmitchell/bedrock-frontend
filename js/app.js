@@ -8175,12 +8175,15 @@
                 </div>
             </div>`;
 
-            // ── 所營事業資料 ──
+            // ── 所營事業資料（預設摺收） ──
             const bizItems = nodeData.business_items || [];
             if (bizItems.length > 0) {
-                detailHtml += `<div style="background:#f9fafb; padding:20px; border-radius:10px; margin-bottom:24px; border:1px solid #e8e8e8;">
-                    <h4 style="margin:0 0 16px 0; font-size:17px; font-weight:700; color:#333;"><i class="fas fa-briefcase" style="margin-right:6px; color:#8E44AD;"></i>所營事業資料（${bizItems.length}）</h4>
-                    <div style="display:grid; gap:6px;">
+                detailHtml += `<details style="background:#f9fafb; padding:0; border-radius:10px; margin-bottom:24px; border:1px solid #e8e8e8;">
+                    <summary style="padding:16px 20px; font-size:17px; font-weight:700; color:#333; cursor:pointer; list-style:none; display:flex; align-items:center; justify-content:space-between;">
+                        <span><i class="fas fa-briefcase" style="margin-right:6px; color:#8E44AD;"></i>所營事業資料（${bizItems.length}）</span>
+                        <i class="fas fa-chevron-down" style="font-size:12px; color:#aaa;"></i>
+                    </summary>
+                    <div style="padding:0 20px 20px 20px; display:grid; gap:6px;">
                         ${bizItems.map(item => {
                             const code = typeof item === 'string' ? '' : (item.code || (Array.isArray(item) ? item[0] : ''));
                             const name = typeof item === 'string' ? item : (item.name || (Array.isArray(item) ? item[1] : String(item)));
@@ -8190,7 +8193,7 @@
                             </div>`;
                         }).join('')}
                     </div>
-                </div>`;
+                </details>`;
             }
 
             // ── 董監事名單（含持股比例） ──
@@ -8415,14 +8418,14 @@
             }
         }
 
-        // ── 歷史變動紀錄（載入區塊） ──
+        // ── 歷史變動紀錄（載入區塊，預設展開） ──
         if (nodeData.type === 'company') {
-            detailHtml += `<div style="background:#f9fafb; padding:20px; border-radius:10px; margin-bottom:24px; border:1px solid #e8e8e8;">
+            detailHtml += `<div style="background:#fff9f3; padding:20px; border-radius:10px; margin-bottom:24px; border:1px solid #f4d7b6;">
                 <h4 style="margin:0 0 12px 0; font-size:17px; font-weight:700; color:#333; cursor:pointer;" onclick="window.__bedrockLoadReportTimeline('${esc(nodeData.entity_id)}', this)">
                     <i class="fas fa-history" style="margin-right:6px; color:#E67E22;"></i>歷史變動紀錄
-                    <i class="fas fa-chevron-down" style="font-size:12px; margin-left:6px; color:#aaa;"></i>
+                    <i class="fas fa-chevron-up" style="font-size:12px; margin-left:6px; color:#aaa;"></i>
                 </h4>
-                <div id="report-timeline-${esc(nodeData.entity_id)}" style="display:none;">
+                <div id="report-timeline-${esc(nodeData.entity_id)}" style="display:block;">
                     <div style="text-align:center; padding:20px; color:#999;"><i class="fas fa-spinner fa-spin"></i> 載入中...</div>
                 </div>
             </div>`;
@@ -8465,7 +8468,14 @@
             html += '</div>';
             container.innerHTML = html;
         } catch (e) {
-            container.innerHTML = `<div style="color:#999; font-size:14px; padding:8px 0;">載入失敗: ${esc(e.message)}</div>`;
+            const msg = String(e.message || e);
+            const is404 = msg.includes('404') || msg.includes('節點不存在');
+            container.innerHTML = `<div style="color:#999; font-size:14px; padding:12px; background:#fff; border-radius:6px; line-height:1.6;">
+                ${is404
+                    ? `<div style="color:#C0392B;"><i class="fas fa-exclamation-circle"></i> 後端查無此公司的變動紀錄 (entity_id: ${esc(entityId)})</div>
+                       <div style="font-size:12px; color:#999; margin-top:4px;">可能原因:此統編未收錄於 changelog 資料表,或爬蟲尚未抓到</div>`
+                    : `<div style="color:#C0392B;">載入失敗: ${esc(msg)}</div>`}
+            </div>`;
         }
     }
     window.__bedrockLoadReportTimeline = function(entityId, headerEl) {
