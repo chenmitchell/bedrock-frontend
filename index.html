@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;1,400&family=Inter:wght@400;500;600&family=Noto+Serif+TC:wght@400&family=Noto+Sans+TC:wght@400;500;600&family=Playfair+Display:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="/css/main.css?v=20260405a">
+    <link rel="stylesheet" href="/css/main.css?v=20260405b">
 </head>
 <body class="scene-login">
     <!-- WCAG: 跳至主要內容連結 -->
@@ -933,18 +933,23 @@
                         </select>
                     </div>
                     <span class="ws-tool-divider" aria-hidden="true"></span>
-                    <div style="display:inline-flex; align-items:center; gap:6px;" title="檢視深度：控制圖形上顯示到第幾層，可隨時調整，不影響已搜尋的資料">
-                        <i class="fas fa-layer-group" style="font-size:12px; color:#999;" aria-hidden="true"></i>
-                        <span style="font-size:10px; color:#888; white-space:nowrap;">檢視深度</span>
-                        <select id="depth-filter-select" class="ws-input" style="padding:3px 8px; font-size:12px; min-width:80px;" onchange="filterByDepth(this.value)">
-                            <option value="1">第 1 層</option>
-                            <option value="2" selected>第 2 層</option>
-                            <option value="3">第 3 層</option>
-                            <option value="4">第 4 層</option>
-                            <option value="5">第 5 層</option>
-                            <option value="99">全部</option>
+                    <div style="display:inline-flex; align-items:center; gap:8px;" title="檢視深度：控制圖形上顯示到第幾層，可隨時調整，不影響已搜尋的資料">
+                        <i class="fas fa-layer-group" style="font-size:13px; color:#3A7CA5;" aria-hidden="true"></i>
+                        <span style="font-size:13px; color:#555; white-space:nowrap; font-weight:500;">檢視深度</span>
+                        <select id="depth-filter-select" class="ws-input" style="padding:5px 12px; font-size:14px; min-width:100px; border-radius:6px; border:1px solid #ccc; font-weight:600;" onchange="filterByDepth(this.value)">
+                            <option value="1">1 層</option>
+                            <option value="2" selected>2 層</option>
+                            <option value="3">3 層</option>
+                            <option value="4">4 層</option>
+                            <option value="5">5 層</option>
+                            <option value="6">6 層</option>
+                            <option value="7">7 層</option>
+                            <option value="8">8 層</option>
+                            <option value="9">9 層</option>
+                            <option value="10">10 層</option>
+                            <option value="99">全部展開</option>
                         </select>
-                        <span id="depth-filter-label" style="font-size:11px; font-weight:600; color:#3A7CA5; min-width:70px; white-space:nowrap;">0 個節點</span>
+                        <span id="depth-filter-label" style="font-size:13px; font-weight:600; color:#3A7CA5; min-width:80px; white-space:nowrap;">0 個節點</span>
                     </div>
                 </div>
                 <div style="position:relative; flex:1; min-height:0;">

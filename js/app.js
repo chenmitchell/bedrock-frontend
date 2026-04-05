@@ -6797,126 +6797,247 @@
         const nextNode = currentIdx < nodeList.length - 1 ? nodeList[currentIdx + 1] : null;
 
         // 導覽列：返回 + 上一筆/下一筆
-        let navHtml = `<div style="padding:12px 16px; background:#f5f7fa; border-bottom:1px solid #e0e0e0; display:flex; align-items:center; justify-content:space-between;">
-            <div style="display:flex; align-items:center; gap:8px;">
-                <button onclick="clearReportDetail()" style="background:none; border:none; color:#3A7CA5; cursor:pointer; font-size:13px; font-weight:500;"><i class="fas fa-arrow-left" style="margin-right:4px;"></i>返回列表</button>
-                <span style="color:#ccc;">/</span>
-                <span style="font-size:13px; font-weight:600; color:#333;">${esc(nodeData.label || nodeId)}</span>
+        let navHtml = `<div style="padding:14px 20px; background:#f5f7fa; border-bottom:1px solid #e0e0e0; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:10;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <button onclick="clearReportDetail()" style="background:none; border:1px solid #ccc; border-radius:6px; color:#3A7CA5; cursor:pointer; font-size:14px; font-weight:500; padding:6px 14px;"><i class="fas fa-arrow-left" style="margin-right:6px;"></i>返回列表</button>
+                <span style="color:#ccc;">|</span>
+                <span style="font-size:15px; font-weight:600; color:#333;">${esc(nodeData.label || nodeId)}</span>
             </div>
-            <div style="display:flex; gap:6px;">
-                <button onclick="${prevNode ? "reportClickNode('" + prevNode.id + "')" : ''}" style="padding:4px 10px; border:1px solid #ddd; border-radius:4px; background:#fff; cursor:${prevNode ? 'pointer' : 'not-allowed'}; opacity:${prevNode ? 1 : 0.4}; font-size:12px;" ${prevNode ? '' : 'disabled'}>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <button onclick="${prevNode ? "reportClickNode('" + prevNode.id + "')" : ''}" style="padding:6px 14px; border:1px solid #ddd; border-radius:6px; background:#fff; cursor:${prevNode ? 'pointer' : 'not-allowed'}; opacity:${prevNode ? 1 : 0.4}; font-size:13px;" ${prevNode ? '' : 'disabled'}>
                     <i class="fas fa-chevron-left"></i> 上一筆
                 </button>
-                <span style="font-size:11px; color:#999; line-height:28px;">${currentIdx + 1} / ${nodeList.length}</span>
-                <button onclick="${nextNode ? "reportClickNode('" + nextNode.id + "')" : ''}" style="padding:4px 10px; border:1px solid #ddd; border-radius:4px; background:#fff; cursor:${nextNode ? 'pointer' : 'not-allowed'}; opacity:${nextNode ? 1 : 0.4}; font-size:12px;" ${nextNode ? '' : 'disabled'}>
+                <span style="font-size:13px; color:#666; min-width:60px; text-align:center;">${currentIdx + 1} / ${nodeList.length}</span>
+                <button onclick="${nextNode ? "reportClickNode('" + nextNode.id + "')" : ''}" style="padding:6px 14px; border:1px solid #ddd; border-radius:6px; background:#fff; cursor:${nextNode ? 'pointer' : 'not-allowed'}; opacity:${nextNode ? 1 : 0.4}; font-size:13px;" ${nextNode ? '' : 'disabled'}>
                     下一筆 <i class="fas fa-chevron-right"></i>
                 </button>
             </div>
         </div>`;
 
-        let detailHtml = '<div style="padding:24px;">';
+        let detailHtml = '<div style="padding:28px; max-width:900px;">';
 
         // 標題
         const typeLabel = nodeData.type === 'company' ? '公司' : '自然人';
         const typeIcon = nodeData.type === 'company' ? 'fa-building' : 'fa-user';
-        detailHtml += `<div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
-            <div style="width:44px; height:44px; border-radius:50%; background:${nodeData.type === 'company' ? '#e8f4f8' : '#f0e8f8'}; display:flex; align-items:center; justify-content:center;">
-                <i class="fas ${typeIcon}" style="font-size:18px; color:${nodeData.type === 'company' ? '#3A7CA5' : '#7B5EA7'};"></i>
+        detailHtml += `<div style="display:flex; align-items:center; gap:14px; margin-bottom:24px;">
+            <div style="width:52px; height:52px; border-radius:50%; background:${nodeData.type === 'company' ? '#e8f4f8' : '#f0e8f8'}; display:flex; align-items:center; justify-content:center;">
+                <i class="fas ${typeIcon}" style="font-size:22px; color:${nodeData.type === 'company' ? '#3A7CA5' : '#7B5EA7'};"></i>
             </div>
             <div>
-                <h3 style="margin:0; font-size:20px; font-weight:700;">${esc(nodeData.label || nodeId)}</h3>
-                <span style="font-size:13px; color:#888;">${typeLabel}</span>
+                <h3 style="margin:0; font-size:24px; font-weight:700;">${esc(nodeData.label || nodeId)}</h3>
+                <span style="font-size:15px; color:#888;">${typeLabel}</span>
             </div>
         </div>`;
 
-        if (nodeData.type === 'company') {
-            // 風險標籤
-            const riskColors = { CRITICAL: '#C0392B', WARNING: '#E67E22', INFO: '#3498DB', NONE: '#95A5A6' };
-            const riskLabels = { CRITICAL: '高風險', WARNING: '中風險', INFO: '資訊', NONE: '正常' };
-            const rl = nodeData.risk_level || 'NONE';
+        const riskColors = { CRITICAL: '#C0392B', WARNING: '#E67E22', INFO: '#3498DB', NONE: '#95A5A6' };
+        const riskLabels = { CRITICAL: '高風險', WARNING: '中風險', INFO: '資訊', NONE: '正常' };
+        const rl = nodeData.risk_level || 'NONE';
 
-            detailHtml += `<div style="display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap;">
-                <span style="padding:4px 12px; border-radius:16px; font-size:12px; font-weight:600; color:#fff; background:${riskColors[rl] || '#95A5A6'};">${riskLabels[rl] || '正常'}</span>
-                ${nodeData.flag_count ? `<span style="padding:4px 12px; border-radius:16px; font-size:12px; font-weight:600; color:#C0392B; background:#fdeaea;">${nodeData.flag_count} 個紅旗</span>` : ''}
-                ${nodeData.is_seed ? `<span style="padding:4px 12px; border-radius:16px; font-size:12px; font-weight:600; color:#1ABC9C; border:1px solid #1ABC9C;">調查主體</span>` : ''}
+        if (nodeData.type === 'company') {
+            // 狀態判定
+            const rawStatus = nodeData.status || '';
+            const isActive = !rawStatus || rawStatus === '核准設立' || rawStatus === '營運中';
+            const statusColor = isActive ? '#27AE60' : (rawStatus.includes('解散') || rawStatus.includes('廢止') || rawStatus.includes('撤銷') ? '#C0392B' : '#E67E22');
+            const statusText = rawStatus || '核准設立';
+
+            // 風險標籤
+            detailHtml += `<div style="display:flex; gap:10px; margin-bottom:24px; flex-wrap:wrap;">
+                <span style="padding:6px 16px; border-radius:20px; font-size:14px; font-weight:600; color:#fff; background:${riskColors[rl] || '#95A5A6'};">${riskLabels[rl] || '正常'}</span>
+                ${nodeData.flag_count ? `<span style="padding:6px 16px; border-radius:20px; font-size:14px; font-weight:600; color:#C0392B; background:#fdeaea;">${nodeData.flag_count} 個紅旗</span>` : ''}
+                ${nodeData.is_seed ? `<span style="padding:6px 16px; border-radius:20px; font-size:14px; font-weight:600; color:#1ABC9C; border:1px solid #1ABC9C;">調查主體</span>` : ''}
+                <span style="padding:6px 16px; border-radius:20px; font-size:14px; font-weight:600; color:${statusColor}; border:1px solid ${statusColor};">${esc(statusText)}</span>
             </div>`;
 
-            // 基本資料卡片
-            detailHtml += `<div style="background:#f9f9f9; padding:16px; border-radius:8px; margin-bottom:20px; border:1px solid #eee;">
-                <h4 style="margin:0 0 12px 0; font-size:15px; font-weight:600; color:#333;">基本資料</h4>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; font-size:14px; line-height:1.6;">
-                    <div><span style="color:#888;">統一編號</span><br><strong style="font-family:monospace; font-size:15px;">${esc(nodeData.entity_id || 'N/A')}</strong></div>
-                    <div><span style="color:#888;">公司狀態</span><br><strong>${nodeData.status === 'dissolved' ? '<span style="color:#C0392B;">已解散</span>' : '<span style="color:#27AE60;">營運中</span>'}</strong></div>
-                    ${nodeData.capitalDisplay ? `<div><span style="color:#888;">資本額</span><br><strong>${esc(nodeData.capitalDisplay)}</strong></div>` : ''}
-                    ${nodeData.capital ? `<div><span style="color:#888;">資本額（原始）</span><br><strong>${Number(nodeData.capital).toLocaleString()} 元</strong></div>` : ''}
-                    ${nodeData.address ? `<div style="grid-column:1/3;"><span style="color:#888;">登記地址</span><br><strong>${esc(nodeData.address)}</strong></div>` : ''}
-                    ${nodeData.setup_date ? `<div><span style="color:#888;">設立日期</span><br><strong>${esc(nodeData.setup_date)}</strong></div>` : ''}
-                    ${nodeData.industry ? `<div><span style="color:#888;">產業別</span><br><strong>${esc(nodeData.industry)}</strong></div>` : ''}
-                    ${nodeData.company_type ? `<div><span style="color:#888;">組織類型</span><br><strong>${esc(nodeData.company_type)}</strong></div>` : ''}
+            // ── 基本資料 ──
+            const capStr = nodeData.capital ? `NT$ ${Number(nodeData.capital).toLocaleString()}` : '';
+            detailHtml += `<div style="background:#f9fafb; padding:20px; border-radius:10px; margin-bottom:24px; border:1px solid #e8e8e8;">
+                <h4 style="margin:0 0 16px 0; font-size:17px; font-weight:700; color:#333;"><i class="fas fa-info-circle" style="margin-right:6px; color:#3A7CA5;"></i>基本資料</h4>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; font-size:15px; line-height:1.7;">
+                    <div><span style="color:#888; font-size:13px;">統一編號</span><br><strong style="font-family:monospace; font-size:17px; letter-spacing:1px;">${esc(nodeData.entity_id || 'N/A')}</strong></div>
+                    <div><span style="color:#888; font-size:13px;">公司狀態</span><br><strong style="color:${statusColor};">
+                        <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${statusColor}; margin-right:4px;"></span>${esc(statusText)}
+                    </strong></div>
+                    ${capStr ? `<div><span style="color:#888; font-size:13px;">資本額</span><br><strong>${capStr}</strong></div>` : ''}
+                    ${nodeData.representative ? `<div><span style="color:#888; font-size:13px;">代表人</span><br><strong>${esc(nodeData.representative)}</strong></div>` : ''}
+                    ${nodeData.address ? `<div style="grid-column:1/3;"><span style="color:#888; font-size:13px;">登記地址</span><br><strong>${esc(nodeData.address)}</strong></div>` : ''}
+                    ${nodeData.setup_date || nodeData.established_date ? `<div><span style="color:#888; font-size:13px;">設立日期</span><br><strong>${esc(nodeData.setup_date || nodeData.established_date)}</strong></div>` : ''}
+                    ${nodeData.last_change_date ? `<div><span style="color:#888; font-size:13px;">最後變更日期</span><br><strong>${esc(nodeData.last_change_date)}</strong></div>` : ''}
+                    ${nodeData.industry ? `<div><span style="color:#888; font-size:13px;">產業別</span><br><strong>${esc(nodeData.industry)}</strong></div>` : ''}
+                    ${nodeData.company_type ? `<div><span style="color:#888; font-size:13px;">組織類型</span><br><strong>${esc(nodeData.company_type)}</strong></div>` : ''}
+                    ${nodeData.registration_authority ? `<div><span style="color:#888; font-size:13px;">登記機關</span><br><strong>${esc(nodeData.registration_authority)}</strong></div>` : ''}
                 </div>
             </div>`;
-        } else if (nodeData.type === 'person') {
-            const rl = nodeData.risk_level || 'NONE';
-            const riskColors = { CRITICAL: '#C0392B', WARNING: '#E67E22', INFO: '#3498DB', NONE: '#95A5A6' };
-            const riskLabels = { CRITICAL: '高風險', WARNING: '中風險', INFO: '資訊', NONE: '正常' };
 
-            detailHtml += `<div style="display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap;">
-                <span style="padding:4px 12px; border-radius:16px; font-size:12px; font-weight:600; color:#fff; background:${riskColors[rl] || '#95A5A6'};">${riskLabels[rl] || '正常'}</span>
-                ${nodeData.flag_count ? `<span style="padding:4px 12px; border-radius:16px; font-size:12px; font-weight:600; color:#C0392B; background:#fdeaea;">${nodeData.flag_count} 個紅旗</span>` : ''}
+            // ── 所營事業資料 ──
+            const bizItems = nodeData.business_items || [];
+            if (bizItems.length > 0) {
+                detailHtml += `<div style="background:#f9fafb; padding:20px; border-radius:10px; margin-bottom:24px; border:1px solid #e8e8e8;">
+                    <h4 style="margin:0 0 16px 0; font-size:17px; font-weight:700; color:#333;"><i class="fas fa-briefcase" style="margin-right:6px; color:#8E44AD;"></i>所營事業資料（${bizItems.length}）</h4>
+                    <div style="display:grid; gap:6px;">
+                        ${bizItems.map(item => {
+                            const code = typeof item === 'string' ? '' : (item.code || (Array.isArray(item) ? item[0] : ''));
+                            const name = typeof item === 'string' ? item : (item.name || (Array.isArray(item) ? item[1] : String(item)));
+                            return `<div style="display:flex; gap:8px; align-items:baseline; font-size:14px; padding:4px 0; border-bottom:1px solid rgba(0,0,0,0.04);">
+                                ${code ? `<span style="font-family:monospace; color:#3A7CA5; font-weight:600; min-width:80px;">${esc(code)}</span>` : ''}
+                                <span>${esc(name)}</span>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>`;
+            }
+
+            // ── 董監事名單（含持股比例） ──
+            const dirs = nodeData.directors_data || [];
+            if (dirs.length > 0) {
+                const totalCap = nodeData.capital || 0;
+                const issuedShares = nodeData.issued_shares || 0;
+                const denominator = totalCap || issuedShares;
+
+                detailHtml += `<div style="background:#f9fafb; padding:20px; border-radius:10px; margin-bottom:24px; border:1px solid #e8e8e8;">
+                    <h4 style="margin:0 0 16px 0; font-size:17px; font-weight:700; color:#333;"><i class="fas fa-users" style="margin-right:6px; color:#2980B9;"></i>董監事名單（${dirs.length}）</h4>
+                    <table style="width:100%; border-collapse:collapse; font-size:14px;">
+                        <thead>
+                            <tr style="background:#eef2f5; border-bottom:2px solid #ddd;">
+                                <th style="text-align:left; padding:10px 12px; font-weight:600;">姓名</th>
+                                <th style="text-align:left; padding:10px 12px; font-weight:600;">職稱</th>
+                                <th style="text-align:left; padding:10px 12px; font-weight:600;">代表法人</th>
+                                <th style="text-align:right; padding:10px 12px; font-weight:600;">出資額/持股</th>
+                                <th style="text-align:right; padding:10px 12px; font-weight:600; min-width:80px;">占比</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${dirs.map((d, i) => {
+                                const name = d['姓名'] || d.name || '';
+                                const title = d['職稱'] || d.title || '';
+                                const repOf = d['所代表法人'] || d.representative_of || '';
+                                const repName = Array.isArray(repOf) ? repOf.join(', ') : String(repOf || '');
+                                const shares = d['出資額'] || d['持有股份數'] || d.shares || 0;
+                                const sharesNum = parseInt(String(shares).replace(/,/g, ''), 10) || 0;
+                                let pct = 0;
+                                if (sharesNum > 0 && denominator > 0) pct = (sharesNum / denominator * 100);
+                                const pctStr = pct > 0 ? pct.toFixed(2) + '%' : '-';
+                                const barWidth = Math.min(pct, 100);
+                                const titleColors = { '董事長': '#C0392B', '董事': '#2980B9', '監察人': '#8E44AD', '獨立董事': '#16A085', '負責人': '#D35400' };
+                                const tc = titleColors[title] || '#7F8C8D';
+                                const bg = i % 2 === 0 ? '#fff' : '#fafbfc';
+                                return `<tr style="background:${bg}; border-bottom:1px solid #f0f0f0;">
+                                    <td style="padding:10px 12px; font-weight:500;">${esc(name)}</td>
+                                    <td style="padding:10px 12px;"><span style="padding:2px 8px; border-radius:10px; font-size:12px; background:${tc}15; color:${tc}; font-weight:600;">${esc(title)}</span></td>
+                                    <td style="padding:10px 12px; font-size:13px; color:#666;">${repName ? esc(repName) : '-'}</td>
+                                    <td style="padding:10px 12px; text-align:right; font-family:monospace;">${sharesNum > 0 ? 'NT$ ' + sharesNum.toLocaleString() : '-'}</td>
+                                    <td style="padding:10px 12px; text-align:right;">
+                                        ${pct > 0 ? `<div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
+                                            <div style="width:60px; height:6px; background:#eee; border-radius:3px; overflow:hidden;">
+                                                <div style="width:${barWidth}%; height:100%; background:linear-gradient(90deg, #E67E22, #F39C12); border-radius:3px;"></div>
+                                            </div>
+                                            <span style="font-weight:700; color:#E67E22; min-width:50px;">${pctStr}</span>
+                                        </div>` : '<span style="color:#ccc;">-</span>'}
+                                    </td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+            }
+        } else if (nodeData.type === 'person') {
+            // 風險標籤
+            detailHtml += `<div style="display:flex; gap:10px; margin-bottom:24px; flex-wrap:wrap;">
+                <span style="padding:6px 16px; border-radius:20px; font-size:14px; font-weight:600; color:#fff; background:${riskColors[rl] || '#95A5A6'};">${riskLabels[rl] || '正常'}</span>
+                ${nodeData.flag_count ? `<span style="padding:6px 16px; border-radius:20px; font-size:14px; font-weight:600; color:#C0392B; background:#fdeaea;">${nodeData.flag_count} 個紅旗</span>` : ''}
             </div>`;
 
-            detailHtml += `<div style="background:#f9f9f9; padding:16px; border-radius:8px; margin-bottom:20px; border:1px solid #eee;">
-                <h4 style="margin:0 0 12px 0; font-size:15px; font-weight:600; color:#333;">基本資料</h4>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; font-size:14px; line-height:1.6;">
-                    <div><span style="color:#888;">姓名</span><br><strong style="font-size:15px;">${esc(nodeData.label || 'N/A')}</strong></div>
-                    <div><span style="color:#888;">類型</span><br><strong>自然人</strong></div>
-                    ${nodeData.nationality ? `<div><span style="color:#888;">國籍</span><br><strong>${esc(nodeData.nationality)}</strong></div>` : ''}
+            detailHtml += `<div style="background:#f9fafb; padding:20px; border-radius:10px; margin-bottom:24px; border:1px solid #e8e8e8;">
+                <h4 style="margin:0 0 16px 0; font-size:17px; font-weight:700; color:#333;"><i class="fas fa-user" style="margin-right:6px; color:#7B5EA7;"></i>基本資料</h4>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; font-size:15px; line-height:1.7;">
+                    <div><span style="color:#888; font-size:13px;">姓名</span><br><strong style="font-size:17px;">${esc(nodeData.label || 'N/A')}</strong></div>
+                    <div><span style="color:#888; font-size:13px;">類型</span><br><strong>自然人</strong></div>
+                    ${nodeData.nationality ? `<div><span style="color:#888; font-size:13px;">國籍</span><br><strong>${esc(nodeData.nationality)}</strong></div>` : ''}
                 </div>
             </div>`;
         }
 
-        // 關聯列表（更大字體、清楚呈現）
+        // ── 紅旗警示 ──
+        const flags = nodeData.flags || [];
+        if (flags.length > 0) {
+            const ruleNames = {
+                'SHELL_COMPANY': '殼公司', 'RAPID_DISSOLVE': '快速註銷', 'PHOENIX_COMPANY': '鳳凰公司',
+                'CIRCULAR_OWNERSHIP': '循環持股', 'NOMINEE_DIRECTOR': '代理董事', 'CAPITAL_ANOMALY': '資本異常',
+                'ADDRESS_CLUSTER': '地址聚集', 'FREQUENT_CHANGE': '頻繁變更', 'DORMANT_REVIVAL': '休眠復甦',
+                'CROSS_HOLDING': '交叉持股', 'AGE_ANOMALY': '年齡異常', 'MASS_DIRECTOR': '大量董事',
+                'REGISTRATION_BURST': '註冊激增', 'STAR_STRUCTURE': '星形結構', 'BRIDGE_NODE': '橋接節點',
+                'UBO_DEEP_PATH': 'UBO 深層路徑', 'CAPITAL_VOLATILITY': '資本劇烈跳動',
+                'BATCH_REGISTRATION': '批量登記', 'DIRECTOR_MUSICAL_CHAIRS': '董事走馬燈',
+                'UBO_CONCENTRATION': 'UBO 資本集中', 'HIDDEN_UBO': '隱藏實質受益人',
+                'SUSPICIOUS_INDUSTRY_MIX': '異常產業組合', 'CROSS_INVESTIGATION': '跨調查關聯',
+            };
+            const sevColors = { CRITICAL: '#C0392B', WARNING: '#E67E22', INFO: '#2980B9' };
+            const sevLabels = { CRITICAL: '嚴重', WARNING: '警告', INFO: '資訊' };
+            detailHtml += `<div style="background:#fff5f5; padding:20px; border-radius:10px; margin-bottom:24px; border:1px solid #f5d5d5;">
+                <h4 style="margin:0 0 16px 0; font-size:17px; font-weight:700; color:#C0392B;"><i class="fas fa-flag" style="margin-right:6px;"></i>紅旗警示（${flags.length}）</h4>
+                ${flags.map(f => {
+                    const c = sevColors[f.severity] || '#999';
+                    const sl = sevLabels[f.severity] || f.severity;
+                    const rn = ruleNames[f.rule_id] || f.rule_id;
+                    return `<div style="padding:10px 12px; border-left:4px solid ${c}; margin-bottom:8px; background:#fff; border-radius:0 6px 6px 0;">
+                        <div style="font-weight:600; font-size:14px;"><span style="color:${c};">[${sl}]</span> ${esc(rn)}</div>
+                        ${f.description ? `<div style="font-size:13px; color:#666; margin-top:4px;">${esc(f.description)}</div>` : ''}
+                    </div>`;
+                }).join('')}
+            </div>`;
+        }
+
+        // ── 關聯列表 ──
         const node = state.cy.getElementById(nodeId);
         if (node.length > 0) {
             const connEdges = node.connectedEdges();
             if (connEdges.length > 0) {
-                // 分類：現任 vs 歷史
                 const currentRels = [];
                 const histRels = [];
                 connEdges.forEach(e => {
                     const d = e.data();
                     const otherId = d.source === nodeId ? d.target : d.source;
                     const otherNode = state.cy.getElementById(otherId);
+                    const otherData = otherNode.length ? otherNode.data() : {};
                     const entry = {
                         otherId,
-                        otherLabel: otherNode.length ? otherNode.data('label') : otherId,
-                        otherType: otherNode.length ? otherNode.data('type') : '',
+                        otherLabel: otherData.label || otherId,
+                        otherType: otherData.type || '',
                         rel: d.label || d.relationship || '關聯',
                         isHist: d.status === 'historical' || d.is_historical,
-                        date: d.date || d.change_date || ''
+                        date: d.date || d.change_date || '',
+                        shares: d.shares || d.shareholding || 0,
+                        otherEntityId: otherData.entity_id || '',
                     };
                     if (entry.isHist) histRels.push(entry);
                     else currentRels.push(entry);
                 });
 
                 function renderRelSection(title, rels, dimmed) {
-                    let h = `<h4 style="font-size:15px; font-weight:600; margin:20px 0 10px; color:${dimmed ? '#999' : '#333'};">${title}（${rels.length}）</h4>`;
-                    h += '<div style="border:1px solid #e0e0e0; border-radius:8px; overflow:hidden;">';
+                    let h = `<div style="background:#f9fafb; padding:20px; border-radius:10px; margin-bottom:24px; border:1px solid #e8e8e8;${dimmed ? ' opacity:0.7;' : ''}">`;
+                    h += `<h4 style="margin:0 0 16px 0; font-size:17px; font-weight:700; color:${dimmed ? '#999' : '#333'};"><i class="fas ${dimmed ? 'fa-history' : 'fa-link'}" style="margin-right:6px; color:${dimmed ? '#bbb' : '#27AE60'};"></i>${title}（${rels.length}）</h4>`;
+                    h += '<table style="width:100%; border-collapse:collapse; font-size:14px;"><thead><tr style="background:#eef2f5; border-bottom:2px solid #ddd;">';
+                    h += '<th style="text-align:left; padding:10px 12px; font-weight:600;">對象</th>';
+                    h += '<th style="text-align:left; padding:10px 12px; font-weight:600;">關係</th>';
+                    h += '<th style="text-align:left; padding:10px 12px; font-weight:600;">統編/ID</th>';
+                    if (dimmed) h += '<th style="text-align:left; padding:10px 12px; font-weight:600;">日期</th>';
+                    h += '</tr></thead><tbody>';
                     rels.forEach((r, i) => {
                         const bg = i % 2 === 0 ? '#fff' : '#fafbfc';
                         const icon = r.otherType === 'company' ? 'fa-building' : 'fa-user';
-                        h += `<div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid #f0f0f0; background:${bg}; font-size:14px;${dimmed ? ' opacity:0.6;' : ''}">
-                            <div style="display:flex; align-items:center; gap:8px; cursor:pointer;" onclick="reportClickNode('${r.otherId}')">
-                                <i class="fas ${icon}" style="color:${r.otherType === 'company' ? '#3A7CA5' : '#7B5EA7'}; font-size:12px;"></i>
-                                <span style="color:#3A7CA5; font-weight:500;">${esc(r.otherLabel)}</span>
-                            </div>
-                            <div style="display:flex; align-items:center; gap:6px;">
-                                <span style="padding:3px 10px; border-radius:12px; font-size:11px; font-weight:500; background:${r.isHist ? '#f5f5f5; color:#888;' : '#e8f5e9; color:#2e7d32;'}">${esc(r.rel)}</span>
-                                ${r.date ? `<span style="font-size:10px; color:#bbb;">${esc(r.date)}</span>` : ''}
-                            </div>
-                        </div>`;
+                        const iconColor = r.otherType === 'company' ? '#3A7CA5' : '#7B5EA7';
+                        h += `<tr style="background:${bg}; border-bottom:1px solid #f0f0f0; cursor:pointer;" onclick="reportClickNode('${r.otherId}')">
+                            <td style="padding:10px 12px;">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <i class="fas ${icon}" style="color:${iconColor};"></i>
+                                    <span style="color:#3A7CA5; font-weight:500;">${esc(r.otherLabel)}</span>
+                                </div>
+                            </td>
+                            <td style="padding:10px 12px;"><span style="padding:3px 10px; border-radius:12px; font-size:12px; font-weight:500; background:${r.isHist ? '#f5f5f5; color:#888;' : '#e8f5e9; color:#2e7d32;'}">${esc(r.rel)}</span></td>
+                            <td style="padding:10px 12px; font-family:monospace; font-size:13px; color:#888;">${esc(r.otherEntityId)}</td>
+                            ${dimmed ? `<td style="padding:10px 12px; font-size:13px; color:#bbb;">${esc(r.date)}</td>` : ''}
+                        </tr>`;
                     });
-                    h += '</div>';
+                    h += '</tbody></table></div>';
                     return h;
                 }
 
@@ -6925,10 +7046,69 @@
             }
         }
 
+        // ── 歷史變動紀錄（載入區塊） ──
+        if (nodeData.type === 'company') {
+            detailHtml += `<div style="background:#f9fafb; padding:20px; border-radius:10px; margin-bottom:24px; border:1px solid #e8e8e8;">
+                <h4 style="margin:0 0 12px 0; font-size:17px; font-weight:700; color:#333; cursor:pointer;" onclick="window.__bedrockLoadReportTimeline('${esc(nodeData.entity_id)}', this)">
+                    <i class="fas fa-history" style="margin-right:6px; color:#E67E22;"></i>歷史變動紀錄
+                    <i class="fas fa-chevron-down" style="font-size:12px; margin-left:6px; color:#aaa;"></i>
+                </h4>
+                <div id="report-timeline-${esc(nodeData.entity_id)}" style="display:none;">
+                    <div style="text-align:center; padding:20px; color:#999;"><i class="fas fa-spinner fa-spin"></i> 載入中...</div>
+                </div>
+            </div>`;
+        }
+
         detailHtml += '</div>';
         container.innerHTML = navHtml + detailHtml;
+
+        // 自動載入歷史變動
+        if (nodeData.type === 'company' && nodeData.entity_id) {
+            _loadReportTimelineData(nodeData.entity_id);
+        }
     }
     window.renderReportDetail = renderReportDetail;
+
+    // 載入歷史變動到報表內
+    async function _loadReportTimelineData(entityId) {
+        const container = document.getElementById('report-timeline-' + entityId);
+        if (!container) return;
+        try {
+            const data = await api.get('/companies/' + entityId + '/changelog');
+            const changes = data.changes || data || [];
+            if (changes.length === 0) {
+                container.innerHTML = '<div style="color:#999; font-size:14px; padding:8px 0;">暫無變動記錄</div>';
+                return;
+            }
+            let html = '<div style="border-left:3px solid #E67E22; padding-left:16px;">';
+            changes.forEach((c, i) => {
+                const dt = c.changed_at || c.date || c.updated_at || '';
+                const field = c.field || c.column_name || '';
+                const oldVal = c.old_value || '';
+                const newVal = c.new_value || '';
+                html += `<div style="padding:10px 0; border-bottom:1px solid rgba(0,0,0,0.05); font-size:14px;">
+                    <div style="font-weight:600; color:#E67E22;">${esc(dt)}</div>
+                    <div style="margin-top:4px;"><span style="color:#888;">${esc(field)}</span></div>
+                    ${oldVal ? `<div style="margin-top:2px; color:#C0392B; font-size:13px;">- ${esc(String(oldVal).substring(0, 200))}</div>` : ''}
+                    ${newVal ? `<div style="margin-top:2px; color:#27AE60; font-size:13px;">+ ${esc(String(newVal).substring(0, 200))}</div>` : ''}
+                </div>`;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        } catch (e) {
+            container.innerHTML = `<div style="color:#999; font-size:14px; padding:8px 0;">載入失敗: ${esc(e.message)}</div>`;
+        }
+    }
+    window.__bedrockLoadReportTimeline = function(entityId, headerEl) {
+        const container = document.getElementById('report-timeline-' + entityId);
+        if (!container) return;
+        const isOpen = container.style.display !== 'none';
+        container.style.display = isOpen ? 'none' : 'block';
+        const chevron = headerEl.querySelector('.fa-chevron-down, .fa-chevron-up');
+        if (chevron) {
+            chevron.className = chevron.className.replace(isOpen ? 'fa-chevron-up' : 'fa-chevron-down', isOpen ? 'fa-chevron-down' : 'fa-chevron-up');
+        }
+    };
 
     function clearReportDetail() {
         // 清除詳情檢視，回到報表列表
