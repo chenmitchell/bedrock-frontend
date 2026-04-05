@@ -2715,10 +2715,20 @@
                     <span class="ws-detail-label">登記地址</span>
                     <span class="ws-detail-value" style="font-size:11px; word-break:break-all;">${esc(data.address || '未知')}</span>
                 </div>
+                ${data.issued_shares ? `
+                <div class="ws-detail-row">
+                    <span class="ws-detail-label">已發行股份</span>
+                    <span class="ws-detail-value">${parseInt(data.issued_shares).toLocaleString()} 股</span>
+                </div>` : ''}
+                ${data.share_amount ? `
+                <div class="ws-detail-row">
+                    <span class="ws-detail-label">每股金額</span>
+                    <span class="ws-detail-value">NT$ ${parseInt(data.share_amount).toLocaleString()}</span>
+                </div>` : ''}
                 ${data.business_items && data.business_items.length > 0 ? `
                 <div class="ws-detail-row" style="flex-direction:column;">
-                    <span class="ws-detail-label" style="margin-bottom:4px;">營業項目</span>
-                    <div style="font-size:11px; color:#555; max-height:80px; overflow-y:auto; padding:4px; background:rgba(0,0,0,0.02); border-radius:4px;">
+                    <span class="ws-detail-label" style="margin-bottom:4px;">所營事業 (${data.business_items.length})</span>
+                    <div style="font-size:11px; color:#555; max-height:160px; overflow-y:auto; padding:6px 8px; background:rgba(0,0,0,0.02); border-radius:4px; line-height:1.6;">
                         ${data.business_items.map(item => esc(typeof item === 'string' ? item : (item.code || '') + ' ' + (item.name || ''))).join('<br>')}
                     </div>
                 </div>` : ''}
@@ -2792,6 +2802,61 @@
                     <div class="ws-detail-section-title"><i class="fas fa-users" style="margin-right:4px;"></i>董監事名單 (${dirs.length})</div>
                     <div style="max-height:200px; overflow-y:auto;">
                         ${dirsHtml}
+                    </div>
+                </div>`;
+            })() : ''}
+
+            ${isCompany && data.directors_data && data.directors_data.length > 0 ? (() => {
+                // 股東架構分析 — 計算持股分布
+                const dirs = data.directors_data;
+                const totalCapital = data.capital || 0;
+                const issuedShares = data.issued_shares || 0;
+                const base = issuedShares || totalCapital;
+                if (base <= 0) return '';
+
+                const shareholders = [];
+                let accountedPct = 0;
+                dirs.forEach(d => {
+                    const name = d['姓名'] || d.name || '';
+                    const shares = parseInt(String(d['出資額'] || d['持有股份數'] || d.shares || 0).replace(/,/g, ''), 10) || 0;
+                    if (shares > 0 && name) {
+                        const pct = shares / base * 100;
+                        shareholders.push({ name, shares, pct });
+                        accountedPct += pct;
+                    }
+                });
+                if (shareholders.length === 0) return '';
+
+                // 按持股比例排序
+                shareholders.sort((a, b) => b.pct - a.pct);
+                const colors = ['#2980B9', '#E67E22', '#27AE60', '#C0392B', '#8E44AD', '#16A085', '#D35400', '#7F8C8D'];
+
+                let barHtml = shareholders.map((s, i) => {
+                    const c = colors[i % colors.length];
+                    const w = Math.max(s.pct, 1);
+                    return `<div style="width:${w}%; background:${c}; height:100%; min-width:2px;" title="${esc(s.name)} ${s.pct.toFixed(1)}%"></div>`;
+                }).join('');
+                if (accountedPct < 100) {
+                    barHtml += `<div style="width:${100 - accountedPct}%; background:#e0e0e0; height:100%;" title="其他/未知 ${(100-accountedPct).toFixed(1)}%"></div>`;
+                }
+
+                let legendHtml = shareholders.slice(0, 8).map((s, i) => {
+                    const c = colors[i % colors.length];
+                    return `<div style="display:flex; align-items:center; gap:4px; font-size:11px;">
+                        <span style="width:8px; height:8px; border-radius:2px; background:${c}; flex-shrink:0;"></span>
+                        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(s.name)}</span>
+                        <span style="font-weight:600; color:${c};">${s.pct.toFixed(1)}%</span>
+                    </div>`;
+                }).join('');
+                if (shareholders.length > 8) legendHtml += `<div style="font-size:10px; color:#999;">…及其他 ${shareholders.length - 8} 位</div>`;
+
+                return `<div class="ws-detail-section">
+                    <div class="ws-detail-section-title"><i class="fas fa-chart-pie" style="margin-right:4px;"></i>股東架構</div>
+                    <div style="height:16px; display:flex; border-radius:8px; overflow:hidden; margin-bottom:8px;">
+                        ${barHtml}
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:3px;">
+                        ${legendHtml}
                     </div>
                 </div>`;
             })() : ''}
@@ -2874,7 +2939,7 @@
 
         // 從 API 拉資料
         try {
-            const invId = state.currentInvestigation;
+            const invId = state.currentInvId;
             // 用 entity_id 找 node
             const graphData = state.cy ? state.cy.nodes().filter(n => n.data('entity_id') === entityId) : [];
             let nodeId = entityId;
@@ -3211,7 +3276,7 @@
                     const d = node.data();
                     const eid = d.entity_id || d.id;
                     if (idSet.has(eid)) {
-                        members.push({ id: d.id, label: d.label || eid, entity_id: eid, address: d.address || '', type: d.type || '' });
+                        members.push({ id: d.id, label: d.label || eid, entity_id: eid, address: d.address || '', type: d.type || '', status: d.status || '', capital: d.capital || 0, representative: d.representative || '' });
                     }
                 });
             }
@@ -3236,22 +3301,22 @@
                     </div>
                 </div>
                 <div id="cluster-members-${idx}" class="cluster-member-detail" style="display:none; margin:0 0 4px 20px; border-left:2px solid var(--color-accent, #2a8fa8); border-radius:0 0 4px 4px; background:rgba(0,0,0,0.02);">
-                    <table style="width:100%; border-collapse:collapse; font-size:12px;">
-                        <thead>
-                            <tr style="background:rgba(0,0,0,0.04);">
-                                <th style="text-align:left; padding:5px 8px; font-weight:600; color:#666;">公司/關係人</th>
-                                <th style="text-align:left; padding:5px 8px; font-weight:600; color:#666;">統編</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${members.map(m => `
-                                <tr style="cursor:pointer; border-bottom:1px solid rgba(0,0,0,0.05);" onclick="event.stopPropagation(); reportClickNode('${esc(m.id)}');" onmouseover="this.style.background='rgba(42,143,168,0.08)'" onmouseout="this.style.background='transparent'">
-                                    <td style="padding:4px 8px; font-weight:500;">${esc(m.label)}</td>
-                                    <td style="padding:4px 8px; color:#888; font-family:monospace; font-size:11px;">${esc(m.entity_id)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
+                    ${members.map(m => {
+                        const cap = m.capital ? (m.capital >= 10000 ? Math.round(m.capital/10000).toLocaleString() + ' 萬' : m.capital.toLocaleString() + ' 元') : '';
+                        const statusColor = m.status === '核准設立' ? '#27AE60' : (m.status === '解散' || m.status === '廢止') ? '#C0392B' : '#E67E22';
+                        return `<div style="padding:8px 10px; border-bottom:1px solid rgba(0,0,0,0.05); cursor:pointer;" onclick="event.stopPropagation(); reportClickNode('${esc(m.id)}');" onmouseover="this.style.background='rgba(42,143,168,0.08)'" onmouseout="this.style.background='transparent'">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-size:13px; font-weight:600;">${esc(m.label)}</span>
+                                <span style="font-family:monospace; font-size:11px; color:#888;">${esc(m.entity_id)}</span>
+                            </div>
+                            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:3px; font-size:11px; color:#666;">
+                                ${m.status ? `<span><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:${statusColor}; margin-right:2px;"></span>${esc(m.status)}</span>` : ''}
+                                ${cap ? `<span>資本 ${cap}</span>` : ''}
+                                ${m.representative ? `<span>代表：${esc(m.representative)}</span>` : ''}
+                            </div>
+                            ${m.address ? `<div style="font-size:10px; color:#999; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(m.address)}</div>` : ''}
+                        </div>`;
+                    }).join('')}
                 </div>`;
         }).join('');
     }
@@ -3266,6 +3331,9 @@
             detail.style.display = 'block';
             const chevron = headerEl.querySelector('.cluster-chevron');
             if (chevron) chevron.style.transform = 'rotate(90deg)';
+        } else {
+            // 收合時同時清除遮罩
+            clearClusterHighlight();
         }
     };
 
