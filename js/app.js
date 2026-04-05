@@ -272,7 +272,7 @@
             el.querySelector('.ubo-overlay-backdrop').addEventListener('click', () => this.hide());
         },
         async _extendCrawl() {
-            const invId = state.currentInvestigationId || state.invId;
+            const invId = state.currentInvId || state.currentInvestigationId || state.invId;
             if (!invId) { Toast.error('找不到調查 ID'); return; }
             // 目前深度 +1，用資料儲存推測
             const currentDepth = (state.cy && state.cy.data('max_depth_reached')) || 3;
@@ -400,6 +400,7 @@
         _analysisTimer: null, // runAnalysis 後的 setTimeout ID
         investigationsFilter: 'all',
         investigationsSearch: '',
+        selectedInvIds: new Set(), // 批次匯出選取的案件 ID 集合
     };
 
     // ================================================================
@@ -1254,9 +1255,11 @@
                 nextStepHtml = `<span class="card-next-step card-next-start"><i class="fas fa-play"></i> 下一步：搜尋</span>`;
             }
 
+            const isSelected = state.selectedInvIds.has(inv.id);
             return `
                 <div class="investigation-card" data-id="${inv.id}">
                     <div class="investigation-card-header">
+                        <input type="checkbox" class="inv-select-checkbox" data-id="${inv.id}" ${isSelected ? 'checked' : ''} onclick="toggleInvSelect(event, ${inv.id})" title="選取以批次匯出" style="margin-right:8px; cursor:pointer; width:16px; height:16px;" />
                         <div style="flex: 1; cursor: pointer;" onclick="openInvestigation('${inv.id}')">
                             <span class="investigation-card-title">${esc(inv.title)}</span>
                         </div>
@@ -1276,7 +1279,97 @@
                 </div>
             `;
         }).join('');
+
+        // 同步批次匯出 bar
+        renderBatchExportBar();
     }
+
+    // ================================================================
+    // 批次匯出 Excel
+    // ================================================================
+    function toggleInvSelect(event, invId) {
+        event.stopPropagation();
+        const id = parseInt(invId);
+        if (state.selectedInvIds.has(id)) state.selectedInvIds.delete(id);
+        else state.selectedInvIds.add(id);
+        renderBatchExportBar();
+    }
+    window.toggleInvSelect = toggleInvSelect;
+
+    function renderBatchExportBar() {
+        let bar = document.getElementById('batch-export-bar');
+        const count = state.selectedInvIds.size;
+        if (count === 0) {
+            if (bar) bar.remove();
+            return;
+        }
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'batch-export-bar';
+            bar.style.cssText = 'position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:9998; background:#2F5496; color:#fff; padding:12px 20px; border-radius:999px; box-shadow:0 6px 20px rgba(0,0,0,0.25); display:flex; gap:14px; align-items:center; font-size:14px;';
+            document.body.appendChild(bar);
+        }
+        bar.innerHTML = `
+            <i class="fas fa-file-excel" style="font-size:16px;"></i>
+            <span>已選 <b>${count}</b> 個案件</span>
+            <button onclick="clearInvSelection()" style="background:transparent; border:1px solid rgba(255,255,255,0.4); color:#fff; padding:6px 12px; border-radius:999px; cursor:pointer; font-size:13px;">清除</button>
+            <button onclick="batchExportExcel()" style="background:#fff; border:none; color:#2F5496; padding:6px 14px; border-radius:999px; cursor:pointer; font-weight:600; font-size:13px;">
+                <i class="fas fa-download"></i> 批次匯出 Excel
+            </button>
+        `;
+    }
+
+    function clearInvSelection() {
+        state.selectedInvIds.clear();
+        renderInvestigations();
+    }
+    window.clearInvSelection = clearInvSelection;
+
+    async function batchExportExcel() {
+        const ids = Array.from(state.selectedInvIds);
+        if (ids.length === 0) return;
+        if (ids.length > 50) {
+            Toast.error('單次最多 50 個案件');
+            return;
+        }
+        try {
+            Toast.info(`正在打包 ${ids.length} 個案件的 Excel…`);
+            const headers = { 'Content-Type': 'application/json' };
+            const token = localStorage.getItem('bedrock_token') || state.token;
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            // 使用 10 分鐘超時
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 600000);
+            const res = await fetch(API_BASE + '/investigations/export/excel/batch', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ investigation_ids: ids }),
+                signal: controller.signal,
+            });
+            clearTimeout(timer);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || '批次匯出失敗');
+            }
+            const success = res.headers.get('X-Export-Success') || '?';
+            const failed = res.headers.get('X-Export-Failed') || '0';
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const cd = res.headers.get('Content-Disposition') || '';
+            const m = cd.match(/filename="?([^"]+)"?/i);
+            a.href = url;
+            a.download = m ? m[1] : `bedrock_batch_${Date.now()}.zip`;
+            a.click();
+            URL.revokeObjectURL(url);
+            Toast.success(`批次匯出完成：成功 ${success} 件，失敗 ${failed} 件`);
+            clearInvSelection();
+        } catch (e) {
+            console.warn('[BEDROCK] 批次匯出失敗:', e.message);
+            Toast.error('批次匯出失敗：' + e.message);
+        }
+    }
+    window.batchExportExcel = batchExportExcel;
 
     // 更新儀表板 KPI 統計
     function updateDashboardKPIs() {
@@ -4827,6 +4920,7 @@
                 menu.style.minWidth = '120px';
 
                 const formats = [
+                    { name: 'Excel (多工作表)', ext: 'excel', icon: 'fa-file-excel' },
                     { name: 'HTML', ext: 'html', icon: 'fa-file-code' },
                     { name: 'PDF', ext: 'pdf', icon: 'fa-file-pdf' },
                     { name: 'JSON', ext: 'json', icon: 'fa-code' },
@@ -4904,10 +4998,15 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `bedrock_report_${state.currentInvId}.${format}`;
+            // 優先使用後端回傳的 Content-Disposition filename
+            const cd = res.headers.get('Content-Disposition') || '';
+            const m = cd.match(/filename="?([^"]+)"?/i);
+            const extMap = { excel: 'xlsx' };
+            const ext = extMap[format] || format;
+            a.download = m ? m[1] : `bedrock_report_${state.currentInvId}.${ext}`;
             a.click();
             URL.revokeObjectURL(url);
-            Toast.success(`報告已匯出為 ${format.toUpperCase()}`);
+            Toast.success(`報告已匯出為 ${ext.toUpperCase()}`);
         } catch (e) {
             console.warn('[BEDROCK] 匯出失敗:', e.message);
             Toast.error('匯出失敗: ' + e.message);
