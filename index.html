@@ -481,6 +481,7 @@
                         <button class="admin-tab" id="admin-tab-audit" role="tab" aria-selected="false" onclick="switchAdminTab('audit')">稽核紀錄</button>
                         <button class="admin-tab" id="admin-tab-sync" role="tab" aria-selected="false" onclick="switchAdminTab('sync')">資料同步</button>
                         <button class="admin-tab" id="admin-tab-database" role="tab" aria-selected="false" onclick="switchAdminTab('database')">資料庫監控</button>
+                        <button class="admin-tab" id="admin-tab-invites" role="tab" aria-selected="false" onclick="switchAdminTab('invites')">邀請碼</button>
                     </div>
 
                     <div id="admin-users-panel" class="admin-panel admin-panel-active" role="tabpanel">
@@ -681,6 +682,66 @@
                                     </button>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== 邀請碼管理面板 ===== -->
+                    <div id="admin-invites-panel" class="admin-panel" role="tabpanel" style="display:none;">
+                        <h3 class="admin-panel-title">邀請碼管理（管道二）</h3>
+                        <div style="padding:16px 0;">
+                            <div style="background:#f8f7f5; border:1px solid #e8e6e1; border-radius:8px; padding:16px; margin-bottom:20px;">
+                                <h4 style="margin:0 0 8px 0; font-size:0.95rem; color:#2d6a8f;">
+                                    <i class="fas fa-info-circle" style="margin-right:6px;"></i>管道二特殊代碼說明
+                                </h4>
+                                <p style="margin:0; font-size:0.88rem; color:#555; line-height:1.7;">
+                                    特殊代碼讓受邀使用者免審核直接啟用帳號。使用者在統一編號欄位輸入此代碼即可識別為管道二。
+                                    請設定使用次數與到期日以控管風險。
+                                </p>
+                            </div>
+
+                            <!-- 建立新邀請碼表單 -->
+                            <div style="background:#fff; border:1px solid #e8e6e1; border-radius:8px; padding:20px; margin-bottom:20px;">
+                                <h4 style="margin:0 0 16px 0; font-size:1rem; font-weight:600;">建立新邀請碼</h4>
+                                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
+                                    <div>
+                                        <label style="display:block; font-size:0.85rem; color:#555; margin-bottom:4px;">代碼 <span style="color:#C0392B;">*</span></label>
+                                        <input type="text" id="invite-new-code" class="input" placeholder="例如：VIP2026" style="width:100%;" maxlength="50">
+                                    </div>
+                                    <div>
+                                        <label style="display:block; font-size:0.85rem; color:#555; margin-bottom:4px;">使用次數上限</label>
+                                        <input type="number" id="invite-new-max-uses" class="input" placeholder="留空=無限" style="width:100%;" min="1" max="10000">
+                                    </div>
+                                    <div>
+                                        <label style="display:block; font-size:0.85rem; color:#555; margin-bottom:4px;">到期日</label>
+                                        <input type="date" id="invite-new-expires" class="input" style="width:100%;">
+                                    </div>
+                                    <div>
+                                        <label style="display:block; font-size:0.85rem; color:#555; margin-bottom:4px;">備註</label>
+                                        <input type="text" id="invite-new-notes" class="input" placeholder="用途說明" style="width:100%;" maxlength="200">
+                                    </div>
+                                </div>
+                                <div style="margin-top:16px; text-align:right;">
+                                    <button class="btn btn-primary" onclick="createInviteCode()">建立邀請碼</button>
+                                </div>
+                            </div>
+
+                            <!-- 列表 -->
+                            <table class="admin-table table">
+                                <thead>
+                                    <tr>
+                                        <th>代碼</th>
+                                        <th>狀態</th>
+                                        <th>使用次數</th>
+                                        <th>到期日</th>
+                                        <th>備註</th>
+                                        <th>建立時間</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-invites-tbody">
+                                    <tr><td colspan="7" style="text-align:center; padding:20px;">載入中…</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 

@@ -256,7 +256,8 @@
                     </div>
                     <div class="ubo-overlay-foot">
                         <button class="ubo-overlay-btn ubo-overlay-btn-secondary" data-act="later">稍後再看</button>
-                        <button class="ubo-overlay-btn ubo-overlay-btn-primary" data-act="ok">我知道了，進入人工審查</button>
+                        <button class="ubo-overlay-btn ubo-overlay-btn-secondary" data-act="ok">先進入人工審查</button>
+                        <button class="ubo-overlay-btn ubo-overlay-btn-primary" data-act="extend">繼續往下挖一層</button>
                     </div>
                 </div>
             `;
@@ -264,8 +265,42 @@
             this._el = el;
             requestAnimationFrame(() => el.classList.add('ubo-overlay-visible'));
             el.querySelector('[data-act="ok"]').addEventListener('click', () => this.hide());
-            el.querySelector('[data-act="later"]').addEventListener('click', () => this.hide());
+            el.querySelector('[data-act="later"]').addEventListener('click', () => { this.hide(); this._showPersistentBanner(warnedCount); });
+            el.querySelector('[data-act="extend"]').addEventListener('click', () => { this.hide(); this._extendCrawl(); });
             el.querySelector('.ubo-overlay-backdrop').addEventListener('click', () => this.hide());
+        },
+        async _extendCrawl() {
+            const invId = state.currentInvestigationId || state.invId;
+            if (!invId) { Toast.error('找不到調查 ID'); return; }
+            // 目前深度 +1，用資料儲存推測
+            const currentDepth = (state.cy && state.cy.data('max_depth_reached')) || 3;
+            const newDepth = Math.min(currentDepth + 1, 10);
+            try {
+                Toast.info(`啟動加深重跑（目標 ${newDepth} 層）...`);
+                await api.post(`/investigations/${invId}/crawl/extend?max_depth=${newDepth}`, {});
+                Toast.success(`爬蟲重新啟動，目標深度 ${newDepth} 層`);
+                // 重新載入圖
+                if (typeof reloadInvestigation === 'function') {
+                    setTimeout(() => reloadInvestigation(invId), 2000);
+                }
+            } catch (e) {
+                Toast.error('加深失敗：' + (e.message || e));
+            }
+        },
+        _showPersistentBanner(warnedCount) {
+            // 顯示一個頂部持續性橫幅，可點擊再次觸發繼續挖
+            const existing = document.getElementById('ubo-persistent-banner');
+            if (existing) existing.remove();
+            const bn = document.createElement('div');
+            bn.id = 'ubo-persistent-banner';
+            bn.style.cssText = 'position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:9998; background:#E74C3C; color:#fff; padding:10px 18px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.2); cursor:pointer; font-size:14px; font-weight:600;';
+            bn.innerHTML = `⚠ 尚未找到 OBU（${warnedCount} 家） · <span style="text-decoration:underline;">點此繼續往下挖一層</span> · <span style="opacity:0.7; font-weight:400; margin-left:8px;">✕</span>`;
+            bn.onclick = (e) => {
+                if (e.target.textContent === '✕') { bn.remove(); return; }
+                bn.remove();
+                UBOOverlay._extendCrawl();
+            };
+            document.body.appendChild(bn);
         },
         hide() {
             if (this._el) {
@@ -643,7 +678,22 @@
             } else if (data.error) {
                 const errorCode = data.error.code;
                 console.error(`[BEDROCK] OAuth callback API error: ${errorCode} — ${data.error.message}`);
-                if (errorCode === 'PENDING_APPROVAL') {
+                if (errorCode === 'PROFILE_INCOMPLETE') {
+                    // 新 Google 使用者，需要完成註冊表單
+                    if (data.error.temp_token) {
+                        auth.setToken(data.error.temp_token);
+                    }
+                    if (data.error.email) {
+                        // 預填 email 與姓名到註冊流程
+                        state.googlePrefill = {
+                            email: data.error.email,
+                            display_name: data.error.display_name || '',
+                        };
+                    }
+                    Toast.info('請完成註冊表單');
+                    showScene('register');
+                    showRegStep(1);
+                } else if (errorCode === 'PENDING_APPROVAL') {
                     showScene('register');
                     showRegStep('pending');
                 } else if (errorCode === 'TOKEN_EXCHANGE_FAILED' || errorCode === 'INVALID_STATE') {
@@ -5640,6 +5690,9 @@
         if (tabName === 'keywords') {
             loadKeywords();
         }
+        if (tabName === 'invites') {
+            loadInviteCodes();
+        }
         if (tabName === 'database') {
             dbRefreshOverview();
         }
@@ -5694,6 +5747,81 @@
             loadAdminUsers();
         } catch (e) {
             showToast('更新失敗: ' + e.message, 'error');
+        }
+    };
+
+    // ========== 邀請碼管理 ==========
+    async function loadInviteCodes() {
+        const tbody = document.getElementById('admin-invites-tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px;">載入中…</td></tr>';
+        try {
+            const data = await api.get('/admin/invite-codes');
+            const codes = (data && (data.items || data.codes || data)) || [];
+            if (!codes.length) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:#888;">尚無邀請碼</td></tr>';
+                return;
+            }
+            tbody.innerHTML = codes.map(c => {
+                const statusColor = c.status === 'active' ? '#27AE60' : '#888';
+                const usedText = c.max_uses ? `${c.used_count || 0} / ${c.max_uses}` : `${c.used_count || 0} / ∞`;
+                const expiresText = c.expires_at ? new Date(c.expires_at).toLocaleDateString('zh-TW') : '—';
+                const createdText = c.created_at ? new Date(c.created_at).toLocaleDateString('zh-TW') : '—';
+                const toggleLabel = c.status === 'active' ? '停用' : '啟用';
+                const toggleStatus = c.status === 'active' ? 'disabled' : 'active';
+                return `<tr>
+                    <td><code style="background:#f3f4f6; padding:4px 8px; border-radius:4px; font-weight:600;">${esc(c.code)}</code></td>
+                    <td><span style="color:${statusColor}; font-weight:600;">${esc(c.status)}</span></td>
+                    <td>${usedText}</td>
+                    <td>${expiresText}</td>
+                    <td style="font-size:0.85rem; color:#666;">${esc(c.notes || '—')}</td>
+                    <td style="font-size:0.85rem; color:#666;">${createdText}</td>
+                    <td>
+                        <button onclick="toggleInviteCode(${c.id}, '${toggleStatus}')" style="padding:4px 10px; background:#fff; border:1px solid #ccc; border-radius:4px; cursor:pointer; font-size:0.85rem; margin-right:4px;">${toggleLabel}</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:#C0392B;">載入失敗：${esc(e.message || e)}</td></tr>`;
+        }
+    }
+    window.loadInviteCodes = loadInviteCodes;
+
+    window.createInviteCode = async function() {
+        const code = (document.getElementById('invite-new-code').value || '').trim();
+        const maxUsesRaw = (document.getElementById('invite-new-max-uses').value || '').trim();
+        const expires = (document.getElementById('invite-new-expires').value || '').trim();
+        const notes = (document.getElementById('invite-new-notes').value || '').trim();
+
+        if (!code) { Toast.warning('請輸入代碼'); return; }
+        if (code.length < 4) { Toast.warning('代碼至少 4 碼'); return; }
+
+        const payload = { code };
+        if (maxUsesRaw) payload.max_uses = parseInt(maxUsesRaw, 10);
+        if (expires) payload.expires_at = expires + 'T23:59:59';
+        if (notes) payload.notes = notes;
+
+        try {
+            await api.post('/admin/invite-codes', payload);
+            Toast.success('邀請碼已建立');
+            // 清空表單
+            document.getElementById('invite-new-code').value = '';
+            document.getElementById('invite-new-max-uses').value = '';
+            document.getElementById('invite-new-expires').value = '';
+            document.getElementById('invite-new-notes').value = '';
+            loadInviteCodes();
+        } catch (e) {
+            Toast.error('建立失敗：' + (e.message || e));
+        }
+    };
+
+    window.toggleInviteCode = async function(id, newStatus) {
+        try {
+            await api.patch('/admin/invite-codes/' + id, { status: newStatus });
+            Toast.success('狀態已更新');
+            loadInviteCodes();
+        } catch (e) {
+            Toast.error('更新失敗：' + (e.message || e));
         }
     };
 
