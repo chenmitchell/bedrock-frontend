@@ -57,11 +57,11 @@
                 throw e;
             }
         },
-        get(path) { return this.request('GET', path); },
-        post(path, body) { return this.request('POST', path, body); },
-        put(path, body) { return this.request('PUT', path, body); },
-        patch(path, body) { return this.request('PATCH', path, body); },
-        del(path) { return this.request('DELETE', path); },
+        get(path, timeoutMs) { return this.request('GET', path, null, timeoutMs); },
+        post(path, body, timeoutMs) { return this.request('POST', path, body, timeoutMs); },
+        put(path, body, timeoutMs) { return this.request('PUT', path, body, timeoutMs); },
+        patch(path, body, timeoutMs) { return this.request('PATCH', path, body, timeoutMs); },
+        del(path, timeoutMs) { return this.request('DELETE', path, null, timeoutMs); },
     };
 
     // ================================================================
@@ -8419,7 +8419,7 @@
             : `【VACUUM 一般清理】\n\n目標資料表：${tableName}\n\n動作說明：\n• 清理已被 UPDATE/DELETE 標記為「死元組」的舊版本資料\n• 釋放空間給該表重複使用（不會還給 OS）\n• 更新統計資訊讓查詢計畫更準確\n\n✓ 完全安全：\n• 不刪除任何活的資料\n• 不鎖整張表，讀寫照常\n• 小表毫秒內完成\n\n確定要對 ${tableName} 執行 VACUUM？`;
         if (!confirm(msg)) return;
         try {
-            const result = await api.post(`/admin/db/vacuum/${tableName}`, { full: !!full, analyze: true });
+            const result = await api.post(`/admin/db/vacuum/${tableName}`, { full: !!full, analyze: true }, 600000);  // 10 分鐘（大表 VACUUM FULL 可能很慢）
             Toast.success(result.message || `${tableName} VACUUM 完成`);
             dbRefreshOverview();
         } catch (e) {
@@ -8432,7 +8432,7 @@
         const msg = `【重建索引 REINDEX】\n\n目標資料表：${tableName}\n\n動作說明：\n• 刪除並重新建立該表的所有索引\n• 修正索引碎片化、回收索引佔用空間\n• 讓查詢效能回到最佳狀態\n\n⚠️ 影響：\n• 執行期間會「獨佔鎖定」該表與索引（寫入會等待，讀取通常不受影響）\n• 不會影響任何資料內容\n• 表越大越慢，大表建議離峰執行\n\n確定要重建 ${tableName} 的索引？`;
         if (!confirm(msg)) return;
         try {
-            const result = await api.post(`/admin/db/reindex/${tableName}`, {});
+            const result = await api.post(`/admin/db/reindex/${tableName}`, {}, 600000);  // 10 分鐘
             Toast.success(result.message || `${tableName} 索引重建完成`);
             dbRefreshOverview();
         } catch (e) {
@@ -8447,7 +8447,7 @@
         const btn = document.getElementById('btn-db-repair');
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 修復中…'; }
         try {
-            const result = await api.post('/admin/db/repair', {});
+            const result = await api.post('/admin/db/repair', {}, 600000);  // 10 分鐘（全域 VACUUM）
             Toast.success(result.message || '全域修復完成');
             dbRefreshOverview();
         } catch (e) {
@@ -8464,8 +8464,14 @@
         const btn = document.getElementById('btn-db-migrate');
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 遷移中…'; }
         try {
-            const result = await api.post('/admin/db/migrate', {});
+            const result = await api.post('/admin/db/migrate', {}, 300000);  // 5 分鐘 timeout（大表 ALTER 可能很慢）
             Toast.success(result.message || 'Schema 遷移完成');
+            if (result.created_tables && result.created_tables.length) {
+                console.log('[BEDROCK] 新建表:', result.created_tables);
+            }
+            if (result.still_missing && result.still_missing.length) {
+                console.warn('[BEDROCK] 仍缺失的表:', result.still_missing);
+            }
             dbRefreshOverview();
         } catch (e) {
             Toast.error('遷移失敗: ' + e.message);
