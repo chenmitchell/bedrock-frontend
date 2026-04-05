@@ -56,6 +56,19 @@
   --font-body: 'Inter', 'Noto Sans TC', system-ui, sans-serif;
   --font-mono: 'SF Mono', 'Fira Code', monospace;
 
+  /* ===== 字體大小設計系統 (5 種標準層級) =====
+     title:   頁面標題、區塊大標題
+     subtitle: 卡片標題、面板標題、表頭
+     body:    正文、表格內容、一般文字
+     caption: 工具列標籤、圖例、次要說明
+     micro:   徽章、狀態標記、極小標注
+  */
+  --fs-title: 16px;
+  --fs-subtitle: 14px;
+  --fs-body: 13px;
+  --fs-caption: 11px;
+  --fs-micro: 10px;
+
   /* é°å½± */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -376,7 +389,7 @@ body:has(.nav-sidebar.nav-collapsed) #workspace-scene {
 }
 
 .nav-section-title {
-  font-size: 0.75rem;
+  font-size: var(--fs-caption);
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -396,7 +409,7 @@ body:has(.nav-sidebar.nav-collapsed) #workspace-scene {
   border: 1px solid rgba(0, 0, 0, 0.06);
   cursor: pointer;
   transition: all var(--transition-fast);
-  font-size: 0.95rem;
+  font-size: var(--fs-body);
   font-weight: 500;
   text-align: left;
 }
@@ -425,7 +438,7 @@ body:has(.nav-sidebar.nav-collapsed) #workspace-scene {
 }
 
 .nav-item-text {
-  font-size: 0.95rem;
+  font-size: var(--fs-body);
   font-weight: 500;
 }
 
@@ -476,14 +489,14 @@ body:has(.nav-sidebar.nav-collapsed) #workspace-scene {
 .nav-user-name {
   font-weight: 500;
   color: var(--color-text-primary);
-  font-size: 0.85rem;
+  font-size: var(--fs-body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .nav-user-role {
-  font-size: 0.7rem;
+  font-size: var(--fs-micro);
   color: var(--color-text-muted);
 }
 
@@ -500,7 +513,7 @@ body:has(.nav-sidebar.nav-collapsed) #workspace-scene {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   color: var(--color-text-muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-caption);
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -2025,7 +2038,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .ws-section-title {
-  font-size: 0.9rem;
+  font-size: var(--fs-subtitle);
   font-weight: 600;
   color: var(--color-text-primary);
   margin-bottom: var(--space-sm);
@@ -2044,7 +2057,7 @@ input:focus, select:focus, textarea:focus {
   border-radius: var(--radius-full);
   text-align: center;
   line-height: 24px;
-  font-size: 0.75rem;
+  font-size: var(--fs-caption);
   font-weight: 600;
 }
 
@@ -2126,7 +2139,7 @@ input:focus, select:focus, textarea:focus {
   border-radius: var(--radius-sm);
   padding: 10px 14px;
   z-index: 10;
-  font-size: 0.82rem;
+  font-size: var(--fs-caption);
   box-shadow: 0 2px 12px rgba(0,0,0,0.08);
   backdrop-filter: blur(6px);
   max-width: 200px;
@@ -2146,7 +2159,7 @@ input:focus, select:focus, textarea:focus {
   gap: 8px;
   margin-bottom: 5px;
   color: var(--color-text-secondary);
-  font-size: 0.82rem;
+  font-size: var(--fs-caption);
 }
 
 .graph-legend-dot {
@@ -2179,7 +2192,7 @@ input:focus, select:focus, textarea:focus {
   border-radius: var(--radius-sm);
   padding: var(--space-sm) var(--space-md);
   z-index: 15;
-  font-size: 0.72rem;
+  font-size: var(--fs-micro);
   box-shadow: 0 2px 12px rgba(0,0,0,0.1);
   backdrop-filter: blur(6px);
   max-width: 170px;
@@ -2900,7 +2913,7 @@ input:focus, select:focus, textarea:focus {
   line-height: 1.2;
 }
 .severity-card-label {
-  font-size: 0.75rem;
+  font-size: var(--fs-caption);
   color: var(--color-text-secondary);
   margin-top: 2px;
 }
@@ -2933,7 +2946,7 @@ input:focus, select:focus, textarea:focus {
   padding: 10px 24px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
-  font-size: 0.8rem;
+  font-size: var(--fs-caption);
 }
 .analysis-filter-bar label {
   display: flex;
@@ -2963,7 +2976,7 @@ input:focus, select:focus, textarea:focus {
   border-right: 1px solid var(--color-border);
 }
 .analysis-section-title {
-  font-size: 0.85rem;
+  font-size: var(--fs-subtitle);
   font-weight: 600;
   color: var(--color-text-secondary);
   margin-bottom: 12px;
@@ -3019,12 +3032,12 @@ input:focus, select:focus, textarea:focus {
   min-width: 0;
 }
 .analysis-cat-name {
-  font-size: 0.85rem;
+  font-size: var(--fs-body);
   font-weight: 600;
   color: var(--color-text-primary);
 }
 .analysis-cat-stats {
-  font-size: 0.72rem;
+  font-size: var(--fs-micro);
   color: var(--color-text-muted);
   margin-top: 1px;
 }
@@ -3058,11 +3071,11 @@ input:focus, select:focus, textarea:focus {
 .analysis-rule-row:hover { background: var(--color-surface-hover); margin: 0 -4px; padding: 7px 4px; border-radius: 4px; }
 .analysis-rule-name {
   flex: 1;
-  font-size: 0.8rem;
+  font-size: var(--fs-body);
   color: var(--color-text-primary);
 }
 .analysis-rule-count {
-  font-size: 0.75rem;
+  font-size: var(--fs-caption);
   font-weight: 600;
   color: var(--color-text-secondary);
   background: var(--color-surface-hover);
@@ -3091,7 +3104,7 @@ input:focus, select:focus, textarea:focus {
   display: block;
 }
 .analysis-sample-item {
-  font-size: 0.73rem;
+  font-size: var(--fs-caption);
   padding: 4px 8px;
   margin-bottom: 3px;
   border-left: 2px solid var(--color-border);
@@ -3233,3 +3246,48 @@ input:focus, select:focus, textarea:focus {
   from { opacity: 0; transform: translateY(24px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ================================================================
+   字體大小設計系統 — 統一覆蓋
+   5 層級: title(16px), subtitle(14px), body(13px), caption(11px), micro(10px)
+   ================================================================ */
+
+/* ── 右側詳情面板 ── */
+.ws-detail { font-size: var(--fs-body); }
+.ws-detail .ws-section-title { font-size: var(--fs-subtitle); }
+.ws-detail-label, .ws-detail-key { font-size: var(--fs-caption); }
+.ws-detail-value { font-size: var(--fs-body); }
+
+/* ── 左側側邊欄 ── */
+.ws-sidebar { font-size: var(--fs-body); }
+.ws-sidebar .ws-section-title { font-size: var(--fs-subtitle); }
+
+/* ── 工具列 ── */
+.graph-toolbar { font-size: var(--fs-caption); }
+.graph-toolbar label { font-size: var(--fs-caption); }
+.graph-toolbar select,
+.graph-toolbar button { font-size: var(--fs-caption); }
+
+/* ── 紅旗面板 ── */
+.analysis-flag-desc { font-size: var(--fs-body); }
+.analysis-flag-severity { font-size: var(--fs-micro); }
+.analysis-hotspot-meta { font-size: var(--fs-micro); }
+
+/* ── 工具提示 ── */
+.cy-tooltip { font-size: var(--fs-body) !important; }
+
+/* ── 統計卡片 ── */
+.stat-card-label { font-size: var(--fs-caption); }
+.stat-card-value { font-size: var(--fs-title); }
+
+/* ── 模態框 ── */
+.modal-label { font-size: var(--fs-caption); }
+.modal-input, .modal-textarea { font-size: var(--fs-body); }
+.modal-btn { font-size: var(--fs-body); }
+
+/* ── 文字工具類 (供 JS inline 使用) ── */
+.fs-title   { font-size: var(--fs-title) !important; }
+.fs-subtitle{ font-size: var(--fs-subtitle) !important; }
+.fs-body    { font-size: var(--fs-body) !important; }
+.fs-caption { font-size: var(--fs-caption) !important; }
+.fs-micro   { font-size: var(--fs-micro) !important; }
