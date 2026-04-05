@@ -208,12 +208,17 @@
             <!-- Step 2: 個人資訊 -->
             <div id="reg-step-2" class="reg-step-content" style="display:none;">
                 <div class="reg-field">
-                    <label for="reg-taxid" class="reg-label">統一編號 <span class="optional">（選填）</span></label>
+                    <label for="reg-taxid" class="reg-label">統一編號 <span class="required">*</span></label>
                     <div class="reg-taxid-row">
-                        <input type="text" id="reg-taxid" class="reg-input" placeholder="8 碼數字" maxlength="20" oninput="handleTaxIdInput(this)">
+                        <input type="text" id="reg-taxid" class="reg-input" placeholder="輸入 8 碼統一編號" maxlength="20" oninput="handleTaxIdInput(this)">
                         <button id="btn-taxid-lookup" class="btn" onclick="lookupTaxId()" style="display:none;">查詢</button>
                     </div>
                     <div id="reg-taxid-result" class="reg-taxid-result" style="display:none;"></div>
+                    <!-- 查不到統編時的手動輸入公司名稱 -->
+                    <div id="reg-company-manual" class="reg-field" style="display:none; margin-top:8px;">
+                        <label for="reg-company-name" class="reg-label" style="color:#E67E22;">查無統編資料，請手動輸入公司/機構名稱 <span class="required">*</span></label>
+                        <input type="text" id="reg-company-name" class="reg-input" placeholder="請輸入公司全名或機構名稱">
+                    </div>
                     <!-- 管道二提示 -->
                     <div id="reg-channel2-hint" class="reg-channel2-hint" style="display:none;">
                         <i class="fas fa-check-circle"></i> 已辨識為特殊管道
@@ -325,6 +330,46 @@
     若不提供必填欄位之資料，將無法完成註冊及使用本系統。</div>
             <div class="modal-footer">
                 <button class="btn btn-primary" onclick="closeModalById('privacy-notice-modal')">我已了解</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 服務條款 Modal ===== -->
+    <div id="terms-of-service-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>服務條款</h3>
+                <button class="modal-close" onclick="closeModalById('terms-of-service-modal')" aria-label="關閉視窗">&times;</button>
+            </div>
+            <div class="modal-body" style="white-space:pre-line; font-size:0.9rem; line-height:1.8;">磐石盡職調查平台 服務條款
+
+一、服務範圍
+本平台提供企業盡職調查輔助分析服務，包含公司登記資料查詢、關聯網路分析、風險偵測及報告生成等功能。
+
+二、使用者義務
+    (1) 使用者應確保帳號資訊之真實性與正確性
+    (2) 使用者不得將帳號借予他人使用
+    (3) 使用者應妥善保管登入憑證（含 TOTP 驗證碼）
+    (4) 使用者應遵守中華民國相關法律法規
+
+三、資料使用聲明
+    (1) 本平台所呈現之公司登記資料均來自經濟部公開資訊
+    (2) 風險偵測結果由系統自動分析產生，僅供參考，不構成法律意見
+    (3) 使用者不得將本平台產生之報告用於非法目的
+
+四、智慧財產權
+    (1) 本平台之分析演算法、風險偵測規則及介面設計均受智慧財產權保護
+    (2) 使用者不得反向工程、複製或散佈本平台之核心技術
+
+五、免責聲明
+    (1) 本平台不保證資料之即時性與完整性
+    (2) 基於公開資料之分析結果可能存在誤差
+    (3) 使用者應自行判斷分析結果之適用性
+
+六、條款修訂
+本平台保留隨時修訂服務條款之權利，修訂後之條款將於公告後生效。</div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeModalById('terms-of-service-modal')">我已了解</button>
             </div>
         </div>
     </div>

@@ -632,6 +632,7 @@
     window.regPrevStep = regPrevStep;
 
     // 統編輸入處理
+    let _taxidLookupTimer = null;
     function handleTaxIdInput(input) {
         const val = input.value.trim();
         const lookupBtn = document.getElementById('btn-taxid-lookup');
@@ -639,15 +640,18 @@
         const channel1Fields = document.getElementById('reg-channel1-fields');
         const codeSourceField = document.getElementById('reg-code-source-field');
         const resultEl = document.getElementById('reg-taxid-result');
-        const orgStep1 = document.getElementById('reg-step-1');
+        const manualEl = document.getElementById('reg-company-manual');
 
-        // 8 碼純數字 → 管道一，顯示查詢按鈕
+        // 8 碼純數字 → 管道一，自動查詢
         if (/^\d{8}$/.test(val)) {
             regState.isChannel2 = false;
             if (lookupBtn) lookupBtn.style.display = '';
             if (channel2Hint) channel2Hint.style.display = 'none';
             if (channel1Fields) channel1Fields.style.display = '';
             if (codeSourceField) codeSourceField.style.display = 'none';
+            // 自動查詢（debounce 500ms）
+            clearTimeout(_taxidLookupTimer);
+            _taxidLookupTimer = setTimeout(() => lookupTaxId(), 500);
         } else if (val.length > 0 && !/^\d{0,7}$/.test(val)) {
             // 非 8 碼數字，可能是特殊代碼 → 管道二
             regState.isChannel2 = true;
@@ -656,39 +660,69 @@
             if (channel1Fields) channel1Fields.style.display = 'none';
             if (codeSourceField) codeSourceField.style.display = '';
             if (resultEl) resultEl.style.display = 'none';
+            if (manualEl) manualEl.style.display = 'none';
         } else {
             regState.isChannel2 = false;
-            if (lookupBtn) lookupBtn.style.display = val.length > 0 ? 'none' : 'none';
+            if (lookupBtn) lookupBtn.style.display = 'none';
             if (channel2Hint) channel2Hint.style.display = 'none';
             if (channel1Fields) channel1Fields.style.display = '';
             if (codeSourceField) codeSourceField.style.display = 'none';
+            if (resultEl) resultEl.style.display = 'none';
+            if (manualEl) manualEl.style.display = 'none';
+            regState.taxidVerified = false;
+            regState.companyName = '';
         }
     }
     window.handleTaxIdInput = handleTaxIdInput;
 
-    // 統編查詢
+    // 統編查詢 — 查到自動帶入公司名稱，查不到顯示手動輸入框
     async function lookupTaxId() {
         const taxid = document.getElementById('reg-taxid').value.trim();
         const resultEl = document.getElementById('reg-taxid-result');
+        const manualEl = document.getElementById('reg-company-manual');
 
         if (!/^\d{8}$/.test(taxid)) {
             Toast.warning('統一編號應為 8 碼數字');
             return;
         }
 
+        // 顯示查詢中狀態
+        if (resultEl) {
+            resultEl.innerHTML = '<span style="color:#888;">查詢中…</span>';
+            resultEl.style.display = '';
+        }
+        if (manualEl) manualEl.style.display = 'none';
+
         try {
             const data = await api.get(`/companies/search?query=${taxid}`);
             if (data && data.companies && data.companies.length > 0) {
                 const co = data.companies[0];
-                resultEl.innerHTML = `<strong>${co.name || co.company_name}</strong><br>地址：${co.address || co.registered_address || '—'}<br>代表人：${co.representative || '—'}<br>狀態：${co.status || '—'}`;
+                const companyName = co.name || co.company_name || '';
+                resultEl.innerHTML = `<div style="background:#e6f4ea; padding:10px 14px; border-radius:6px; border-left:3px solid #27AE60;">
+                    <strong style="font-size:1.05em; color:#1B4965;">${esc(companyName)}</strong><br>
+                    <span style="color:#555;">地址：${esc(co.address || co.registered_address || '—')}</span><br>
+                    <span style="color:#555;">代表人：${esc(co.representative || '—')}</span>
+                    <span style="margin-left:12px; color:#555;">狀態：${esc(co.status || '—')}</span>
+                </div>`;
                 resultEl.style.display = '';
+                if (manualEl) manualEl.style.display = 'none';
+                // 記錄已驗證的公司名稱
+                regState.taxidVerified = true;
+                regState.companyName = companyName;
             } else {
-                resultEl.innerHTML = '查無此統編資料';
+                // 查無此統編 → 顯示手動輸入
+                resultEl.innerHTML = '<span style="color:#E67E22;">查無此統一編號之登記資料</span>';
                 resultEl.style.display = '';
+                if (manualEl) manualEl.style.display = '';
+                regState.taxidVerified = false;
+                regState.companyName = '';
             }
         } catch (e) {
-            resultEl.innerHTML = '查詢失敗：' + e.message;
+            resultEl.innerHTML = '<span style="color:#C0392B;">查詢失敗：' + esc(e.message) + '</span>';
             resultEl.style.display = '';
+            if (manualEl) manualEl.style.display = '';
+            regState.taxidVerified = false;
+            regState.companyName = '';
         }
     }
     window.lookupTaxId = lookupTaxId;
@@ -726,6 +760,23 @@
             const phone = document.getElementById('reg-phone').value.trim();
             const jobAttr = document.getElementById('reg-job-attribute').value;
 
+            // 統編驗證：必填，且必須已查到公司或手動填了公司名
+            if (!taxid) { Toast.warning('請輸入統一編號'); return; }
+            if (!/^\d{8}$/.test(taxid)) { Toast.warning('統一編號應為 8 碼數字'); return; }
+
+            let orgName = '';
+            if (regState.taxidVerified && regState.companyName) {
+                orgName = regState.companyName;
+            } else {
+                // 查不到統編時，必須手動填公司名稱
+                const manualName = (document.getElementById('reg-company-name') || {}).value || '';
+                orgName = manualName.trim();
+                if (!orgName) {
+                    Toast.warning('查無統編資料，請手動輸入公司/機構名稱');
+                    return;
+                }
+            }
+
             if (!phone || !/^09\d{8}$/.test(phone)) { Toast.warning('請輸入正確手機號碼（09 開頭 10 碼）'); return; }
 
             try {
@@ -733,7 +784,8 @@
                     organization_type: regState.orgType,
                     organization_sub: regState.orgSub,
                     job_attribute: jobAttr,
-                    organization_taxid: taxid || null,
+                    organization_taxid: taxid,
+                    organization_name: orgName,
                     full_name: fullname,
                     phone: phone,
                     agree_terms: true,
@@ -815,7 +867,8 @@
     window.showPrivacyNotice = showPrivacyNotice;
 
     function showTermsOfService() {
-        Toast.warning('服務條款尚在準備中');
+        const modal = document.getElementById('terms-of-service-modal');
+        if (modal) modal.style.display = 'flex';
     }
     window.showTermsOfService = showTermsOfService;
 
@@ -824,6 +877,13 @@
         if (modal) modal.style.display = 'none';
     }
     window.closeModalById = closeModalById;
+
+    // 點擊 overlay 背景關閉 modal
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('modal-overlay')) {
+            e.target.style.display = 'none';
+        }
+    });
 
     function updateGreeting() {
         const el = document.getElementById('welcome-greeting');
