@@ -96,6 +96,189 @@
     window.Toast = Toast;
 
     // ================================================================
+    // 裝置偵測（手機/平板/桌機 + 直/橫式 + 低記憶體）
+    // ================================================================
+    const Device = {
+        isMobile: false,
+        isTablet: false,
+        isTouch: false,
+        isLowMemory: false,
+        orientation: 'landscape',  // 'portrait' | 'landscape'
+        memoryGB: null,
+        _listeners: [],
+
+        detect() {
+            const ua = navigator.userAgent || '';
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+
+            // 觸控偵測
+            this.isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+            // 手機/平板偵測（UA + 視窗寬度雙重判斷）
+            const mobileUA = /iPhone|iPod|Android.*Mobile|BlackBerry|Windows Phone|webOS/i.test(ua);
+            const tabletUA = /iPad|Android(?!.*Mobile)|Tablet/i.test(ua);
+            this.isMobile = mobileUA || (this.isTouch && Math.min(w, h) < 600);
+            this.isTablet = tabletUA || (this.isTouch && !this.isMobile && Math.min(w, h) < 1024);
+
+            // 直/橫式
+            this.orientation = (h >= w) ? 'portrait' : 'landscape';
+
+            // 記憶體偵測（Chrome/Edge 支援 navigator.deviceMemory）
+            if (typeof navigator.deviceMemory === 'number') {
+                this.memoryGB = navigator.deviceMemory;
+                this.isLowMemory = this.memoryGB <= 2;  // ≤ 2GB 視為低記憶體
+            } else if (this.isMobile) {
+                // 無 API 支援時，手機預設進入低記憶體模式
+                this.isLowMemory = true;
+            }
+
+            this._applyClasses();
+            return this;
+        },
+
+        _applyClasses() {
+            const body = document.body;
+            if (!body) return;
+            body.classList.toggle('is-mobile', this.isMobile);
+            body.classList.toggle('is-tablet', this.isTablet);
+            body.classList.toggle('is-desktop', !this.isMobile && !this.isTablet);
+            body.classList.toggle('is-touch', this.isTouch);
+            body.classList.toggle('is-portrait', this.orientation === 'portrait');
+            body.classList.toggle('is-landscape', this.orientation === 'landscape');
+            body.classList.toggle('is-low-memory', this.isLowMemory);
+        },
+
+        onOrientationChange(cb) {
+            this._listeners.push(cb);
+        },
+
+        _handleResize() {
+            const prev = this.orientation;
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            this.orientation = (h >= w) ? 'portrait' : 'landscape';
+            this._applyClasses();
+            if (prev !== this.orientation) {
+                this._listeners.forEach(cb => { try { cb(this.orientation); } catch(_) {} });
+                // 切換方向時，重新調整 Cytoscape
+                if (state && state.cy) setTimeout(() => { try { state.cy.resize(); state.cy.fit(null, 40); } catch(_) {} }, 200);
+            }
+        },
+    };
+    Device.detect();
+    window.addEventListener('resize', () => Device._handleResize(), { passive: true });
+    window.addEventListener('orientationchange', () => setTimeout(() => Device._handleResize(), 100));
+    window.Device = Device;
+
+    // ================================================================
+    // 持續型完成卡片（不自動關閉，使用者手動關閉）
+    // ================================================================
+    const CompletionCard = {
+        _container: null,
+        _getContainer() {
+            if (!this._container) {
+                this._container = document.createElement('div');
+                this._container.className = 'completion-card-container';
+                document.body.appendChild(this._container);
+            }
+            return this._container;
+        },
+        show({ title, message, stats, type = 'success', actions }) {
+            const card = document.createElement('div');
+            card.className = `completion-card completion-card-${type}`;
+            const icon = type === 'success' ? '✓' : type === 'warning' ? '⚠' : 'ℹ';
+            const statsHTML = stats && stats.length
+                ? `<div class="completion-card-stats">${stats.map(s => `<div class="completion-card-stat"><div class="completion-card-stat-val">${s.value}</div><div class="completion-card-stat-label">${s.label}</div></div>`).join('')}</div>`
+                : '';
+            const actionsHTML = actions && actions.length
+                ? `<div class="completion-card-actions">${actions.map((a, i) => `<button class="completion-card-btn ${a.primary ? 'primary' : ''}" data-act="${i}">${a.label}</button>`).join('')}</div>`
+                : '';
+            card.innerHTML = `
+                <button class="completion-card-close" aria-label="關閉">×</button>
+                <div class="completion-card-header">
+                    <span class="completion-card-icon">${icon}</span>
+                    <div class="completion-card-title">${title || ''}</div>
+                </div>
+                ${message ? `<div class="completion-card-msg">${message}</div>` : ''}
+                ${statsHTML}
+                ${actionsHTML}
+            `;
+            this._getContainer().appendChild(card);
+            requestAnimationFrame(() => card.classList.add('completion-card-visible'));
+
+            const close = () => {
+                card.classList.remove('completion-card-visible');
+                setTimeout(() => card.remove(), 250);
+            };
+            card.querySelector('.completion-card-close').addEventListener('click', close);
+            if (actions) {
+                card.querySelectorAll('.completion-card-btn').forEach((btn, i) => {
+                    btn.addEventListener('click', () => {
+                        try { actions[i].onClick && actions[i].onClick(); } catch(_) {}
+                        if (actions[i].closeOnClick !== false) close();
+                    });
+                });
+            }
+            return { close };
+        },
+    };
+    window.CompletionCard = CompletionCard;
+
+    // ================================================================
+    // UBO 蓋板提醒（三層內無法確認實質受益人）
+    // ================================================================
+    const UBOOverlay = {
+        _el: null,
+        show({ warnedCompanies = [], totalCompanies = 0 }) {
+            this.hide();
+            const el = document.createElement('div');
+            el.className = 'ubo-overlay';
+            const warnedCount = warnedCompanies.length;
+            const listHTML = warnedCompanies.slice(0, 20).map(c =>
+                `<li><span class="ubo-overlay-dot"></span><span class="ubo-overlay-name">${c.name || c.tax_id || ''}</span>${c.tax_id ? `<span class="ubo-overlay-taxid">${c.tax_id}</span>` : ''}</li>`
+            ).join('');
+            const more = warnedCount > 20 ? `<div class="ubo-overlay-more">…還有 ${warnedCount - 20} 家</div>` : '';
+            el.innerHTML = `
+                <div class="ubo-overlay-backdrop"></div>
+                <div class="ubo-overlay-modal" role="alertdialog" aria-modal="true">
+                    <div class="ubo-overlay-head">
+                        <div class="ubo-overlay-icon">⚠</div>
+                        <div>
+                            <div class="ubo-overlay-title">三層內無法確認實質受益人</div>
+                            <div class="ubo-overlay-sub">系統已追蹤至第三層股權結構，仍有 <b>${warnedCount}</b> / ${totalCompanies} 家公司的實質受益人未明。建議進行人工穿透調查或追蹤境外股東。</div>
+                        </div>
+                    </div>
+                    <div class="ubo-overlay-body">
+                        <div class="ubo-overlay-list-title">待確認清單</div>
+                        <ul class="ubo-overlay-list">${listHTML}</ul>
+                        ${more}
+                    </div>
+                    <div class="ubo-overlay-foot">
+                        <button class="ubo-overlay-btn ubo-overlay-btn-secondary" data-act="later">稍後再看</button>
+                        <button class="ubo-overlay-btn ubo-overlay-btn-primary" data-act="ok">我知道了，進入人工審查</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(el);
+            this._el = el;
+            requestAnimationFrame(() => el.classList.add('ubo-overlay-visible'));
+            el.querySelector('[data-act="ok"]').addEventListener('click', () => this.hide());
+            el.querySelector('[data-act="later"]').addEventListener('click', () => this.hide());
+            el.querySelector('.ubo-overlay-backdrop').addEventListener('click', () => this.hide());
+        },
+        hide() {
+            if (this._el) {
+                const el = this._el;
+                el.classList.remove('ubo-overlay-visible');
+                setTimeout(() => el.remove(), 250);
+                this._el = null;
+            }
+        },
+    };
+    window.UBOOverlay = UBOOverlay;
+
+    // ================================================================
     // 場景管理
     // ================================================================
     function showScene(name) {
@@ -4425,10 +4608,47 @@
 
             if (fill) fill.style.width = '100%';
             if (text) text.textContent = `分析完成 — ${count} 個異常、${flagsSaved} 個紅旗`;
-            Toast.success(`分析完成：發現 ${count} 個異常，寫入 ${flagsSaved} 個紅旗`);
+
+            // 持續型完成卡片（不自動關閉，使用者手動關閉）
+            CompletionCard.show({
+                type: 'success',
+                title: '分析完成',
+                message: '已完成 15+ 種結構異常偵測與紅旗寫入。',
+                stats: [
+                    { value: count, label: '結構異常' },
+                    { value: flagsSaved, label: '紅旗寫入' },
+                ],
+                actions: [
+                    { label: '打開儀表板', primary: true, onClick: () => openAnalysisDashboard() },
+                    { label: '先看圖', primary: false },
+                ],
+            });
 
             // 重新載入所有資料（圖 + 紅旗 + 集群 + 媒體）
-            loadInvestigationData(state.currentInvId);
+            await loadInvestigationData(state.currentInvId);
+
+            // 檢查：三層內無法確認 UBO 的公司 → 蓋板提醒
+            try {
+                const warned = [];
+                let totalCompanies = 0;
+                if (state.cy) {
+                    state.cy.nodes('[type = "company"]').forEach(n => {
+                        totalCompanies += 1;
+                        if (n.data('obu_warning')) {
+                            warned.push({
+                                name: n.data('label') || n.data('name') || '',
+                                tax_id: n.data('entity_id') || n.data('tax_id') || '',
+                            });
+                        }
+                    });
+                }
+                if (warned.length > 0) {
+                    // 延遲一點讓完成卡片先顯示
+                    setTimeout(() => UBOOverlay.show({ warnedCompanies: warned, totalCompanies }), 600);
+                }
+            } catch (err) {
+                console.warn('[BEDROCK] UBO 警示檢查失敗:', err && err.message);
+            }
 
             // 更新 stepper 到 review 步驟
             _hintDismissed = false;

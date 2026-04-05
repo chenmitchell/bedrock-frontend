@@ -311,12 +311,18 @@ const CYTOSCAPE_CONFIG = {
             // 註冊 Cola 布局
             cytoscape.use(cola);
 
+            // 低記憶體/行動裝置優化模式
+            const isLowMem = (window.Device && window.Device.isLowMemory) || false;
+            const isMobile = (window.Device && window.Device.isMobile) || false;
+            const lowPerf = isLowMem || isMobile;
+
             const cy = cytoscape({
                 container: document.getElementById(containerId),
                 style: this.nodeStyle.concat(this.edgeStyle),
                 elements: elements,
                 wheelSensitivity: 0.1,
-                pixelRatio: 'auto',
+                // 低記憶體時降低 pixel ratio 以減少 canvas 記憶體用量
+                pixelRatio: lowPerf ? 1 : 'auto',
                 motionBlur: false,
                 selectionType: 'single',
                 touchTapThreshold: 8,
@@ -325,9 +331,10 @@ const CYTOSCAPE_CONFIG = {
                 autoungrabify: false,
                 autounselectify: false,
                 styleEnabled: true,
-                hideEdgesOnViewport: false,
-                hideLabelsOnViewport: false,
-                textureOnViewport: false,
+                // 低記憶體時啟用 viewport 優化：拖曳/縮放時隱藏邊與標籤、使用貼圖
+                hideEdgesOnViewport: lowPerf,
+                hideLabelsOnViewport: lowPerf,
+                textureOnViewport: lowPerf,
                 boxSelectionEnabled: false,
                 panningEnabled: true,
                 userPanningEnabled: true,
