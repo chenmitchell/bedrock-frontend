@@ -1972,6 +1972,11 @@
 
         state.cy = cytoscape({
             container,
+            // ★ 效能優化：大圖時減少渲染負擔
+            textureOnViewport: true,       // 縮放/拖曳時用低解析度紋理
+            hideEdgesOnViewport: true,      // 縮放/拖曳時隱藏邊（大幅提升流暢度）
+            hideLabelsOnViewport: true,     // 縮放/拖曳時隱藏標籤
+            pixelRatio: 1,                 // 固定 1x 像素比（避免 Retina 4x 記憶體）
             style: [
                 {
                     selector: 'node',
@@ -1989,6 +1994,7 @@
                         'border-color': 'data(border_color)',
                         'text-max-width': '90px',
                         'text-wrap': 'ellipsis',
+                        'min-zoomed-font-size': 10,  // 縮小到看不清時不渲染文字
                     },
                 },
                 {
@@ -2116,7 +2122,7 @@
                     style: {
                         'width': 1.5,
                         'line-color': '#B0AEA8',
-                        'curve-style': 'bezier',
+                        'curve-style': 'straight',     // ★ straight 比 bezier 快很多
                         'target-arrow-shape': 'triangle',
                         'target-arrow-color': '#B0AEA8',
                         'arrow-scale': 0.8,
@@ -2129,6 +2135,7 @@
                         'text-background-color': '#fff',
                         'text-background-opacity': 0.7,
                         'text-background-padding': '2px',
+                        'min-zoomed-font-size': 12,  // 縮小時不渲染邊標籤
                     },
                 },
                 // ── 色盲友善邊線設計 ──
@@ -2455,20 +2462,32 @@
         const nodeCount = elements.filter(e => e.group === 'nodes').length;
         const seedNodes = state.cy.nodes('[?is_seed]');
 
-        if (nodeCount > 150) {
-            // 大圖用 concentric：seed 放最中心
+        if (nodeCount > 300) {
+            // 超大圖：用 grid 佈局（最快，O(n)）
+            state.cy.layout({
+                name: 'grid',
+                animate: false,
+                rows: Math.ceil(Math.sqrt(nodeCount)),
+                fit: true,
+                padding: 30,
+            }).run();
+            Toast.show(`${nodeCount} 個節點，使用快速網格排版`, 'info', 2000);
+        } else if (nodeCount > 100) {
+            // 大圖用 concentric（較快，不用力學模擬）
             state.cy.layout({
                 name: 'concentric',
                 animate: false,
                 concentric: function(node) {
-                    if (node.data('is_seed')) return 100;  // seed 最中心
+                    if (node.data('is_seed')) return 100;
                     if (node.data('flag_count')) return 50 + node.data('flag_count');
                     return node.connectedEdges().length;
                 },
                 levelWidth: function() { return 3; },
-                minNodeSpacing: 20,
+                minNodeSpacing: 15,
+                fit: true,
+                padding: 30,
             }).run();
-            Toast.show(`${nodeCount} 個節點，使用快速排版`, 'info', 2000);
+            Toast.show(`${nodeCount} 個節點，使用同心圓排版`, 'info', 2000);
         } else {
             runLayout('cola');
         }
@@ -5686,7 +5705,6 @@
         if (count === 0) return;
 
         // ── 動態計算節點大小與邊寬 ──
-        // 節點越少 → 越大；節點越多 → 越小（但有上下限）
         let nodeScale, edgeScale, fontSize, spacing;
         if (count <= 10) {
             nodeScale = 2.2;   edgeScale = 2.0;   fontSize = 14;  spacing = 80;
@@ -5700,16 +5718,13 @@
             nodeScale = 0.7;   edgeScale = 0.8;   fontSize = 10;  spacing = 20;
         }
 
-        // 套用動態大小到可見節點
+        // ★ 使用 batch() 批量更新樣式（避免每次 style() 都觸發重繪）
+        state.cy.startBatch();
         visible.forEach(n => {
             const baseSize = n.data('size') || 28;
             const newSize = Math.round(baseSize * nodeScale);
-            n.style('width', newSize);
-            n.style('height', newSize);
-            n.style('font-size', fontSize + 'px');
+            n.style({ 'width': newSize, 'height': newSize, 'font-size': fontSize + 'px' });
         });
-
-        // 套用動態邊寬到可見邊
         visibleEdges.forEach(e => {
             const type = e.data('type');
             let baseWidth = 1.5;
@@ -5717,18 +5732,24 @@
             else if (type === 'shareholder') baseWidth = 2;
             else if (type === 'director') baseWidth = 1.8;
             else if (type === 'historical') baseWidth = 1;
-            e.style('width', Math.max(baseWidth * edgeScale, 0.8));
-            e.style('arrow-scale', Math.max(0.6, 0.8 * edgeScale));
+            e.style({ 'width': Math.max(baseWidth * edgeScale, 0.8), 'arrow-scale': Math.max(0.6, 0.8 * edgeScale) });
         });
 
+        // ★ 大圖：隱藏邊標籤以節省渲染資源
+        if (count > 80) {
+            visibleEdges.style('label', '');
+        }
+        state.cy.endBatch();
+
         // ── 重新排版 ──
-        // 注意：cola/concentric 等 extension layout 必須在 cy 上呼叫，不能在 collection 上
-        // 解法：用 cy.layout() 搭配 eles 參數（部分 layout 支援）或先隱藏後全圖排版
-        if (count > 150) {
+        if (count > 200) {
+            // 超大圖：只 fit，不重排（重排會卡死）
+            state.cy.fit(visible, 40);
+        } else if (count > 80) {
+            // 大圖：concentric（不用動畫）
             state.cy.layout({
                 name: 'concentric',
-                animate: true,
-                animationDuration: 400,
+                animate: false,
                 eles: visible.union(visibleEdges),
                 concentric: function(node) {
                     if (node.data('is_seed')) return 100;
@@ -5741,33 +5762,26 @@
                 padding: 40,
             }).run();
         } else {
+            // 小圖：cola（有動畫，但降低迭代次數）
             state.cy.layout({
                 name: 'cola',
-                animate: true,
-                animationDuration: 600,
+                animate: count <= 30,  // 只有很小的圖才動畫
+                animationDuration: 400,
                 eles: visible.union(visibleEdges),
                 nodeSpacing: spacing,
                 edgeLength: spacing * 3,
-                convergenceThreshold: 0.001,
+                convergenceThreshold: 0.01,  // ★ 降低精度要求，更快收斂
                 randomize: false,
                 avoidOverlap: true,
                 handleDisconnected: true,
                 flow: { axis: 'y', minSeparation: Math.max(spacing, 40) },
-                edgeSymDiffLength: 10,
-                unconstrIter: 15,
-                userConstIter: 25,
-                allConstIter: 25,
+                unconstrIter: 10,   // ★ 減少迭代次數
+                userConstIter: 15,
+                allConstIter: 15,
                 fit: true,
                 padding: 40,
             }).run();
         }
-
-        // layout 完後 fit
-        setTimeout(() => {
-            if (state.cy && visible.length > 0) {
-                state.cy.fit(visible, 40);
-            }
-        }, 600);
     }
 
     function filterByDepth(maxDepth) {
