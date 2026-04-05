@@ -5270,20 +5270,25 @@
         const visited = new Set();
         const queue = [];
 
-        // 取得 seed 節點的 entity_id
+        // 取得 seed 節點的 entity_id（多種方式確保能抓到）
         const seedItems = document.querySelectorAll('.ws-seed-item');
         const seedValues = new Set();
         seedItems.forEach(el => {
+            // 方法1: 從 onclick 提取（相容 focusSeedNode 和 focusSeedNodeEnhanced）
             const onclick = el.getAttribute('onclick') || '';
-            const match = onclick.match(/focusSeedNode\('(.+?)'\)/);
+            const match = onclick.match(/focusSeedNode(?:Enhanced)?\('(.+?)'\)/);
             if (match) seedValues.add(match[1]);
+            // 方法2: 從 data-seed-id 提取
+            const seedId = el.getAttribute('data-seed-id');
+            if (seedId) seedValues.add(seedId);
         });
 
         // 在圖中找到 seed 節點（seed 距離 = 0）
+        // 優先用 is_seed 標記（由 graph API 提供）
         state.cy.nodes().forEach(node => {
             const d = node.data();
             const entityId = d.entity_id || d.id;
-            if (seedValues.has(entityId) || seedValues.has(d.label)) {
+            if (d.is_seed || seedValues.has(entityId) || seedValues.has(d.label)) {
                 depthMap.set(node.id(), 0);
                 visited.add(node.id());
                 queue.push(node);
