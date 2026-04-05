@@ -8289,6 +8289,20 @@
         try {
             const data = await api.get(`/admin/db/table/${tableName}`);
 
+            // 表尚未建立 → 顯示提示
+            if (data && data.not_created) {
+                if (content) content.innerHTML = `
+                    <div style="padding:24px; text-align:center;">
+                        <i class="fas fa-exclamation-triangle" style="font-size:48px; color:#e67e22; margin-bottom:12px;"></i>
+                        <h3 style="margin:8px 0;">資料表 <code>${esc(tableName)}</code> 尚未建立</h3>
+                        <p style="color:#666; margin:12px 0;">${esc(data.message || '此表已在程式 model 中定義但資料庫中不存在')}</p>
+                        <button class="btn btn-primary" onclick="document.getElementById('db-table-detail-modal').style.display='none'; dbRunMigration();">
+                            <i class="fas fa-database"></i> 立即執行 Schema 遷移
+                        </button>
+                    </div>`;
+                return;
+            }
+
             let html = `
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;">
                     <div style="background:#f8f9fa; padding:12px; border-radius:6px; text-align:center;">
@@ -8400,7 +8414,10 @@
     window.dbShowTableDetail = dbShowTableDetail;
 
     async function dbVacuumTable(tableName, full) {
-        if (!confirm(`確定要對 ${tableName} 執行 VACUUM${full ? ' FULL' : ''} ？`)) return;
+        const msg = full
+            ? `【VACUUM FULL 完整清理】\n\n目標資料表：${tableName}\n\n動作說明：\n• 重建整張表，徹底釋放死元組佔用的空間給 OS\n• 清理後表會縮小、查詢變快\n\n⚠️ 影響：\n• 執行期間會「獨佔鎖定」整張表（其他查詢全部等待）\n• 耗時與表大小成正比，大表可能需數分鐘\n• 不會刪除任何活的資料，但建議在離峰時段執行\n\n確定要對 ${tableName} 執行 VACUUM FULL？`
+            : `【VACUUM 一般清理】\n\n目標資料表：${tableName}\n\n動作說明：\n• 清理已被 UPDATE/DELETE 標記為「死元組」的舊版本資料\n• 釋放空間給該表重複使用（不會還給 OS）\n• 更新統計資訊讓查詢計畫更準確\n\n✓ 完全安全：\n• 不刪除任何活的資料\n• 不鎖整張表，讀寫照常\n• 小表毫秒內完成\n\n確定要對 ${tableName} 執行 VACUUM？`;
+        if (!confirm(msg)) return;
         try {
             const result = await api.post(`/admin/db/vacuum/${tableName}`, { full: !!full, analyze: true });
             Toast.success(result.message || `${tableName} VACUUM 完成`);
@@ -8412,7 +8429,8 @@
     window.dbVacuumTable = dbVacuumTable;
 
     async function dbReindexTable(tableName) {
-        if (!confirm(`確定要重建 ${tableName} 的索引？`)) return;
+        const msg = `【重建索引 REINDEX】\n\n目標資料表：${tableName}\n\n動作說明：\n• 刪除並重新建立該表的所有索引\n• 修正索引碎片化、回收索引佔用空間\n• 讓查詢效能回到最佳狀態\n\n⚠️ 影響：\n• 執行期間會「獨佔鎖定」該表與索引（寫入會等待，讀取通常不受影響）\n• 不會影響任何資料內容\n• 表越大越慢，大表建議離峰執行\n\n確定要重建 ${tableName} 的索引？`;
+        if (!confirm(msg)) return;
         try {
             const result = await api.post(`/admin/db/reindex/${tableName}`, {});
             Toast.success(result.message || `${tableName} 索引重建完成`);
@@ -8424,7 +8442,8 @@
     window.dbReindexTable = dbReindexTable;
 
     async function dbRepairAll() {
-        if (!confirm('確定要執行全域修復？將對所有表進行 VACUUM ANALYZE。')) return;
+        const msg = `【全域資料庫修復】\n\n動作說明：\n• 對「所有」資料表執行 VACUUM ANALYZE\n• 清理死元組 + 重建統計資訊\n• 讓整個資料庫的查詢效能回到最佳狀態\n\n✓ 完全安全：\n• 不刪除任何活的資料\n• 不鎖表，讀寫照常\n• 依表數量約需數秒到一分鐘\n\n確定要執行全域修復？`;
+        if (!confirm(msg)) return;
         const btn = document.getElementById('btn-db-repair');
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 修復中…'; }
         try {
@@ -8440,7 +8459,8 @@
     window.dbRepairAll = dbRepairAll;
 
     async function dbRunMigration() {
-        if (!confirm('確定要執行 Schema 遷移？將建立缺失的表並補齊欄位。')) return;
+        const msg = `【Schema 遷移（建表 + 補欄位）】\n\n動作說明：\n• 為所有已定義的 model 建立「尚未存在」的資料表\n• 對「已存在但缺欄位」的表自動補上新欄位（IF NOT EXISTS）\n• 建立必要的索引\n\n✓ 完全安全（冪等操作）：\n• 不會修改或刪除既有表與欄位\n• 不會動到任何資料列\n• 已存在的表會直接跳過\n\n💡 使用時機：\n• 看到表狀態顯示「未建立 (N/A)」\n• 後端程式新增了 model 或欄位但 DB 還沒跟上\n\n確定要執行 Schema 遷移？`;
+        if (!confirm(msg)) return;
         const btn = document.getElementById('btn-db-migrate');
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 遷移中…'; }
         try {
