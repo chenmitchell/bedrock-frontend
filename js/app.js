@@ -2164,7 +2164,11 @@
                 {
                     selector: 'node',
                     style: {
-                        'label': 'data(label)',
+                        // OBU 警示：若 obu_warning=true，在公司名稱後標註「⚠三層內無法辨識OBU」
+                        'label': (ele) => {
+                            const l = ele.data('label') || '';
+                            return ele.data('obu_warning') ? `${l}\n⚠三層內無法辨識OBU` : l;
+                        },
                         'font-family': 'Inter, Noto Sans TC, sans-serif',
                         'font-size': '11px',
                         'color': '#4A4A47',
@@ -2175,9 +2179,19 @@
                         'background-color': 'data(color)',
                         'border-width': 1.5,
                         'border-color': 'data(border_color)',
-                        'text-max-width': '90px',
-                        'text-wrap': 'ellipsis',
+                        'text-max-width': '110px',
+                        'text-wrap': 'wrap',
+                        'line-height': 1.2,
                         'min-zoomed-font-size': 10,  // 縮小到看不清時不渲染文字
+                    },
+                },
+                // 有 OBU 警示的公司節點加強邊框提示
+                {
+                    selector: 'node[type="company"][?obu_warning]',
+                    style: {
+                        'border-color': '#E74C3C',
+                        'border-width': 3,
+                        'color': '#C0392B',
                     },
                 },
                 {
@@ -2360,15 +2374,30 @@
                     },
                 },
                 {
+                    // S1: 歷史（前任）邊線 — 使用紫灰色點線以與「現任」橘紅虛線做視覺區分
+                    // 維持色盲安全：紫色與橘紅色在灰階下亦可辨識
                     selector: 'edge[type="historical"]',
                     style: {
-                        'line-style': 'dotted',          // 點線
-                        'line-color': '#999999',
-                        'target-arrow-color': '#999999',
-                        'target-arrow-shape': 'triangle',
-                        'opacity': 0.5,
-                        'width': 1,
-                        'color': '#999999',
+                        'line-style': 'dotted',
+                        'line-color': '#8B7EC8',         // 紫灰色
+                        'target-arrow-color': '#8B7EC8',
+                        'target-arrow-shape': 'tee',      // T 形箭頭表示「已終止」
+                        'opacity': 0.7,                   // 提高透明度使其可見
+                        'width': 1.5,
+                        'color': '#8B7EC8',
+                        'line-dash-pattern': [3, 3],
+                    },
+                },
+                {
+                    // S1: 針對前任代表人專用樣式（role 含「前任」字樣或 label 前綴「前任」）
+                    selector: 'edge[type="historical"][role *= "前任代表人"]',
+                    style: {
+                        'line-color': '#A855F7',         // 強調紫色
+                        'target-arrow-color': '#A855F7',
+                        'color': '#A855F7',
+                        'opacity': 0.85,
+                        'width': 2,
+                        'line-dash-pattern': [6, 4],
                     },
                 },
                 {
