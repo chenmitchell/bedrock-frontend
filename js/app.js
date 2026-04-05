@@ -94,6 +94,8 @@
         warning(msg) { this.show(msg, 'warning'); },
     };
     window.Toast = Toast;
+    // 全域別名，讓 showToast('msg', 'success'|'error'|'warning') 也可使用
+    window.showToast = function(msg, type) { Toast.show(msg, type || 'info'); };
 
     // ================================================================
     // 裝置偵測（手機/平板/桌機 + 直/橫式 + 低記憶體）
@@ -1564,9 +1566,19 @@
                             <div><span style="color:#888;">TOTP</span><br><strong>${u.totp_enabled ? '已啟用' : '未啟用'}</strong></div>
                             <div><span style="color:#888;">註冊時間</span><br><strong>${formatDate(u.created_at)}</strong></div>
                             <div><span style="color:#888;">上次登入</span><br><strong>${formatDate(u.last_login_at) || '-'}</strong></div>
+                            <div><span style="color:#888;">最大爬取深度</span><br>
+                                <select onclick="event.stopPropagation();" onchange="updateUserDepth(${u.id}, this.value)" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px;">
+                                    ${[1,2,3,4,5,6,7,8,10].map(d => `<option value="${d}" ${(u.max_crawl_depth||3)==d?'selected':''}>${d} 層</option>`).join('')}
+                                </select>
+                            </div>
                         </div>
-                        ${isPending ? `<div style="margin-top:12px; display:flex; gap:8px;">
-                            <button onclick="event.stopPropagation(); updateUserStatus(${u.id}, 'active'); loadAdminUsers();" style="padding:6px 16px; background:#27AE60; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600;">✓ 核准</button>
+                        ${isPending ? `<div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
+                            <label style="font-size:12px; color:#888;">核准深度：
+                                <select id="approve-depth-${u.id}" onclick="event.stopPropagation();" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px; margin-left:4px;">
+                                    ${[1,2,3,4,5,6,7,8,10].map(d => `<option value="${d}" ${d===3?'selected':''}>${d} 層</option>`).join('')}
+                                </select>
+                            </label>
+                            <button onclick="event.stopPropagation(); approveUserWithDepth(${u.id});" style="padding:6px 16px; background:#27AE60; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600;">✓ 核准</button>
                             <button onclick="event.stopPropagation(); updateUserStatus(${u.id}, 'rejected'); loadAdminUsers();" style="padding:6px 16px; background:#C0392B; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600;">✗ 拒絕</button>
                         </div>` : ''}
                     </td>
@@ -5764,6 +5776,25 @@
             loadAdminUsers();
         } catch (e) {
             showToast('更新失敗: ' + e.message, 'error');
+        }
+    };
+    window.updateUserDepth = async function(userId, depth) {
+        try {
+            await api.patch('/admin/users/' + userId, { max_crawl_depth: parseInt(depth, 10) });
+            showToast('深度權限已更新：' + depth + ' 層', 'success');
+        } catch (e) {
+            showToast('更新失敗: ' + e.message, 'error');
+        }
+    };
+    window.approveUserWithDepth = async function(userId) {
+        const sel = document.getElementById('approve-depth-' + userId);
+        const depth = sel ? parseInt(sel.value, 10) : 3;
+        try {
+            await api.patch('/admin/users/' + userId, { status: 'active', max_crawl_depth: depth });
+            showToast('已核准（最大深度 ' + depth + ' 層）', 'success');
+            loadAdminUsers();
+        } catch (e) {
+            showToast('核准失敗: ' + e.message, 'error');
         }
     };
 
