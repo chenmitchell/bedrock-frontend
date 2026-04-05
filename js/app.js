@@ -3047,18 +3047,22 @@
     function runLayout(name) {
         if (!state.cy) return;
 
-        // ★ 大圖時自動降低 cola 迭代次數，避免卡頓
-        const visibleCount = state.cy.nodes().filter(n => n.style('display') !== 'none').length;
+        // ★ 只對「可見」的節點和邊做 layout，避免 cytoscape 對 display:none 的節點也算力學
+        const visibleNodes = state.cy.nodes().filter(n => n.style('display') !== 'none');
+        const visibleEdges = state.cy.edges().filter(e => e.style('display') !== 'none');
+        const visibleEles = visibleNodes.union(visibleEdges);
+        const visibleCount = visibleNodes.length;
         const isLarge = visibleCount > 80;
 
         const layouts = {
             cola: {
                 name: 'cola',
-                animate: !isLarge,            // 大圖不動畫
-                animationDuration: isLarge ? 0 : 800,
+                eles: visibleEles,             // ★ 只 layout 可見元素
+                animate: !isLarge,
+                animationDuration: isLarge ? 0 : 500,
                 nodeSpacing: 50,
                 edgeLength: 150,
-                convergenceThreshold: isLarge ? 0.01 : 0.001,  // 大圖降低精度
+                convergenceThreshold: isLarge ? 0.01 : 0.001,
                 randomize: false,
                 avoidOverlap: true,
                 handleDisconnected: true,
@@ -3072,6 +3076,7 @@
             },
             grid: {
                 name: 'grid',
+                eles: visibleEles,
                 animate: true,
                 animationDuration: 300,
                 rows: undefined,
@@ -6515,8 +6520,10 @@
         if (!state.cy) return;
         Perf.start('filterByDepth');
         opts = opts || {};
-        const skipRelayout = !!opts.skipRelayout;
-        const skipAnimation = !!opts.skipAnimation;
+        // ★ 如果在表格/報表視圖（圖被遮住），跳過動畫和 layout 加速
+        const inReportView = !!_reportViewActive;
+        const skipRelayout = !!opts.skipRelayout || inReportView;
+        const skipAnimation = !!opts.skipAnimation || inReportView;
         maxDepth = parseInt(maxDepth);
         const label = document.getElementById('depth-filter-label');
 
@@ -6625,7 +6632,7 @@
             } else {
                 fadingNodes.animate(
                     { style: { opacity: 0 } },
-                    { duration: 300, complete: applyHide }
+                    { duration: 150, complete: applyHide }
                 );
             }
         }
@@ -6657,13 +6664,21 @@
                 });
             });
             // 淡入新節點
-            const fadingIn = state.cy.collection();
-            newlyShown.forEach(id => {
-                const n = state.cy.getElementById(id);
-                if (n.length) fadingIn.merge(n);
-            });
-            fadingIn.animate({ style: { opacity: 1 } }, { duration: 400 });
-            runLayout('cola');
+            if (!skipAnimation) {
+                const fadingIn = state.cy.collection();
+                newlyShown.forEach(id => {
+                    const n = state.cy.getElementById(id);
+                    if (n.length) fadingIn.merge(n);
+                });
+                fadingIn.animate({ style: { opacity: 1 } }, { duration: 400 });
+            } else {
+                // 表格模式：同步設為 opacity 1
+                newlyShown.forEach(id => {
+                    const n = state.cy.getElementById(id);
+                    if (n.length) n.style('opacity', 1);
+                });
+            }
+            if (!skipRelayout) runLayout('cola');
             filterSidebarByVisibleNodes();
         }
 
@@ -6702,12 +6717,12 @@
     // ==================== 深度連動：側邊欄同步過濾 ====================
     let _sidebarFilterTimer = null;
     function filterSidebarByVisibleNodes() {
-        // Debounce：200ms 內多次呼叫只執行最後一次
+        // Debounce：50ms 內多次呼叫只執行最後一次（足以合併事件但使用者不會感到延遲）
         if (_sidebarFilterTimer) clearTimeout(_sidebarFilterTimer);
         _sidebarFilterTimer = setTimeout(() => {
             _sidebarFilterTimer = null;
             Perf.mark('filterSidebarByVisibleNodes', _filterSidebarByVisibleNodesImpl);
-        }, 200);
+        }, 50);
     }
     function _filterSidebarByVisibleNodesImpl() {
         if (!state.cy) return;
@@ -8148,10 +8163,10 @@
                     </strong></div>
                     ${nodeData.company_type ? `<div><span style="color:#888; font-size:13px;">組織類型</span><br><strong>${esc(nodeData.company_type)}</strong></div>` : ''}
                     ${nodeData.registration_authority ? `<div><span style="color:#888; font-size:13px;">登記機關</span><br><strong>${esc(nodeData.registration_authority)}</strong></div>` : ''}
-                    ${capStr ? `<div><span style="color:#888; font-size:13px;">資本總額</span><br><strong>${capStr}</strong></div>` : ''}
-                    ${nodeData.paid_in_capital ? `<div><span style="color:#888; font-size:13px;">實收資本額</span><br><strong>NT$ ${Number(String(nodeData.paid_in_capital).replace(/,/g, '')).toLocaleString()}</strong></div>` : ''}
-                    ${nodeData.issued_shares ? `<div><span style="color:#888; font-size:13px;">已發行股份</span><br><strong>${parseInt(nodeData.issued_shares).toLocaleString()} 股</strong></div>` : ''}
-                    ${nodeData.share_amount ? `<div><span style="color:#888; font-size:13px;">每股金額</span><br><strong>NT$ ${parseInt(nodeData.share_amount).toLocaleString()}</strong></div>` : ''}
+                    ${capStr ? `<div><span style="color:#888; font-size:13px;">資本總額(元)</span><br><strong>${capStr}</strong></div>` : ''}
+                    ${nodeData.paid_in_capital ? `<div><span style="color:#888; font-size:13px;">實收資本額(元)</span><br><strong>NT$ ${Number(String(nodeData.paid_in_capital).replace(/,/g, '')).toLocaleString()}</strong></div>` : ''}
+                    ${nodeData.issued_shares ? `<div><span style="color:#888; font-size:13px;">已發行股份總數(股)</span><br><strong>${parseInt(nodeData.issued_shares).toLocaleString()} 股</strong></div>` : ''}
+                    ${nodeData.share_amount ? `<div><span style="color:#888; font-size:13px;">每股金額(元)</span><br><strong>NT$ ${parseInt(nodeData.share_amount).toLocaleString()}</strong></div>` : ''}
                     ${nodeData.representative ? `<div><span style="color:#888; font-size:13px;">代表人/負責人</span><br><strong>${esc(nodeData.representative)}</strong></div>` : ''}
                     ${nodeData.established_date ? `<div><span style="color:#888; font-size:13px;">核准設立日期</span><br><strong>${esc(nodeData.established_date)}</strong></div>` : ''}
                     ${nodeData.last_change_date ? `<div><span style="color:#888; font-size:13px;">最後核准變更日期</span><br><strong>${esc(nodeData.last_change_date)}</strong></div>` : ''}
@@ -8192,6 +8207,7 @@
                             <tr style="background:#eef2f5; border-bottom:2px solid #ddd;">
                                 <th style="text-align:left; padding:10px 12px; font-weight:600;">姓名</th>
                                 <th style="text-align:left; padding:10px 12px; font-weight:600;">職稱</th>
+                                <th style="text-align:left; padding:10px 12px; font-weight:600;">類型</th>
                                 <th style="text-align:left; padding:10px 12px; font-weight:600;">代表法人</th>
                                 <th style="text-align:right; padding:10px 12px; font-weight:600;">出資額/持股</th>
                                 <th style="text-align:right; padding:10px 12px; font-weight:600; min-width:80px;">占比</th>
@@ -8212,9 +8228,13 @@
                                 const titleColors = { '董事長': '#C0392B', '董事': '#2980B9', '監察人': '#8E44AD', '獨立董事': '#16A085', '負責人': '#D35400' };
                                 const tc = titleColors[title] || '#7F8C8D';
                                 const bg = i % 2 === 0 ? '#fff' : '#fafbfc';
+                                const isLegalRep = !!repName;
+                                const typeLabel = isLegalRep ? '法人代表' : '自然人';
+                                const typeColor = isLegalRep ? '#8E44AD' : '#16A085';
                                 return `<tr style="background:${bg}; border-bottom:1px solid #f0f0f0;">
                                     <td style="padding:10px 12px; font-weight:500;">${esc(name)}</td>
                                     <td style="padding:10px 12px;"><span style="padding:2px 8px; border-radius:10px; font-size:12px; background:${tc}15; color:${tc}; font-weight:600;">${esc(title)}</span></td>
+                                    <td style="padding:10px 12px;"><span style="padding:2px 8px; border-radius:10px; font-size:12px; background:${typeColor}15; color:${typeColor}; font-weight:600;">${typeLabel}</span></td>
                                     <td style="padding:10px 12px; font-size:13px; color:#666;">${repName ? esc(repName) : '-'}</td>
                                     <td style="padding:10px 12px; text-align:right; font-family:monospace;">${sharesNum > 0 ? 'NT$ ' + sharesNum.toLocaleString() : '-'}</td>
                                     <td style="padding:10px 12px; text-align:right;">
@@ -8225,6 +8245,36 @@
                                             <span style="font-weight:700; color:#E67E22; min-width:50px;">${pctStr}</span>
                                         </div>` : '<span style="color:#ccc;">-</span>'}
                                     </td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+            }
+
+            // ── 經理人名單 ──
+            const managers = nodeData.managers_data || nodeData.managers || [];
+            if (managers.length > 0) {
+                detailHtml += `<div style="background:#f9fafb; padding:20px; border-radius:10px; margin-bottom:24px; border:1px solid #e8e8e8;">
+                    <h4 style="margin:0 0 16px 0; font-size:17px; font-weight:700; color:#333;"><i class="fas fa-user-tie" style="margin-right:6px; color:#D35400;"></i>經理人名單（${managers.length}）</h4>
+                    <table style="width:100%; border-collapse:collapse; font-size:14px;">
+                        <thead>
+                            <tr style="background:#eef2f5; border-bottom:2px solid #ddd;">
+                                <th style="text-align:left; padding:10px 12px; font-weight:600;">姓名</th>
+                                <th style="text-align:left; padding:10px 12px; font-weight:600;">職稱</th>
+                                <th style="text-align:left; padding:10px 12px; font-weight:600;">到職/異動日期</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${managers.map((m, i) => {
+                                const mname = m['姓名'] || m.name || '';
+                                const mtitle = m['職稱'] || m.title || '經理人';
+                                const mdate = m['到職日期'] || m['異動日期'] || m.date || m.appointed_date || '';
+                                const bg = i % 2 === 0 ? '#fff' : '#fafbfc';
+                                return `<tr style="background:${bg}; border-bottom:1px solid #f0f0f0;">
+                                    <td style="padding:10px 12px; font-weight:500;">${esc(mname)}</td>
+                                    <td style="padding:10px 12px;"><span style="padding:2px 8px; border-radius:10px; font-size:12px; background:#D3540215; color:#D35400; font-weight:600;">${esc(mtitle)}</span></td>
+                                    <td style="padding:10px 12px; font-size:13px; color:#666;">${esc(mdate) || '-'}</td>
                                 </tr>`;
                             }).join('')}
                         </tbody>
