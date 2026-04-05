@@ -1250,24 +1250,84 @@
             const roleLabels = { admin: '管理員', analyst: '分析師', viewer: '檢視者', auditor: '稽核員' };
             const statusLabels = { active: '啟用', pending_approval: '待審核', approved: '已核准', suspended: '停用', rejected: '拒絕' };
 
-            tbody.innerHTML = users.map(u => `
-                <tr>
-                    <td><strong>${esc(u.full_name || u.name || 'N/A')}</strong><br><small style="color:#666;">${esc(u.organization || '')}</small></td>
+            // 待審核通知
+            const pendingUsers = users.filter(u => u.status === 'pending_approval');
+            if (pendingUsers.length > 0) {
+                const noticeEl = document.getElementById('admin-pending-notice');
+                if (noticeEl) {
+                    noticeEl.innerHTML = `<div style="background:#FFF3CD; border:1px solid #FFEAA7; border-radius:8px; padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; gap:10px;">
+                        <i class="fas fa-exclamation-triangle" style="color:#E67E22; font-size:18px;"></i>
+                        <div>
+                            <strong style="color:#D35400;">${pendingUsers.length} 位使用者待審核</strong>
+                            <span style="color:#888; font-size:13px; margin-left:8px;">${pendingUsers.map(u => esc(u.full_name || u.email)).join('、')}</span>
+                        </div>
+                    </div>`;
+                    noticeEl.style.display = '';
+                } else {
+                    // 動態插入通知區塊
+                    const container = tbody.closest('table')?.parentElement;
+                    if (container) {
+                        const notice = document.createElement('div');
+                        notice.id = 'admin-pending-notice';
+                        notice.innerHTML = `<div style="background:#FFF3CD; border:1px solid #FFEAA7; border-radius:8px; padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; gap:10px;">
+                            <i class="fas fa-exclamation-triangle" style="color:#E67E22; font-size:18px;"></i>
+                            <div>
+                                <strong style="color:#D35400;">${pendingUsers.length} 位使用者待審核</strong>
+                                <span style="color:#888; font-size:13px; margin-left:8px;">${pendingUsers.map(u => esc(u.full_name || u.email)).join('、')}</span>
+                            </div>
+                        </div>`;
+                        container.insertBefore(notice, container.firstChild);
+                    }
+                }
+            }
+
+            tbody.innerHTML = users.map(u => {
+                const isPending = u.status === 'pending_approval';
+                const rowBg = isPending ? 'background:#FFF8E1;' : '';
+                return `
+                <tr style="${rowBg} cursor:pointer;" onclick="event.target.tagName === 'SELECT' || toggleUserDetail(${u.id})">
+                    <td><strong>${esc(u.full_name || u.name || 'N/A')}</strong><br><small style="color:#666;">${esc(u.organization || '')}</small>
+                        ${isPending ? '<span style="display:inline-block; background:#E67E22; color:#fff; font-size:10px; padding:1px 6px; border-radius:4px; margin-left:4px;">待審核</span>' : ''}
+                    </td>
                     <td>${esc(u.email)}</td>
                     <td>
-                        <select onchange="updateUserRole(${u.id}, this.value)" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px;">
+                        <select onclick="event.stopPropagation();" onchange="updateUserRole(${u.id}, this.value)" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px;">
                             ${roleOptions.map(r => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${roleLabels[r] || r}</option>`).join('')}
                         </select>
                     </td>
                     <td>
-                        <select onchange="updateUserStatus(${u.id}, this.value)" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px;">
+                        <select onclick="event.stopPropagation();" onchange="updateUserStatus(${u.id}, this.value)" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px;">
                             ${statusOptions.map(s => `<option value="${s}" ${u.status === s ? 'selected' : ''}>${statusLabels[s] || s}</option>`).join('')}
                         </select>
                     </td>
                     <td>${esc(u.investigation_count || 0)} 件</td>
                     <td>${formatDate(u.created_at)}</td>
                 </tr>
-            `).join('');
+                <tr id="user-detail-${u.id}" style="display:none;">
+                    <td colspan="6" style="background:#f9fafb; padding:16px;">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:13px;">
+                            <div><span style="color:#888;">Google 名稱</span><br><strong>${esc(u.google_display_name || u.full_name || '-')}</strong></div>
+                            <div><span style="color:#888;">機構類型</span><br><strong>${esc(u.organization_type || '-')}</strong></div>
+                            <div><span style="color:#888;">工作屬性</span><br><strong>${esc(u.job_attribute || '-')}</strong></div>
+                            <div><span style="color:#888;">統一編號</span><br><strong>${esc(u.organization_taxid || '-')}</strong></div>
+                            <div><span style="color:#888;">電話</span><br><strong>${esc(u.phone || '-')}</strong></div>
+                            <div><span style="color:#888;">TOTP</span><br><strong>${u.totp_enabled ? '已啟用' : '未啟用'}</strong></div>
+                            <div><span style="color:#888;">註冊時間</span><br><strong>${formatDate(u.created_at)}</strong></div>
+                            <div><span style="color:#888;">上次登入</span><br><strong>${formatDate(u.last_login_at) || '-'}</strong></div>
+                        </div>
+                        ${isPending ? `<div style="margin-top:12px; display:flex; gap:8px;">
+                            <button onclick="event.stopPropagation(); updateUserStatus(${u.id}, 'active'); loadAdminUsers();" style="padding:6px 16px; background:#27AE60; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600;">✓ 核准</button>
+                            <button onclick="event.stopPropagation(); updateUserStatus(${u.id}, 'rejected'); loadAdminUsers();" style="padding:6px 16px; background:#C0392B; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600;">✗ 拒絕</button>
+                        </div>` : ''}
+                    </td>
+                </tr>`;
+            }).join('');
+
+            // 展開/收合使用者詳情
+            window.toggleUserDetail = function(userId) {
+                const row = document.getElementById('user-detail-' + userId);
+                if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+            };
         } catch (e) {
             console.warn('[BEDROCK] 載入使用者失敗:', e.message);
             tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#B22D20;">載入失敗: ${esc(e.message)}</td></tr>`;
@@ -5407,12 +5467,15 @@
         }
         // ── 全面聯動：詳情面板、表格中的歷史項目 ──
         syncHistoricalVisibility();
-        // 重新適配圖形到螢幕
-        if (typeof autoResizeAndRelayout === 'function') {
-            autoResizeAndRelayout();
-        } else {
-            setTimeout(() => { if (state.cy) state.cy.fit(undefined, 40); }, 100);
-        }
+        // 重新適配圖形到螢幕（不做全量 relayout，只 fit 可見節點，保持原有位置）
+        setTimeout(() => {
+            if (state.cy) {
+                const visible = state.cy.nodes().filter(n => n.style('display') !== 'none');
+                if (visible.length > 0) {
+                    state.cy.fit(visible, 40);
+                }
+            }
+        }, 100);
     }
     window.toggleHistoricalEdges = toggleHistoricalEdges;
 
@@ -6960,13 +7023,15 @@
 
         // ===== Companies table =====
         html += '<div id="report-panel-companies" class="report-panel">';
-        html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+        html += '<table style="width:100%; border-collapse:collapse; font-size:14px;">';
         html += '<thead><tr style="background:#f5f7fa; text-align:left;">';
-        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">公司名稱</th>';
-        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">統一編號</th>';
-        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">風險等級</th>';
-        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">紅旗數</th>';
-        html += '<th style="padding:8px 12px; border-bottom:2px solid #ddd; font-weight:600;">地址</th>';
+        html += '<th style="padding:10px 14px; border-bottom:2px solid #ddd; font-weight:600;">公司名稱</th>';
+        html += '<th style="padding:10px 14px; border-bottom:2px solid #ddd; font-weight:600;">統一編號</th>';
+        html += '<th style="padding:10px 14px; border-bottom:2px solid #ddd; font-weight:600;">風險等級</th>';
+        html += '<th style="padding:10px 14px; border-bottom:2px solid #ddd; font-weight:600;">紅旗數</th>';
+        html += '<th style="padding:10px 14px; border-bottom:2px solid #ddd; font-weight:600;">資本額</th>';
+        html += '<th style="padding:10px 14px; border-bottom:2px solid #ddd; font-weight:600;">代表人</th>';
+        html += '<th style="padding:10px 14px; border-bottom:2px solid #ddd; font-weight:600;">地址</th>';
         html += '</tr></thead><tbody>';
         companies.forEach((c, i) => {
             const bg = i % 2 === 0 ? '#fff' : '#fafbfc';
@@ -6974,12 +7039,16 @@
             const entityId = c.entity_id || '';
             const flagCount = c.flag_count || 0;
             const addr = c.address || '';
+            const cap = c.capital ? (c.capital >= 10000 ? Math.round(c.capital / 10000).toLocaleString() + ' 萬' : c.capital.toLocaleString()) : '-';
+            const rep = c.representative || '-';
             html += '<tr style="background:' + bg + '; cursor:pointer;" onclick="reportClickNode(\'' + c.id + '\')">';
-            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee;">' + name + seedBadge(c.is_seed) + '</td>';
-            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; font-family:monospace;">' + entityId + '</td>';
-            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee;">' + riskBadge(c.risk_level) + '</td>';
-            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; text-align:center;">' + (flagCount > 0 ? '<span style="color:#C0392B; font-weight:600;">' + flagCount + '</span>' : '0') + '</td>';
-            html += '<td style="padding:8px 12px; border-bottom:1px solid #eee; font-size:11px; color:#666; max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + addr + '</td>';
+            html += '<td style="padding:10px 14px; border-bottom:1px solid #eee; font-weight:500;">' + name + seedBadge(c.is_seed) + '</td>';
+            html += '<td style="padding:10px 14px; border-bottom:1px solid #eee; font-family:monospace;">' + entityId + '</td>';
+            html += '<td style="padding:10px 14px; border-bottom:1px solid #eee;">' + riskBadge(c.risk_level) + '</td>';
+            html += '<td style="padding:10px 14px; border-bottom:1px solid #eee; text-align:center;">' + (flagCount > 0 ? '<span style="color:#C0392B; font-weight:600;">' + flagCount + '</span>' : '0') + '</td>';
+            html += '<td style="padding:10px 14px; border-bottom:1px solid #eee; font-size:13px;">' + cap + '</td>';
+            html += '<td style="padding:10px 14px; border-bottom:1px solid #eee; font-size:13px;">' + rep + '</td>';
+            html += '<td style="padding:10px 14px; border-bottom:1px solid #eee; font-size:12px; color:#666; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + addr + '</td>';
             html += '</tr>';
         });
         html += '</tbody></table></div>';
@@ -7296,14 +7365,17 @@
                     <div><span style="color:#888; font-size:13px;">公司狀態</span><br><strong style="color:${statusColor};">
                         <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${statusColor}; margin-right:4px;"></span>${esc(statusText)}
                     </strong></div>
-                    ${capStr ? `<div><span style="color:#888; font-size:13px;">資本額</span><br><strong>${capStr}</strong></div>` : ''}
-                    ${nodeData.representative ? `<div><span style="color:#888; font-size:13px;">代表人</span><br><strong>${esc(nodeData.representative)}</strong></div>` : ''}
-                    ${nodeData.address ? `<div style="grid-column:1/3;"><span style="color:#888; font-size:13px;">登記地址</span><br><strong>${esc(nodeData.address)}</strong></div>` : ''}
-                    ${nodeData.setup_date || nodeData.established_date ? `<div><span style="color:#888; font-size:13px;">設立日期</span><br><strong>${esc(nodeData.setup_date || nodeData.established_date)}</strong></div>` : ''}
-                    ${nodeData.last_change_date ? `<div><span style="color:#888; font-size:13px;">最後變更日期</span><br><strong>${esc(nodeData.last_change_date)}</strong></div>` : ''}
-                    ${nodeData.industry ? `<div><span style="color:#888; font-size:13px;">產業別</span><br><strong>${esc(nodeData.industry)}</strong></div>` : ''}
                     ${nodeData.company_type ? `<div><span style="color:#888; font-size:13px;">組織類型</span><br><strong>${esc(nodeData.company_type)}</strong></div>` : ''}
                     ${nodeData.registration_authority ? `<div><span style="color:#888; font-size:13px;">登記機關</span><br><strong>${esc(nodeData.registration_authority)}</strong></div>` : ''}
+                    ${capStr ? `<div><span style="color:#888; font-size:13px;">資本總額</span><br><strong>${capStr}</strong></div>` : ''}
+                    ${nodeData.paid_in_capital ? `<div><span style="color:#888; font-size:13px;">實收資本額</span><br><strong>NT$ ${Number(String(nodeData.paid_in_capital).replace(/,/g, '')).toLocaleString()}</strong></div>` : ''}
+                    ${nodeData.issued_shares ? `<div><span style="color:#888; font-size:13px;">已發行股份</span><br><strong>${parseInt(nodeData.issued_shares).toLocaleString()} 股</strong></div>` : ''}
+                    ${nodeData.share_amount ? `<div><span style="color:#888; font-size:13px;">每股金額</span><br><strong>NT$ ${parseInt(nodeData.share_amount).toLocaleString()}</strong></div>` : ''}
+                    ${nodeData.representative ? `<div><span style="color:#888; font-size:13px;">代表人/負責人</span><br><strong>${esc(nodeData.representative)}</strong></div>` : ''}
+                    ${nodeData.established_date ? `<div><span style="color:#888; font-size:13px;">核准設立日期</span><br><strong>${esc(nodeData.established_date)}</strong></div>` : ''}
+                    ${nodeData.last_change_date ? `<div><span style="color:#888; font-size:13px;">最後核准變更日期</span><br><strong>${esc(nodeData.last_change_date)}</strong></div>` : ''}
+                    ${nodeData.dissolved_date ? `<div><span style="color:#888; font-size:13px;">解散/廢止日期</span><br><strong style="color:#C0392B;">${esc(nodeData.dissolved_date)}</strong></div>` : ''}
+                    ${nodeData.address ? `<div style="grid-column:1/3;"><span style="color:#888; font-size:13px;">公司所在地</span><br><strong>${esc(nodeData.address)}</strong></div>` : ''}
                 </div>
             </div>`;
 
