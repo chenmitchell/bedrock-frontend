@@ -85,7 +85,7 @@ html, body {
 
 body {
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.6;
   background: var(--color-bg);
   color: var(--color-text-primary);
@@ -190,22 +190,22 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 h1 {
-  font-size: 1.8rem;
+  font-size: 2rem;
 }
 h2 {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
 }
 h3 {
-  font-size: 1.15rem;
+  font-size: 1.25rem;
 }
 h4 {
-  font-size: 1rem;
+  font-size: 1.1rem;
 }
 h5 {
-  font-size: 0.9rem;
+  font-size: 1rem;
 }
 h6 {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }
 
 p {
@@ -376,7 +376,7 @@ body:has(.nav-sidebar.nav-collapsed) #workspace-scene {
 }
 
 .nav-section-title {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -396,7 +396,7 @@ body:has(.nav-sidebar.nav-collapsed) #workspace-scene {
   border: 1px solid rgba(0, 0, 0, 0.06);
   cursor: pointer;
   transition: all var(--transition-fast);
-  font-size: 0.875rem;
+  font-size: 0.95rem;
   font-weight: 500;
   text-align: left;
 }
@@ -415,17 +415,17 @@ body:has(.nav-sidebar.nav-collapsed) #workspace-scene {
 }
 
 .nav-item-icon {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 0.9rem;
+  font-size: 1rem;
 }
 
 .nav-item-text {
-  font-size: 0.875rem;
+  font-size: 0.95rem;
   font-weight: 500;
 }
 
@@ -580,14 +580,14 @@ body:has(.nav-sidebar.nav-collapsed) #workspace-scene {
 }
 
 .kpi-label {
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   color: var(--color-text-muted);
   letter-spacing: 0.03em;
 }
 
 .kpi-value {
   font-family: var(--font-mono);
-  font-size: 1.6rem;
+  font-size: 1.75rem;
   font-weight: 600;
   color: var(--color-text-primary);
   letter-spacing: -0.02em;
@@ -599,7 +599,7 @@ body:has(.nav-sidebar.nav-collapsed) #workspace-scene {
   border: none;
   border-radius: var(--radius-md);
   font-family: var(--font-body);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -902,7 +902,7 @@ input:focus, select:focus, textarea:focus {
   padding: var(--space-md);
   text-align: left;
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -955,18 +955,18 @@ input:focus, select:focus, textarea:focus {
   z-index: 1;
   text-align: center;
   width: 100%;
-  max-width: 360px;
-  padding: 0 24px;
+  max-width: 420px;
+  padding: 0 28px;
 }
 
 /* 品牌名 — Playfair Display, 寬字距 */
 .brand {
   font-family: 'Playfair Display', serif;
-  font-size: 16px;
+  font-size: 22px;
   font-weight: 400;
-  letter-spacing: 10px;
+  letter-spacing: 12px;
   color: #9A9BA0;
-  text-indent: 10px; /* 補償 letter-spacing 置中偏移 */
+  text-indent: 12px; /* 補償 letter-spacing 置中偏移 */
   margin: 0;
 }
 
@@ -981,7 +981,7 @@ input:focus, select:focus, textarea:focus {
 /* 副標 — Noto Serif TC */
 .brand-subtitle {
   font-family: 'Noto Serif TC', serif;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 400;
   color: #6A6B70;
   letter-spacing: 0.05em;
@@ -996,7 +996,7 @@ input:focus, select:focus, textarea:focus {
 }
 .login-quote p {
   font-family: 'EB Garamond', serif;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 400;
   font-style: italic;
   line-height: 1.8;
@@ -1006,7 +1006,7 @@ input:focus, select:focus, textarea:focus {
 .login-quote cite {
   display: block;
   font-family: 'EB Garamond', serif;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 400;
   font-style: italic;
   color: rgba(255, 255, 255, 0.30);
@@ -1070,14 +1070,14 @@ input:focus, select:focus, textarea:focus {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  height: 48px;
-  padding: 0 24px;
+  height: 52px;
+  padding: 0 28px;
   background: transparent;
   border: 1px solid #9A9BA0;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #9A9BA0;
   font-weight: 400;
-  font-size: 15px;
+  font-size: 16px;
   cursor: pointer;
   transition: all 150ms ease;
   width: 100%;
@@ -1106,6 +1106,24 @@ input:focus, select:focus, textarea:focus {
 .login-status.pending { background: rgba(234, 179, 8, 0.15); color: #facc15; }
 .login-status.success { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
 
+/* 註冊連結 */
+.login-register-link {
+  margin-top: 16px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.40);
+  text-align: center;
+}
+.login-register-link a {
+  color: #4A9EBF;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 150ms ease;
+}
+.login-register-link a:hover {
+  color: #5BB5D6;
+  text-decoration: underline;
+}
+
 /* 頁腳 — 固定於視窗底部 */
 .login-footer {
   position: fixed;
@@ -1114,7 +1132,7 @@ input:focus, select:focus, textarea:focus {
   right: 0;
   text-align: center;
   color: rgba(255, 255, 255, 0.30);
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.03em;
   z-index: 1;
 }
@@ -1595,14 +1613,14 @@ input:focus, select:focus, textarea:focus {
 }
 
 .section-title {
-  font-size: 1.15rem;
+  font-size: 1.25rem;
   font-weight: 600;
   margin-bottom: 2px;
 }
 
 .section-desc {
   color: var(--color-text-muted);
-  font-size: 0.82rem;
+  font-size: 0.9rem;
 }
 
 .dashboard-search {
