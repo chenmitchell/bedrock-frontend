@@ -4336,6 +4336,8 @@
         }
     }
 
+    window.__bedrockReanalyze = function() { runAnalysis(); };
+
     async function runAnalysis() {
         if (!state.currentInvId) return;
 
@@ -4376,10 +4378,8 @@
             if (text) text.textContent = `分析完成 — ${count} 個異常、${flagsSaved} 個紅旗`;
             Toast.success(`分析完成：發現 ${count} 個異常，寫入 ${flagsSaved} 個紅旗`);
 
-            // 重新載入所有側邊欄資料（紅旗 + 集群 + 媒體）
-            loadRedFlags(state.currentInvId);
-            loadClusters(state.currentInvId);
-            loadMedia(state.currentInvId);
+            // 重新載入所有資料（圖 + 紅旗 + 集群 + 媒體）
+            loadInvestigationData(state.currentInvId);
 
             // 更新 stepper 到 review 步驟
             _hintDismissed = false;

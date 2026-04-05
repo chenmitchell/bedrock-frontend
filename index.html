@@ -909,8 +909,8 @@
                         紅旗警示
                         <span id="flag-count" class="ws-count" style="background: rgba(255, 59, 48, 0.1); color: var(--color-danger);">0</span>
                         <span class="help-icon" data-tooltip="紅旗是系統自動偵測的可疑模式，例如：殼公司、循環持股、頻繁變更負責人、資本異常等 AML 警訊。">?</span>
-                        <button id="btn-analyze" class="btn btn-sm" style="background: none; color: var(--color-accent); border: none; padding: 0; cursor: pointer; margin-left: auto;" title="對已搜尋的網路圖執行結構分析，偵測可疑模式" data-tooltip="對已搜尋的網路圖執行結構分析，偵測可疑模式">
-                            <i class="fas fa-microscope"></i> 分析
+                        <button id="btn-analyze" class="btn btn-sm" style="background: rgba(192,57,43,0.1); color: #C0392B; border: 1px solid rgba(192,57,43,0.2); padding: 3px 10px; cursor: pointer; margin-left: auto; border-radius: 6px; font-weight: 600; font-size: 12px;" title="對已搜尋的網路圖執行結構分析，偵測可疑模式" data-tooltip="對已搜尋的網路圖執行結構分析，偵測可疑模式">
+                            <i class="fas fa-microscope"></i> 重新分析
                         </button>
                         <button id="btn-open-dashboard" class="btn btn-sm" style="background: none; color: var(--color-warning); border: none; padding: 0; cursor: pointer;" title="開啟分析儀表板，檢視歸納整理後的紅旗" data-tooltip="開啟分析儀表板，檢視歸納整理後的紅旗" onclick="openAnalysisDashboard()">
                             <i class="fas fa-chart-bar"></i> 儀表板
@@ -962,6 +962,10 @@
                     <button class="ws-tool-btn" id="btn-toggle-filter" title="節點篩選：顯示/隱藏特定類型" onclick="toggleFilterPanel()" aria-label="節點篩選">
                         <i class="fas fa-filter" aria-hidden="true"></i>
                         <span>篩選</span>
+                    </button>
+                    <button class="ws-tool-btn" id="btn-reanalyze" title="重新執行風險分析（偵測紅旗、集群、UBO）" onclick="window.__bedrockReanalyze && window.__bedrockReanalyze()" aria-label="重新分析" style="background:rgba(192,57,43,0.08); color:#C0392B; font-weight:600;">
+                        <i class="fas fa-microscope" aria-hidden="true"></i>
+                        <span>重新分析</span>
                     </button>
                     <button class="ws-tool-btn" id="btn-toggle-report-view" title="切換報表/圖形檢視" onclick="toggleReportView()" aria-label="切換報表檢視">
                         <i class="fas fa-table" aria-hidden="true"></i>
